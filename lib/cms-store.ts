@@ -1,0 +1,364 @@
+import fs from "node:fs"
+import path from "node:path"
+
+import { defaultCmsContent } from "@/data/cms-defaults"
+import { normalizeNotificationSettings } from "@/lib/form-notifications"
+import type {
+  CmsContent,
+  CmsPaymentOrder,
+  CmsPaymentOrderStatus,
+  CmsPaymentSettings,
+  CmsTeamMember,
+} from "@/types/cms"
+
+type CmsDatabase = {
+  close: () => void
+  exec: (sql: string) => unknown
+  prepare: (sql: string) => {
+    get: (...params: unknown[]) => unknown
+    run: (...params: unknown[]) => unknown
+  }
+}
+
+type CmsContentRow = {
+  content_json: string
+}
+
+type DatabaseSyncConstructor = new (filename: string) => CmsDatabase
+
+const cmsSqliteFile =
+  process.env.CMS_SQLITE_FILE ??
+  path.join(/* turbopackIgnore: true */ process.cwd(), "data", "cms.sqlite")
+const adminToken = process.env.ADMIN_SESSION_TOKEN ?? "local-admin-token"
+const legacyDefaultRecipientEmail = "autiechen@gmail.com"
+
+let writeQueue: Promise<unknown> = Promise.resolve()
+let databaseSyncPromise: Promise<DatabaseSyncConstructor> | null = null
+
+function withRuntimeDefaults(content: CmsContent): CmsContent {
+  const contactPage = content.contactPage ?? defaultCmsContent.contactPage
+  const paymentSettings = normalizePaymentSettings(content.paymentSettings)
+  const notificationRecipient =
+    content.notificationSettings?.recipientEmail?.trim() ?? ""
+  const contactRecipient =
+    contactPage.zh?.contactEmail?.trim() ??
+    defaultCmsContent.contactPage.zh.contactEmail
+  const recipientEmail =
+    notificationRecipient &&
+    notificationRecipient !== legacyDefaultRecipientEmail
+      ? notificationRecipient
+      : contactRecipient || notificationRecipient
+
+  return {
+    ...content,
+    updatedAt: content.updatedAt || new Date().toISOString(),
+    afterSalesPage: content.afterSalesPage ?? defaultCmsContent.afterSalesPage,
+    contactPage,
+    dashboardTasks: content.dashboardTasks ?? defaultCmsContent.dashboardTasks,
+    paymentOrders: (content.paymentOrders ?? []).map((order) =>
+      normalizePaymentOrder(order, paymentSettings)
+    ),
+    paymentSettings,
+    notificationSettings: normalizeNotificationSettings({
+      ...content.notificationSettings,
+      recipientEmail,
+    }),
+    siteSettings: {
+      ...defaultCmsContent.siteSettings,
+      ...content.siteSettings,
+    },
+    serviceRegions: content.serviceRegions ?? defaultCmsContent.serviceRegions,
+    serviceLocations:
+      content.serviceLocations ?? defaultCmsContent.serviceLocations,
+    teamMembers: content.teamMembers ?? defaultCmsContent.teamMembers,
+  }
+}
+
+function normalizePaymentOrder(
+  order: CmsPaymentOrder,
+  paymentSettings: CmsPaymentSettings
+): CmsPaymentOrder {
+  return {
+    ...order,
+    amountValue: normalizePaymentAmountValue(order.amountValue, order.amount),
+    currency: normalizePaymentCurrency(
+      order.currency || paymentSettings.currency
+    ),
+    gatewayStatus: order.gatewayStatus ?? "",
+    provider: "airwallex",
+    serviceAddress: order.serviceAddress ?? "",
+    status: normalizePaymentOrderStatus(order.status),
+    webhookEventIds: Array.isArray(order.webhookEventIds)
+      ? order.webhookEventIds.filter(Boolean)
+      : [],
+  }
+}
+
+function normalizePaymentSettings(
+  settings: CmsPaymentSettings | undefined
+): CmsPaymentSettings {
+  const fallback = defaultCmsContent.paymentSettings
+
+  return {
+    currency: normalizePaymentCurrency(settings?.currency || fallback.currency),
+    enabled: Boolean(settings?.enabled),
+    provider: "airwallex",
+  }
+}
+
+function normalizePaymentAmountValue(value: unknown, fallback: string) {
+  const numericValue = Number(value)
+
+  if (Number.isFinite(numericValue) && numericValue >= 0) {
+    return numericValue
+  }
+
+  const amount = Number(
+    fallback.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/)?.[0] ?? 0
+  )
+
+  return Number.isFinite(amount) && amount >= 0 ? amount : 0
+}
+
+function normalizePaymentCurrency(value: string | undefined) {
+  const currency = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "")
+
+  return currency || "USD"
+}
+
+function normalizePaymentOrderStatus(value: unknown): CmsPaymentOrderStatus {
+  return ["cancelled", "failed", "paid", "pending", "unpaid"].includes(
+    String(value)
+  )
+    ? (value as CmsPaymentOrderStatus)
+    : "unpaid"
+}
+
+async function readCmsContent(): Promise<CmsContent> {
+  await writeQueue.catch(() => null)
+
+  return withRuntimeDefaults(
+    (await readCmsContentFromDatabase()) ?? defaultCmsContent
+  )
+}
+
+async function readCmsContentFromDatabase(): Promise<CmsContent | null> {
+  const database = await openCmsDatabase()
+
+  try {
+    const row = database
+      .prepare("SELECT content_json FROM cms_content WHERE id = 1")
+      .get() as CmsContentRow | undefined
+
+    if (!row?.content_json) {
+      return null
+    }
+
+    return JSON.parse(row.content_json) as CmsContent
+  } finally {
+    database.close()
+  }
+}
+
+async function writeCmsContent(content: CmsContent): Promise<CmsContent> {
+  return enqueueCmsWrite(async () => writeNextCmsContent(content))
+}
+
+async function updateCmsContent(
+  updater: (current: CmsContent) => CmsContent
+): Promise<CmsContent> {
+  return enqueueCmsWrite(async () => {
+    const currentContent = withRuntimeDefaults(
+      (await readCmsContentFromDatabase()) ?? defaultCmsContent
+    )
+
+    return writeNextCmsContent(updater(currentContent))
+  })
+}
+
+function enqueueCmsWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const nextWrite = writeQueue.then(operation, operation)
+  writeQueue = nextWrite.catch(() => null)
+
+  return nextWrite
+}
+
+async function writeNextCmsContent(content: CmsContent) {
+  const nextContent = withRuntimeDefaults({
+    ...content,
+    updatedAt: new Date().toISOString(),
+  })
+  const database = await openCmsDatabase()
+
+  try {
+    database
+      .prepare(
+        `
+          INSERT INTO cms_content (id, content_json, updated_at)
+          VALUES (1, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            content_json = excluded.content_json,
+            updated_at = excluded.updated_at
+        `
+      )
+      .run(JSON.stringify(nextContent), nextContent.updatedAt)
+  } finally {
+    database.close()
+  }
+
+  return nextContent
+}
+
+async function openCmsDatabase() {
+  fs.mkdirSync(/* turbopackIgnore: true */ path.dirname(cmsSqliteFile), {
+    recursive: true,
+  })
+
+  const DatabaseSync = await loadDatabaseSync()
+  const database = new DatabaseSync(/* turbopackIgnore: true */ cmsSqliteFile)
+  database.exec("PRAGMA busy_timeout = 5000")
+  database.exec("PRAGMA journal_mode = WAL")
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS cms_content (
+      id INTEGER PRIMARY KEY,
+      content_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `)
+
+  return database
+}
+
+async function loadDatabaseSync() {
+  databaseSyncPromise ??= loadNodeSqlite().then(
+    (module) => module.DatabaseSync as DatabaseSyncConstructor
+  )
+
+  return databaseSyncPromise
+}
+
+function loadNodeSqlite() {
+  const runtimeImport = new Function(
+    "specifier",
+    "return import(specifier)"
+  ) as (specifier: string) => Promise<{ DatabaseSync: unknown }>
+
+  return runtimeImport("node:sqlite")
+}
+
+function toPublicContent(content: CmsContent): CmsContent {
+  const teamMembersWithRatings = computeTeamMemberRatings(
+    content.teamMembers ?? [],
+    content.paymentOrders ?? []
+  )
+  return {
+    ...content,
+    adminSettings: undefined,
+    dashboardTasks: [],
+    teamMembers: teamMembersWithRatings,
+    blogPosts: content.blogPosts.filter(isPublished).sort(sortByOrder),
+    galleryItems: content.galleryItems.filter(isPublished).sort(sortByOrder),
+    reviewItems: content.reviewItems.filter(isPublished).sort(sortByOrder),
+    faq: {
+      zh: {
+        ...content.faq.zh,
+        items: content.faq.zh.items.filter(isPublished).sort(sortByOrder),
+      },
+      en: {
+        ...content.faq.en,
+        items: content.faq.en.items.filter(isPublished).sort(sortByOrder),
+      },
+    },
+    paymentOrders: [],
+    paymentSettings: content.paymentSettings,
+    notificationSettings: {
+      recipientEmail: "",
+      smtpFrom: "",
+      smtpHost: "",
+      smtpPassword: "",
+      smtpPort: "",
+      smtpSecure: false,
+      smtpUsername: "",
+    },
+    serviceRegions: content.serviceRegions,
+    serviceLocations: content.serviceLocations,
+  }
+}
+
+function computeTeamMemberRatings(
+  members: CmsTeamMember[],
+  orders: CmsPaymentOrder[]
+): CmsTeamMember[] {
+  return members.map((member) => {
+    const assignedOrders = orders.filter(
+      (o) => o.assignedAuntieId === member.id && o.status === "paid"
+    )
+    const reviewedOrders = assignedOrders.filter((o) => o.review)
+    const ratings = reviewedOrders
+      .map((o) => o.review!.rating)
+      .filter((r) => Number.isFinite(r) && r > 0)
+    const avgRating =
+      ratings.length > 0
+        ? Math.round(
+            (ratings.reduce((sum, r) => sum + r, 0) / ratings.length) * 10
+          ) / 10
+        : member.rating
+    return {
+      ...member,
+      rating: avgRating,
+      completedCount: assignedOrders.length,
+    }
+  })
+}
+
+function normalizePaymentOrderId(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+}
+
+function findPaymentOrder(content: CmsContent, orderId: string) {
+  const normalizedOrderId = normalizePaymentOrderId(orderId)
+
+  return (
+    content.paymentOrders.find(
+      (order) => normalizePaymentOrderId(order.orderId) === normalizedOrderId
+    ) ?? null
+  )
+}
+
+function isAdminToken(value: string | null) {
+  return value === adminToken
+}
+
+function createAdminToken() {
+  return adminToken
+}
+
+function isPublished(item: { status: string }) {
+  return item.status === "published"
+}
+
+function sortByOrder(
+  left: { sortOrder: number },
+  right: { sortOrder: number }
+) {
+  return left.sortOrder - right.sortOrder
+}
+
+export {
+  createAdminToken,
+  findPaymentOrder,
+  isAdminToken,
+  normalizePaymentOrderId,
+  readCmsContent,
+  toPublicContent,
+  updateCmsContent,
+  writeCmsContent,
+}
+
+export type { CmsPaymentOrder }
