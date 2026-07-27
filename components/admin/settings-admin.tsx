@@ -294,15 +294,21 @@ export function PaymentSettingsAdmin({
         </div>
 
         <section className="grid gap-4 rounded-lg border border-border bg-background/60 p-4 lg:grid-cols-3">
-          <label className="flex min-h-10 items-center gap-3 rounded-md border border-border bg-card px-3 text-sm font-medium">
-            <Checkbox
-              checked={draft.enabled}
-              onCheckedChange={(checked) =>
-                updateDraft({ enabled: Boolean(checked) })
-              }
-            />
-            启用支付接口
-          </label>
+          <FormField htmlFor="payment-settings-enabled" label="支付状态">
+            <label
+              className="flex h-9 items-center gap-3 rounded-md border border-border bg-card px-3 text-sm font-medium"
+              htmlFor="payment-settings-enabled"
+            >
+              <Checkbox
+                checked={draft.enabled}
+                id="payment-settings-enabled"
+                onCheckedChange={(checked) =>
+                  updateDraft({ enabled: Boolean(checked) })
+                }
+              />
+              启用支付接口
+            </label>
+          </FormField>
           <FormField label="支付通道">
             <div className="flex min-h-9 items-center justify-between gap-3 rounded-md border border-border bg-muted px-3 text-sm">
               <span className="font-medium">Airwallex</span>
@@ -741,7 +747,7 @@ export function SiteSettingsAdmin({
                 <p>显示在联系我们、页脚和支付辅助入口中。</p>
               </div>
             </div>
-            <div className="grid gap-2.5 sm:grid-cols-2">
+            <div className="grid gap-2.5">
               <FormField className="space-y-1.5" label="电话 / 微信">
                 <Input
                   className="h-8 rounded-md"
@@ -761,10 +767,7 @@ export function SiteSettingsAdmin({
                   value={draft.email}
                 />
               </FormField>
-              <FormField
-                className="space-y-1.5 sm:col-span-2"
-                label="表单通知邮箱"
-              >
+              <FormField className="space-y-1.5" label="表单通知邮箱">
                 <Input
                   className="h-8 rounded-md"
                   onChange={(event) =>
