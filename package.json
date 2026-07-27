@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
-    "package:docker": "bash scripts/package-docker.sh",
     "start": "next start -H 0.0.0.0",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
