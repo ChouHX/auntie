@@ -36,38 +36,25 @@ pnpm dev
 
 ## 与 base 的差异
 
-| 项目 | base | cn-showcase |
-|------|------|-------------|
-| 主体 | 香港 AUNTIE CHEN HOME SOLUTIONS LIMITED | 国内主体占位 |
-| 后台 `/admin` | 有 | 无 |
-| 支付 `/checkout` | Airwallex | 无 |
-| API | 有 | 无 |
-| 内容来源 | CMS API + 默认值 | 仅本地默认值 |
-| 预约表单 | 可创建支付订单 | 仅前端演示提交 |
+| 项目             | base                                    | cn-showcase    |
+| ---------------- | --------------------------------------- | -------------- |
+| 主体             | 香港 AUNTIE CHEN HOME SOLUTIONS LIMITED | 国内主体占位   |
+| 后台 `/admin`    | 有                                      | 无             |
+| 支付 `/checkout` | Airwallex                               | 无             |
+| API              | 有                                      | 无             |
+| 内容来源         | CMS API + 默认值                        | 仅本地默认值   |
+| 预约表单         | 可创建支付订单                          | 仅前端演示提交 |
 
-## Docker 一键打包
+## Docker 源码部署
 
 ```bash
 cd cn-showcase
-pnpm install
-pnpm package:docker
-```
-
-成功后会在 `release/` 生成：
-
-```text
-release/auntie-chen-cn-showcase-YYYYMMDDHHMMSS.tar.gz
-```
-
-服务器部署：
-
-```bash
-tar -xzf auntie-chen-cn-showcase-*.tar.gz
-cd auntie-chen-cn-showcase-*
-cp .env.example .env
 docker compose up --build -d
 # 默认访问 http://服务器IP:4175
 ```
+
+Docker 会直接从源码安装锁定版本的依赖、执行 Next.js 生产构建，并将
+standalone 产物复制到运行镜像，不需要预先生成发布压缩包。
 
 可选环境变量：
 
