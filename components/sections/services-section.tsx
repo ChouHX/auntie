@@ -1,4 +1,5 @@
 import { ArrowRight, CaretRight, CheckCircle, X } from "@phosphor-icons/react"
+import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Link } from "@/lib/router-compat"
 
@@ -27,15 +28,28 @@ const serviceImages = [
   { src: "/services/recurring.jpg", position: "58% 30%" },
 ] as const
 
-function ServicesSection() {
+type ServicesSectionProps = {
+  anchorPrefix?: string
+  id?: string
+  showHeading?: boolean
+}
+
+function ServicesSection({
+  anchorPrefix = "",
+  id = "services",
+  showHeading = true,
+}: ServicesSectionProps) {
   const { dict } = useI18n()
   const services = dict.servicesSection.items
 
   return (
     <Section
       data-scroll-reveal="false"
-      id="services"
-      className="overflow-hidden py-10 transition-colors duration-300 sm:py-16"
+      id={id}
+      className={cn(
+        "overflow-hidden transition-colors duration-300",
+        showHeading ? "py-10 sm:py-16" : "pt-8 pb-10 sm:pt-12 sm:pb-16"
+      )}
     >
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_12%,rgba(37,99,235,0.1),transparent_26%),radial-gradient(circle_at_88%_16%,rgba(14,165,233,0.08),transparent_24%)] dark:bg-[radial-gradient(circle_at_12%_12%,rgba(59,130,246,0.16),transparent_26%),radial-gradient(circle_at_88%_16%,rgba(14,165,233,0.12),transparent_24%)]"
@@ -47,30 +61,38 @@ function ServicesSection() {
         }}
       />
       <div className="relative">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <SectionHeading
-            kicker={dict.servicesSection.kicker}
-            title={dict.servicesSection.title}
-            description={dict.servicesSection.description}
-            className="max-w-3xl"
-          />
-          <Button
-            asChild
-            className="h-9 w-fit px-4 text-sm sm:h-10 sm:px-6"
-            variant="brandStrong"
-          >
-            <Link to="/booking">
-              {dict.common.bookNow}
-              <ArrowRight weight="bold" />
-            </Link>
-          </Button>
-        </div>
+        {showHeading ? (
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <SectionHeading
+              kicker={dict.servicesSection.kicker}
+              title={dict.servicesSection.title}
+              description={dict.servicesSection.description}
+              className="max-w-3xl"
+            />
+            <Button
+              asChild
+              className="h-9 w-fit px-4 text-sm sm:h-10 sm:px-6"
+              variant="brandStrong"
+            >
+              <Link to="/booking">
+                {dict.common.bookNow}
+                <ArrowRight weight="bold" />
+              </Link>
+            </Button>
+          </div>
+        ) : null}
 
         {/* ── Mobile: compact 2-col grid, tap to expand ── */}
-        <div className="mt-6 grid grid-cols-2 gap-2.5 sm:hidden">
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-2.5 sm:hidden",
+            showHeading && "mt-6"
+          )}
+        >
           {services.map((service, index) => (
             <MobileServiceCard
               key={service.title}
+              anchorPrefix={anchorPrefix}
               service={service}
               index={index}
             />
@@ -78,10 +100,15 @@ function ServicesSection() {
         </div>
 
         {/* ── Desktop / tablet: full cards ── */}
-        <div className="mt-8 hidden gap-4 sm:grid md:grid-cols-2 lg:grid-cols-3">
+        <div
+          className={cn(
+            "hidden gap-4 sm:grid md:grid-cols-2 lg:grid-cols-3",
+            showHeading && "mt-8"
+          )}
+        >
           {services.map((service, index) => (
             <Card
-              id={serviceAnchorIds[index]}
+              id={`${anchorPrefix}${serviceAnchorIds[index]}`}
               key={service.title}
               className="group animate-fade-up scroll-mt-28 overflow-hidden rounded-xl bg-card/88 shadow-md shadow-blue-100/40 hover:shadow-lg hover:shadow-blue-100/55 dark:bg-slate-900/88 dark:shadow-blue-950/24 dark:hover:shadow-blue-950/34"
               style={{ animationDelay: `${index * 70}ms` }}
@@ -93,7 +120,7 @@ function ServicesSection() {
                   objectPosition={
                     (serviceImages[index] ?? serviceImages[0]).position
                   }
-                  priority={index < 3}
+                  priority={false}
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/76 via-slate-950/20 to-transparent px-5 pt-12 pb-4 text-white">
                   <div className="text-[10px] font-semibold tracking-[0.14em] text-blue-100/85 uppercase sm:text-xs sm:tracking-[0.16em]">
@@ -134,6 +161,7 @@ function ServicesSection() {
 }
 
 type MobileServiceCardProps = {
+  anchorPrefix: string
   service: {
     title: string
     tag: string
@@ -143,11 +171,18 @@ type MobileServiceCardProps = {
   index: number
 }
 
-function MobileServiceCard({ service, index }: MobileServiceCardProps) {
+function MobileServiceCard({
+  anchorPrefix,
+  service,
+  index,
+}: MobileServiceCardProps) {
   const imageData = serviceImages[index] ?? serviceImages[0]
 
   return (
-    <div id={serviceAnchorIds[index]} className="scroll-mt-28">
+    <div
+      id={`${anchorPrefix}${serviceAnchorIds[index]}`}
+      className="scroll-mt-28"
+    >
       <Dialog>
         <DialogTrigger asChild>
           <button
@@ -160,7 +195,7 @@ function MobileServiceCard({ service, index }: MobileServiceCardProps) {
                 src={imageData.src}
                 alt={service.title}
                 objectPosition={imageData.position}
-                priority={index < 3}
+                priority={false}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/15 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 px-2.5 pt-8 pb-2 text-white">
@@ -295,7 +330,7 @@ function ServiceImage({
       {status === "loading" ? (
         <Skeleton className="absolute inset-0 rounded-none bg-blue-100/80 dark:bg-slate-800" />
       ) : null}
-      <img
+      <Image
         ref={imageRef}
         src={src}
         alt={alt}
@@ -304,10 +339,12 @@ function ServiceImage({
           status === "loaded" ? "opacity-100" : "opacity-0"
         )}
         decoding="async"
+        fill
         fetchPriority={priority ? "high" : "auto"}
         loading={priority ? "eager" : "lazy"}
         onError={handleError}
         onLoad={handleLoad}
+        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
         style={{
           objectFit: "cover",
           objectPosition,

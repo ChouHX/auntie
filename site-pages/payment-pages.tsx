@@ -11,6 +11,7 @@ import { Link, useNavigate, useSearchParams } from "@/lib/router-compat"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import {
   Accordion,
   AccordionContent,
@@ -34,12 +35,15 @@ import { useCmsContent } from "@/hooks/use-cms-content"
 import { useI18n, type Language } from "@/lib/i18n"
 import { saveLocalPaymentOrder } from "@/lib/local-orders"
 import { getSiteLogo } from "@/lib/site-settings"
-import type { CmsPaymentOrder } from "@/types/cms"
+import type { CmsPaymentOrder, CmsPaymentOrderAmountItem } from "@/types/cms"
 
 type PaymentOrder = {
   airwallexPaymentIntentId?: string
   amount: string
+  amountBreakdown: CmsPaymentOrderAmountItem[]
+  amountValue: number
   airwallexPaymentUrl?: string
+  baseAmountValue: number
   contact: string
   gatewayStatus?: string
   customerName: string
@@ -51,9 +55,11 @@ type PaymentOrder = {
   serviceDate: string
   serviceType: string
   status: CmsPaymentOrder["status"]
+  tipAmount: number
 }
 
 type PaymentCopy = {
+  baseAmount: string
   backHome: string
   closeReceipt: string
   contactSupport: string
@@ -64,8 +70,12 @@ type PaymentCopy = {
       PaymentOrder,
       | "airwallexPaymentIntentId"
       | "airwallexPaymentUrl"
+      | "amountBreakdown"
+      | "amountValue"
+      | "baseAmountValue"
       | "gatewayStatus"
       | "status"
+      | "tipAmount"
     >,
     string
   >
@@ -79,15 +89,29 @@ type PaymentCopy = {
   paymentConfirmRetry: string
   paymentConfirmationPending: string
   paymentFailed: string
+  paymentOrderExpiredDescription: string
+  paymentOrderExpiredTitle: string
   paymentMethodLabel: string
   paymentSummaryTitle: string
   paymentType: string
+  policyLinksLabel: string
+  policyPrivacy: string
+  policyTerms: string
+  policyRefund: string
+  policyDelivery: string
   policyNotice: string
   processingPayment: string
   receiptDescription: string
   receiptTitle: string
   reviewNotice: string
   secureTitle: string
+  tipAmount: string
+  tipDescription: string
+  tipPlaceholder: string
+  tipValidationMessage: string
+  totalAmount: string
+  confirmPayment: string
+  confirmPaymentDescription: string
   successDescription: string
   successTitle: string
   viewReceipt: string
@@ -95,6 +119,7 @@ type PaymentCopy = {
 
 const paymentCopy: Record<Language, PaymentCopy> = {
   zh: {
+    baseAmount: "基础费用",
     backHome: "返回首页",
     closeReceipt: "关闭",
     contactSupport: "联系客服",
@@ -124,11 +149,19 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     paymentConfirmationPending:
       "支付已提交，支付平台仍在确认结果。请勿重复付款，可以稍后重新确认。",
     paymentFailed: "支付未完成，请重新加载支付表单后再试。",
+    paymentOrderExpiredDescription:
+      "该订单未在规定时间内完成付款，已自动取消。如需继续预约，请返回首页重新提交预约。",
+    paymentOrderExpiredTitle: "付款订单已超时取消",
     paymentNotice:
-      "付款由国际支付服务商空中云汇（Airwallex）安全处理，采用加密传输与支付风控机制；陈阿姨到家不会保存您的银行卡信息。",
+      "本次付款由国内最大跨境支付平台Airwallex（空中云汇）安全支付系统处理，陈阿姨到家无法保存您的完整银行卡号、CVV 或安全验证码，仅保留订单服务所需信息用于预约确认与售后跟进。",
     paymentMethodLabel: "付款方式",
     paymentSummaryTitle: "付款明细",
     paymentType: "订单付款",
+    policyLinksLabel: "相关政策",
+    policyPrivacy: "隐私政策",
+    policyTerms: "服务条款",
+    policyRefund: "取消与退款政策",
+    policyDelivery: "服务履约说明",
     policyNotice:
       "清洁服务属于上门服务，服务完成后通常不支持无理由退款。如有问题请在 48 小时内联系客服。",
     processingPayment: "正在确认支付结果...",
@@ -136,12 +169,20 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     receiptTitle: "账单信息",
     reviewNotice: "提交服务评价",
     secureTitle: "安全付款",
+    tipAmount: "小费",
+    tipDescription: "请填写小费金额；如不打赏，请填写 0。",
+    tipPlaceholder: "0.00",
+    tipValidationMessage: "请填写 0 - 1000 之间的小费金额。",
+    totalAmount: "确认支付金额",
+    confirmPayment: "确认金额并进入安全付款",
+    confirmPaymentDescription: "请核对以上金额，确认后将进入安全付款界面。",
     successDescription:
       "感谢您的付款。我们已收到您的服务款项。后续如有服务反馈或售后问题，可以通过客服联系我们。",
     successTitle: "支付成功",
     viewReceipt: "查看账单",
   },
   en: {
+    baseAmount: "Service total",
     backHome: "Back home",
     closeReceipt: "Close",
     contactSupport: "Contact support",
@@ -173,11 +214,19 @@ const paymentCopy: Record<Language, PaymentCopy> = {
       "Payment has been submitted and is still being confirmed. Do not pay again; you can check the result again shortly.",
     paymentFailed:
       "The payment was not completed. Reload the payment form and try again.",
+    paymentOrderExpiredDescription:
+      "This order was not paid within the allowed time and has been cancelled. Return home to submit a new booking.",
+    paymentOrderExpiredTitle: "Payment order expired",
     paymentNotice:
-      "Payments are securely handled by Airwallex with encrypted transmission and payment risk controls. Auntie Chen Home does not store your card information.",
+      "Payment is handled through a secure payment channel. Auntie Chen Home does not store your card information.",
     paymentMethodLabel: "Payment Method",
     paymentSummaryTitle: "Payment Details",
     paymentType: "Order payment",
+    policyLinksLabel: "Policies",
+    policyPrivacy: "Privacy Policy",
+    policyTerms: "Terms of Service",
+    policyRefund: "Cancellation & Refund",
+    policyDelivery: "Service Delivery",
     policyNotice:
       "Cleaning is an on-site service. After service is completed, no-reason refunds are usually not supported. Contact support within 48 hours if there is an issue.",
     processingPayment: "Confirming payment result...",
@@ -185,6 +234,15 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     receiptTitle: "Billing Details",
     reviewNotice: "Submit service review",
     secureTitle: "Secure payment",
+    tipAmount: "Tip",
+    tipDescription:
+      "Enter a tip amount. Enter 0 if you do not wish to add a tip.",
+    tipPlaceholder: "0.00",
+    tipValidationMessage: "Enter a tip amount from 0 to 1000.",
+    totalAmount: "Payment total",
+    confirmPayment: "Confirm amount and continue",
+    confirmPaymentDescription:
+      "Review the amount above. The secure payment page opens after confirmation.",
     successDescription:
       "Thank you for your payment. We have received your service payment. For service feedback or after-service questions, contact support.",
     successTitle: "Payment Successful",
@@ -197,15 +255,6 @@ const airwallexSdkScriptSrc =
   "https://static.airwallex.com/components/sdk/v1/index.js"
 const paymentCompletionPollDelaysMs = [0, 1000, 2000, 3000, 5000, 8000, 13000]
 const paymentOrderSyncIntervalMs = 3500
-const airwallexPaymentCompleteEventNames = [
-  "success",
-  "complete",
-  "completed",
-  "payment_success",
-  "paymentSuccess",
-  "onSuccess",
-]
-
 type AirwallexEmbeddedEnvironment = "demo" | "prod"
 
 type AirwallexDropInIntent = {
@@ -269,59 +318,6 @@ const paymentCheckoutPromises = new Map<
   Promise<PaymentCheckoutResult>
 >()
 
-const exclusiveOrderSeeds: Record<
-  string,
-  Omit<PaymentOrder, "paymentType" | "serviceType"> & {
-    serviceType: Record<Language, string>
-  }
-> = {
-  "ORD-1001": {
-    amount: "$268.00",
-    contact: "+1 9492798310",
-    customerName: "Irvine Client",
-    note: "Kitchen deep cleaning and bathroom detail work.",
-    orderId: "ORD-1001",
-    serviceAddress: "Irvine, CA",
-    serviceArea: "Irvine · 美国",
-    serviceDate: "2026-06-27",
-    serviceType: {
-      zh: "深度清洁",
-      en: "Deep Cleaning",
-    },
-    status: "unpaid",
-  },
-  "ORD-20260627": {
-    amount: "$188.00",
-    contact: "client@example.com",
-    customerName: "Los Angeles Client",
-    note: "Completed regular cleaning service.",
-    orderId: "ORD-20260627",
-    serviceAddress: "Los Angeles, CA",
-    serviceArea: "洛杉矶 / 尔湾 · 美国",
-    serviceDate: "2026-06-27",
-    serviceType: {
-      zh: "日常清洁",
-      en: "Regular Cleaning",
-    },
-    status: "unpaid",
-  },
-  "ORD-XXXX": {
-    amount: "$268.00",
-    contact: "+1 9492798310",
-    customerName: "Auntie Chen Client",
-    note: "Dedicated payment link sample for order review.",
-    orderId: "ORD-XXXX",
-    serviceAddress: "Irvine, CA",
-    serviceArea: "Irvine · 美国",
-    serviceDate: "2026-06-27",
-    serviceType: {
-      zh: "深度清洁",
-      en: "Deep Cleaning",
-    },
-    status: "unpaid",
-  },
-}
-
 function PaymentPage() {
   const { dict, language } = useI18n()
   const { content } = useCmsContent(["siteSettings"])
@@ -335,9 +331,6 @@ function PaymentPage() {
   const [remoteOrder, setRemoteOrder] = useState<
     PaymentOrder | null | undefined
   >(undefined)
-  const fallbackOrder = orderId
-    ? createExclusiveOrder(orderId, language, copy.paymentType)
-    : null
   const activeRemoteOrder =
     normalizeOrderId(remoteOrder?.orderId ?? "") === orderId
       ? remoteOrder
@@ -349,7 +342,7 @@ function PaymentPage() {
     },
     [copy.paymentType, setRemoteOrder]
   )
-  const exclusiveOrder = activeRemoteOrder ?? fallbackOrder
+  const exclusiveOrder = activeRemoteOrder
   const isLoadingOrder = Boolean(orderId) && remoteOrder === undefined
 
   useEffect(() => {
@@ -502,6 +495,13 @@ function PaymentPage() {
               copy={copy}
               logoImage={logoImage}
             />
+          ) : activeRemoteOrder?.status === "cancelled" ? (
+            <ExpiredPaymentOrderCard
+              brandName={dict.common.brandName}
+              copy={copy}
+              logoImage={logoImage}
+              orderId={activeRemoteOrder.orderId}
+            />
           ) : exclusiveOrder ? (
             <ExclusiveOrderCard
               brandName={dict.common.brandName}
@@ -547,8 +547,16 @@ function ExclusiveOrderCard({
   order: PaymentOrder
 }) {
   const [isReceiptOpen, setIsReceiptOpen] = useState(false)
+  const [isPaymentConfirmed, setIsPaymentConfirmed] = useState(
+    Boolean(order.airwallexPaymentIntentId) || order.status === "pending"
+  )
+  const [confirmedTipAmount, setConfirmedTipAmount] = useState(order.tipAmount)
   const paidOrder = order.status === "paid" ? order : null
   const isPaid = Boolean(paidOrder)
+  const needsPaymentConfirmation =
+    !isPaymentConfirmed &&
+    order.status === "unpaid" &&
+    !order.airwallexPaymentIntentId
   const receiptDialog = (
     <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
       <DialogContent className="max-w-2xl">
@@ -629,6 +637,10 @@ function ExclusiveOrderCard({
           </div>
         </div>
 
+        {!needsPaymentConfirmation ? (
+          <PaymentAmountBreakdown copy={copy} order={order} />
+        ) : null}
+
         <div className="hidden lg:block">
           <CheckoutOrderSummary copy={copy} order={order} />
         </div>
@@ -638,6 +650,10 @@ function ExclusiveOrderCard({
         <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
           {copy.paymentNotice}
         </p>
+        <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+          {copy.policyNotice}
+        </p>
+        <CheckoutPolicyLinks copy={copy} />
       </aside>
 
       <div className="flex min-h-[28rem] flex-col justify-start bg-white px-4 py-5 md:min-h-[32rem] md:justify-center md:px-8 md:py-6 lg:px-10 dark:bg-slate-900">
@@ -651,12 +667,24 @@ function ExclusiveOrderCard({
             {copy.secureTitle}
           </span>
         </div>
-        <AirwallexDropInPayment
-          copy={copy}
-          language={language}
-          onOrderUpdate={onOrderUpdate}
-          order={order}
-        />
+        {needsPaymentConfirmation ? (
+          <PaymentConfirmationPanel
+            copy={copy}
+            onConfirm={(tipAmount) => {
+              setConfirmedTipAmount(tipAmount)
+              setIsPaymentConfirmed(true)
+            }}
+            order={order}
+          />
+        ) : (
+          <AirwallexDropInPayment
+            copy={copy}
+            language={language}
+            onOrderUpdate={onOrderUpdate}
+            order={order}
+            tipAmount={confirmedTipAmount || order.tipAmount}
+          />
+        )}
       </div>
 
       {receiptDialog}
@@ -664,16 +692,154 @@ function ExclusiveOrderCard({
   )
 }
 
+function PaymentConfirmationPanel({
+  copy,
+  onConfirm,
+  order,
+}: {
+  copy: PaymentCopy
+  onConfirm: (tipAmount: number) => void
+  order: PaymentOrder
+}) {
+  const [tipInput, setTipInput] = useState("")
+  const parsedTipAmount = tipInput.trim() ? Number(tipInput) : 0
+  const isTipValid =
+    tipInput.trim() !== "" &&
+    Number.isFinite(parsedTipAmount) &&
+    parsedTipAmount >= 0 &&
+    parsedTipAmount <= 1000
+  const baseAmountValue = getBasePaymentAmount(order)
+  const totalAmount = baseAmountValue + (isTipValid ? parsedTipAmount : 0)
+
+  return (
+    <div className="mx-auto w-full max-w-md rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+      <div className="text-base font-semibold text-slate-950 dark:text-white">
+        {copy.paymentSummaryTitle}
+      </div>
+      <div className="mt-3">
+        <PaymentAmountBreakdown copy={copy} order={order} />
+      </div>
+      <label className="mt-4 block text-sm font-medium text-slate-950 dark:text-white">
+        {copy.tipAmount}
+        <Input
+          className="mt-2 h-10 rounded-md"
+          inputMode="decimal"
+          max="1000"
+          min="0"
+          onChange={(event) => setTipInput(event.target.value)}
+          placeholder={copy.tipPlaceholder}
+          required
+          type="number"
+          value={tipInput}
+        />
+      </label>
+      <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
+        {copy.tipDescription}
+      </p>
+      {!isTipValid ? (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-300">
+          {copy.tipValidationMessage}
+        </p>
+      ) : null}
+      <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 dark:border-white/10">
+        <span className="text-sm text-slate-500 dark:text-slate-400">
+          {copy.totalAmount}
+        </span>
+        <span className="text-xl font-semibold text-slate-950 dark:text-white">
+          {formatPaymentAmount(totalAmount, order.amount)}
+        </span>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+        {copy.confirmPaymentDescription}
+      </p>
+      <Button
+        className="mt-4 h-10 w-full rounded-lg"
+        disabled={!isTipValid}
+        onClick={() => onConfirm(Number(parsedTipAmount.toFixed(2)))}
+        type="button"
+        variant="brand"
+      >
+        <CreditCard weight="fill" />
+        {copy.confirmPayment}
+      </Button>
+    </div>
+  )
+}
+
+function PaymentAmountBreakdown({
+  copy,
+  order,
+}: {
+  copy: PaymentCopy
+  order: PaymentOrder
+}) {
+  const baseAmountValue = getBasePaymentAmount(order)
+  const items = order.amountBreakdown.length
+    ? order.amountBreakdown
+    : [{ amount: baseAmountValue, label: copy.baseAmount }]
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white/80 dark:border-white/10 dark:bg-white/[0.04]">
+      <div className="divide-y divide-slate-100 dark:divide-white/10">
+        {items.map((item, index) => (
+          <div
+            className="flex items-center justify-between gap-4 px-3 py-2 text-xs"
+            key={`${item.label}-${index}`}
+          >
+            <span className="min-w-0 truncate text-slate-500 dark:text-slate-400">
+              {item.label}
+            </span>
+            <span className="shrink-0 font-medium text-slate-900 dark:text-white">
+              {formatPaymentAmount(item.amount, order.amount)}
+            </span>
+          </div>
+        ))}
+        {order.tipAmount > 0 ? (
+          <div className="flex items-center justify-between gap-4 px-3 py-2 text-xs">
+            <span className="text-slate-500 dark:text-slate-400">
+              {copy.tipAmount}
+            </span>
+            <span className="font-medium text-slate-900 dark:text-white">
+              {formatPaymentAmount(order.tipAmount, order.amount)}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function getBasePaymentAmount(order: PaymentOrder) {
+  if (Number.isFinite(order.baseAmountValue) && order.baseAmountValue >= 0) {
+    return order.baseAmountValue
+  }
+
+  const breakdownTotal = order.amountBreakdown.reduce(
+    (sum, item) => sum + item.amount,
+    0
+  )
+
+  return breakdownTotal || Math.max(0, order.amountValue - order.tipAmount)
+}
+
+function formatPaymentAmount(value: number, fallbackAmount: string) {
+  const prefix = fallbackAmount.trim().match(/[^\d.,\s-]+/)?.[0] ?? "$"
+
+  return `${prefix}${value.toFixed(2)}`
+}
+
 function AirwallexDropInPayment({
   copy,
   language,
   onOrderUpdate,
   order,
+  tipAmount,
 }: {
   copy: PaymentCopy
   language: Language
   onOrderUpdate: (order: CmsPaymentOrder) => void
   order: PaymentOrder
+  tipAmount: number
 }) {
   const containerId = `airwallex-dropin-${normalizeOrderId(
     order.orderId
@@ -690,15 +856,16 @@ function AirwallexDropInPayment({
 
     mountGenerationRef.current = generation
     let isActive = true
+    let paymentSubmitted = false
     let dropInElement: AirwallexElement | null = null
-    let removeAirwallexMessageListener: (() => void) | null = null
     const isCurrentMount = () =>
       isActive && mountGenerationRef.current === generation
     const handlePaymentSubmitted = () => {
-      if (!isCurrentMount()) {
+      if (!isCurrentMount() || paymentSubmitted) {
         return
       }
 
+      paymentSubmitted = true
       setError("")
       setIsCompleting(true)
       setIsLoading(false)
@@ -708,7 +875,7 @@ function AirwallexDropInPayment({
 
     async function mountDropIn() {
       try {
-        const result = await getPaymentCheckout(order.orderId)
+        const result = await getPaymentCheckout(order.orderId, tipAmount)
 
         if (!isCurrentMount()) {
           return
@@ -748,19 +915,12 @@ function AirwallexDropInPayment({
           return
         }
 
-        removeAirwallexMessageListener = listenForAirwallexPaymentComplete(
-          result.paymentIntent.id,
-          handlePaymentSubmitted
-        )
-
         dropInElement.on?.("ready", () => {
           if (isCurrentMount()) {
             setIsLoading(false)
           }
         })
-        airwallexPaymentCompleteEventNames.forEach((eventName) => {
-          dropInElement?.on?.(eventName, handlePaymentSubmitted)
-        })
+        dropInElement.on?.("success", handlePaymentSubmitted)
         dropInElement.on?.("error", (event) => {
           if (isCurrentMount()) {
             setError(
@@ -855,7 +1015,6 @@ function AirwallexDropInPayment({
     return () => {
       isActive = false
       mountGenerationRef.current += 1
-      removeAirwallexMessageListener?.()
       cleanupAirwallexElement(dropInElement)
     }
   }, [
@@ -866,6 +1025,7 @@ function AirwallexDropInPayment({
     onOrderUpdate,
     order.orderId,
     retryKey,
+    tipAmount,
   ])
 
   return (
@@ -967,20 +1127,23 @@ async function loadAirwallexSdk(): Promise<AirwallexComponentsSdk> {
   return airwallexSdkPromise
 }
 
-function getPaymentCheckout(orderId: string) {
+function getPaymentCheckout(orderId: string, tipAmount: number) {
   const normalizedOrderId = normalizeOrderId(orderId)
-  const cachedPromise = paymentCheckoutPromises.get(normalizedOrderId)
+  const cacheKey = `${normalizedOrderId}:${tipAmount.toFixed(2)}`
+  const cachedPromise = paymentCheckoutPromises.get(cacheKey)
 
   if (cachedPromise) {
     return cachedPromise
   }
 
-  const checkoutPromise = startPaymentOrderCheckout(orderId).catch((error) => {
-    paymentCheckoutPromises.delete(normalizedOrderId)
-    throw error
-  })
+  const checkoutPromise = startPaymentOrderCheckout(orderId, tipAmount).catch(
+    (error) => {
+      paymentCheckoutPromises.delete(cacheKey)
+      throw error
+    }
+  )
 
-  paymentCheckoutPromises.set(normalizedOrderId, checkoutPromise)
+  paymentCheckoutPromises.set(cacheKey, checkoutPromise)
   return checkoutPromise
 }
 
@@ -1075,78 +1238,6 @@ function replaceCheckoutUrlWithSync(orderId: string) {
   url.searchParams.set("order", normalizeOrderId(orderId))
   url.searchParams.set("sync", "1")
   window.history.replaceState(window.history.state, "", url)
-}
-
-function listenForAirwallexPaymentComplete(
-  paymentIntentId: string,
-  onComplete: () => void
-) {
-  if (typeof window === "undefined") {
-    return () => null
-  }
-
-  function handleMessage(event: MessageEvent) {
-    if (!isAirwallexOrigin(event.origin)) {
-      return
-    }
-
-    if (isAirwallexPaymentCompleteMessage(event.data, paymentIntentId)) {
-      onComplete()
-    }
-  }
-
-  window.addEventListener("message", handleMessage)
-  return () => window.removeEventListener("message", handleMessage)
-}
-
-function isAirwallexOrigin(origin: string) {
-  try {
-    const hostname = new URL(origin).hostname
-
-    return hostname === "airwallex.com" || hostname.endsWith(".airwallex.com")
-  } catch {
-    return false
-  }
-}
-
-function isAirwallexPaymentCompleteMessage(
-  data: unknown,
-  paymentIntentId: string
-) {
-  const messageText = getMessageText(data).toLowerCase()
-
-  if (!messageText) {
-    return false
-  }
-
-  const hasCurrentIntent =
-    paymentIntentId && messageText.includes(paymentIntentId.toLowerCase())
-  const hasPaymentContext =
-    hasCurrentIntent || /payment|intent|checkout|dropin/.test(messageText)
-  const hasSuccessSignal = /success|succeeded|paid|completed|complete/.test(
-    messageText
-  )
-  const hasFailureSignal = /error|failed|cancelled|canceled|declined/.test(
-    messageText
-  )
-
-  return hasPaymentContext && hasSuccessSignal && !hasFailureSignal
-}
-
-function getMessageText(value: unknown): string {
-  if (typeof value === "string") {
-    return value
-  }
-
-  if (!value || typeof value !== "object") {
-    return ""
-  }
-
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return ""
-  }
 }
 
 function wait(delayMs: number) {
@@ -1344,8 +1435,53 @@ function MissingOrderCard({
       <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100">
         {copy.fields.orderId}: {orderId}
       </div>
+      <div className="mt-4">
+        <CheckoutPolicyLinks copy={copy} />
+      </div>
       <Button asChild className="mt-6" variant="outline">
         <Link to="/contact">{copy.contactSupport}</Link>
+      </Button>
+    </Card>
+  )
+}
+
+function ExpiredPaymentOrderCard({
+  brandName,
+  copy,
+  logoImage,
+  orderId,
+}: {
+  brandName: string
+  copy: PaymentCopy
+  logoImage: string
+  orderId: string
+}) {
+  return (
+    <Card className="w-full max-w-xl rounded-lg bg-card/86 p-6 shadow-xl shadow-blue-100/60 dark:bg-slate-900/82 dark:shadow-blue-950/24">
+      <CheckoutBrandHeader
+        brandName={brandName}
+        className="mb-6"
+        logoImage={logoImage}
+        subtitle={copy.secureTitle}
+      />
+      <div className="flex items-start gap-4">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white">
+          <WarningCircle size={24} weight="fill" />
+        </div>
+        <div>
+          <h2 className="text-xl font-medium text-slate-950 dark:text-white">
+            {copy.paymentOrderExpiredTitle}
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
+            {copy.paymentOrderExpiredDescription}
+          </p>
+        </div>
+      </div>
+      <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100">
+        {copy.fields.orderId}: {orderId}
+      </div>
+      <Button asChild className="mt-6" variant="brand">
+        <Link to="/">{copy.backHome}</Link>
       </Button>
     </Card>
   )
@@ -1379,6 +1515,9 @@ function PaymentLinkRequiredCard({
       </p>
       <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-100">
         {copy.policyNotice}
+      </div>
+      <div className="mt-4">
+        <CheckoutPolicyLinks copy={copy} />
       </div>
       <Button asChild className="mt-6" variant="outline">
         <Link to="/contact">{copy.contactSupport}</Link>
@@ -1438,15 +1577,26 @@ function MobileCheckoutOrderDetails({
   ].filter((item) => Boolean(String(item.value).trim()))
 
   return (
-    <Accordion className="lg:hidden" collapsible type="single">
-      <AccordionItem className="border-slate-200 dark:border-white/10" value="order-details">
+    <Accordion
+      className="lg:hidden"
+      collapsible
+      defaultValue="order-details"
+      type="single"
+    >
+      <AccordionItem
+        className="border-slate-200 dark:border-white/10"
+        value="order-details"
+      >
         <AccordionTrigger className="py-3 text-sm font-medium">
           <span>{copy.paymentSummaryTitle}</span>
         </AccordionTrigger>
         <AccordionContent className="pb-3">
           <div className="space-y-2 rounded-lg border border-slate-200 bg-white/75 p-3 dark:border-white/10 dark:bg-white/[0.04]">
             {items.map((item) => (
-              <div className="flex items-start justify-between gap-4 text-xs" key={item.label}>
+              <div
+                className="flex items-start justify-between gap-4 text-xs"
+                key={item.label}
+              >
                 <span className="shrink-0 text-slate-500 dark:text-slate-400">
                   {item.label}
                 </span>
@@ -1499,6 +1649,34 @@ function CheckoutOrderSummary({
               {item.value}
             </span>
           </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CheckoutPolicyLinks({ copy }: { copy: PaymentCopy }) {
+  const links = [
+    { label: copy.policyPrivacy, to: "/privacy" },
+    { label: copy.policyTerms, to: "/terms" },
+    { label: copy.policyRefund, to: "/cancellation-refund" },
+    { label: copy.policyDelivery, to: "/service-delivery" },
+  ]
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white/70 px-3 py-3 text-xs text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+      <div className="font-medium text-slate-800 dark:text-slate-100">
+        {copy.policyLinksLabel}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5">
+        {links.map((link) => (
+          <Link
+            key={link.to}
+            className="underline underline-offset-2 transition hover:text-blue-700 dark:hover:text-blue-200"
+            to={link.to}
+          >
+            {link.label}
+          </Link>
         ))}
       </div>
     </div>
@@ -1669,27 +1847,6 @@ function PaymentSummary({
   )
 }
 
-function createExclusiveOrder(
-  orderId: string,
-  language: Language,
-  paymentType: string
-): PaymentOrder | null {
-  const seed = Object.values(exclusiveOrderSeeds).find(
-    (candidate) => normalizeOrderId(candidate.orderId) === orderId
-  )
-
-  if (!seed) {
-    return null
-  }
-
-  return {
-    ...seed,
-    paymentType,
-    serviceType: seed.serviceType[language],
-    status: seed.status,
-  }
-}
-
 function toPaymentOrder(
   order: CmsPaymentOrder,
   paymentType: string
@@ -1697,7 +1854,13 @@ function toPaymentOrder(
   return {
     airwallexPaymentIntentId: order.airwallexPaymentIntentId,
     amount: order.amount,
+    amountBreakdown: order.amountBreakdown ?? [],
+    amountValue: order.amountValue ?? parsePaymentAmount(order.amount),
     airwallexPaymentUrl: order.airwallexPaymentUrl,
+    baseAmountValue:
+      order.baseAmountValue ??
+      order.amountValue ??
+      parsePaymentAmount(order.amount),
     contact: order.contact,
     gatewayStatus: order.gatewayStatus,
     customerName: order.customerName,
@@ -1709,7 +1872,16 @@ function toPaymentOrder(
     serviceDate: order.serviceDate,
     serviceType: order.serviceType,
     status: order.status,
+    tipAmount: order.tipAmount ?? 0,
   }
+}
+
+function parsePaymentAmount(value: string) {
+  const amount = Number(
+    value.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/)?.[0] ?? 0
+  )
+
+  return Number.isFinite(amount) ? amount : 0
 }
 
 function normalizeOrderId(value: string) {

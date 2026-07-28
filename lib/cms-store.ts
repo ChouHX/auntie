@@ -3,6 +3,7 @@ import path from "node:path"
 
 import { defaultCmsContent } from "@/data/cms-defaults"
 import { normalizeNotificationSettings } from "@/lib/form-notifications"
+import { logServerEvent } from "@/lib/server-log"
 import type {
   CmsContent,
   CmsPaymentOrder,
@@ -78,9 +79,23 @@ function normalizePaymentOrder(
   order: CmsPaymentOrder,
   paymentSettings: CmsPaymentSettings
 ): CmsPaymentOrder {
+  const amountBreakdown = normalizePaymentAmountBreakdown(order.amountBreakdown)
+  const breakdownTotal = amountBreakdown.reduce(
+    (sum, item) => sum + item.amount,
+    0
+  )
+  const baseAmountValue = breakdownTotal
+    ? Number(breakdownTotal.toFixed(2))
+    : normalizePaymentAmountValue(order.baseAmountValue, order.amount)
+  const tipAmount = normalizeTipAmount(order.tipAmount)
+
   return {
     ...order,
-    amountValue: normalizePaymentAmountValue(order.amountValue, order.amount),
+    amountBreakdown,
+    amountValue:
+      baseAmountValue + tipAmount ||
+      normalizePaymentAmountValue(order.amountValue, order.amount),
+    baseAmountValue,
     currency: normalizePaymentCurrency(
       order.currency || paymentSettings.currency
     ),
@@ -88,10 +103,46 @@ function normalizePaymentOrder(
     provider: "airwallex",
     serviceAddress: order.serviceAddress ?? "",
     status: normalizePaymentOrderStatus(order.status),
+    tipAmount: normalizeTipAmount(order.tipAmount),
     webhookEventIds: Array.isArray(order.webhookEventIds)
       ? order.webhookEventIds.filter(Boolean)
       : [],
   }
+}
+
+function normalizeTipAmount(value: unknown) {
+  const amount = Number(value)
+
+  return Number.isFinite(amount) && amount > 0
+    ? Number(Math.min(amount, 1000).toFixed(2))
+    : 0
+}
+
+function normalizePaymentAmountBreakdown(value: unknown) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null
+      }
+
+      const record = item as { amount?: unknown; label?: unknown }
+      const label = String(record.label ?? "")
+        .trim()
+        .slice(0, 80)
+      const amount = Number(record.amount)
+
+      if (!label || !Number.isFinite(amount) || amount < 0) {
+        return null
+      }
+
+      return { amount: Number(amount.toFixed(2)), label }
+    })
+    .filter((item): item is { amount: number; label: string } => item !== null)
+    .slice(0, 20)
 }
 
 function normalizePaymentSettings(
@@ -208,6 +259,12 @@ async function writeNextCmsContent(content: CmsContent) {
   } finally {
     database.close()
   }
+
+  logServerEvent("info", "cms.content.write_completed", {
+    databaseFile: cmsSqliteFile,
+    orderCount: nextContent.paymentOrders.length,
+    updatedAt: nextContent.updatedAt,
+  })
 
   return nextContent
 }

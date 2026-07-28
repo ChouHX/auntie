@@ -5,6 +5,7 @@ import type { ReactNode } from "react"
 
 import { PageTransition } from "@/components/common/page-transition"
 import { SiteHeadSync } from "@/components/common/site-head-sync"
+import { MobileAppChrome } from "@/components/marketing/mobile-app-chrome"
 import { MobileAppDock } from "@/components/marketing/mobile-app-dock"
 import { SiteFooter } from "@/components/marketing/site-footer"
 import { SiteHeader } from "@/components/marketing/site-header"
@@ -14,6 +15,7 @@ function SiteShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isAdmin = pathname?.startsWith("/admin")
   const isCheckout = pathname === "/checkout" || pathname === "/pay"
+  const isHome = pathname === "/"
 
   if (isAdmin) {
     return (
@@ -38,12 +40,29 @@ function SiteShell({ children }: { children: ReactNode }) {
 
   return (
     <I18nProvider>
-      <div className="min-h-screen bg-[linear-gradient(180deg,#edf8ff_0%,#fbfdff_44%,#ffffff_100%)] pb-[calc(3.75rem+env(safe-area-inset-bottom))] text-slate-950 transition-colors duration-300 md:pb-0 dark:bg-slate-950 dark:bg-none dark:text-white">
+      <div
+        className={`min-h-screen bg-[linear-gradient(180deg,#edf8ff_0%,#fbfdff_44%,#ffffff_100%)] text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:bg-none dark:text-white ${isHome ? "" : "pb-[calc(3.75rem+env(safe-area-inset-bottom))] md:pb-0"}`}
+      >
         <SiteHeadSync />
-        <SiteHeader />
-        <PageTransition>{children}</PageTransition>
-        <MobileAppDock />
-        <SiteFooter />
+        {isHome ? (
+          <>
+            <div className="hidden md:block">
+              <SiteHeader />
+            </div>
+            <MobileAppChrome />
+            {children}
+            <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+              <SiteFooter />
+            </div>
+          </>
+        ) : (
+          <>
+            <SiteHeader />
+            <PageTransition>{children}</PageTransition>
+            <MobileAppDock />
+            <SiteFooter />
+          </>
+        )}
       </div>
     </I18nProvider>
   )

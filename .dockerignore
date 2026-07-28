@@ -16,5 +16,7 @@ data/cms-content.json
 data/cms.sqlite*
 data/*.tmp
 public/uploads
+public/gold-aunties/gold-auntie-??.png
+assets/source-images
 
 tsconfig.tsbuildinfo

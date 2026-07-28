@@ -1,6 +1,7 @@
 import type { CmsPaymentOrder } from "@/types/cms"
 
 const localOrdersStorageKey = "auntie-chen-local-payment-orders"
+const localOrdersUpdatedEvent = "auntie-chen-local-orders-updated"
 const maxLocalOrders = 20
 
 type LocalPaymentOrder = Pick<
@@ -78,7 +79,10 @@ function writeLocalPaymentOrders(orders: LocalPaymentOrder[]) {
 
   try {
     window.localStorage.setItem(localOrdersStorageKey, JSON.stringify(orders))
-  } catch {}
+    window.dispatchEvent(new Event(localOrdersUpdatedEvent))
+  } catch {
+    // Local order history is a convenience cache; ignore browser storage errors.
+  }
 }
 
 function toLocalPaymentOrder(order: CmsPaymentOrder): LocalPaymentOrder {
@@ -149,6 +153,7 @@ function normalizeStatus(value: unknown): LocalPaymentOrder["status"] {
 
 export {
   clearLocalPaymentOrders,
+  localOrdersUpdatedEvent,
   readLocalPaymentOrders,
   removeLocalPaymentOrder,
   saveLocalPaymentOrder,

@@ -24,10 +24,12 @@ type CmsBlogCategory = {
 }
 
 type CmsGalleryItem = {
+  detailSrc?: string
   id: string
   sortOrder: number
   src: string
   status: CmsStatus
+  thumbnailSrc?: string
 }
 
 type CmsContactMethod = {
@@ -94,14 +96,21 @@ type CmsPaymentSettings = {
 type CmsPaymentOrderStatus =
   "cancelled" | "failed" | "paid" | "pending" | "unpaid"
 
+type CmsPaymentOrderAmountItem = {
+  amount: number
+  label: string
+}
+
 type CmsPaymentOrder = {
   airwallexPaymentIntentClientSecret?: string
   airwallexPaymentIntentId?: string
   airwallexPaymentLinkId?: string
   airwallexPaymentUrl?: string
   amount: string
+  amountBreakdown?: CmsPaymentOrderAmountItem[]
   amountValue?: number
   assignedAuntieId?: string
+  baseAmountValue?: number
   contact: string
   createdAt: string
   currency?: string
@@ -111,6 +120,7 @@ type CmsPaymentOrder = {
   note: string
   orderId: string
   paidAt?: string
+  paymentExpiresAt?: string
   provider?: "airwallex"
   review?: CmsOrderReview
   serviceAddress: string
@@ -118,6 +128,7 @@ type CmsPaymentOrder = {
   serviceDate: string
   serviceType: string
   status: CmsPaymentOrderStatus
+  tipAmount?: number
   updatedAt: string
   webhookEventIds?: string[]
 }
@@ -245,6 +256,7 @@ export type {
   CmsGalleryItem,
   CmsNotificationSettings,
   CmsPaymentOrder,
+  CmsPaymentOrderAmountItem,
   CmsPaymentOrderStatus,
   CmsPaymentSettings,
   CmsServiceLocation,

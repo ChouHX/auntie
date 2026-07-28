@@ -129,9 +129,7 @@ async function fetchFeaturedAunties() {
 }
 
 async function fetchPublicAuntie(auntieId: string) {
-  return request<CmsTeamMember>(
-    `/api/aunties/${encodeURIComponent(auntieId)}`
-  )
+  return request<CmsTeamMember>(`/api/aunties/${encodeURIComponent(auntieId)}`)
 }
 
 async function loginAdmin(username: string, password: string) {
@@ -402,7 +400,7 @@ async function createBookingPaymentOrder(payload: BookingOrderPayload) {
   )
 }
 
-async function startPaymentOrderCheckout(orderId: string) {
+async function startPaymentOrderCheckout(orderId: string, tipAmount = 0) {
   return request<{
     order: CmsPaymentOrder
     paymentIntent: {
@@ -413,6 +411,7 @@ async function startPaymentOrderCheckout(orderId: string) {
       id: string
     } | null
   }>(`/api/payment-orders/${encodeURIComponent(orderId)}/checkout`, {
+    body: JSON.stringify({ tipAmount }),
     method: "POST",
   })
 }

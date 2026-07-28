@@ -1,12 +1,40 @@
+import Image from "next/image"
+import { useState } from "react"
 import { PlayCircle, VideoCamera } from "@phosphor-icons/react"
 
 import { Section, SectionHeading } from "@/components/common/section"
 import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useI18n } from "@/lib/i18n"
+
+const serviceVideoIds = [
+  "6a21VvDhnPY",
+  "6a21VvDhnPY",
+  "eTGvWFxVbok",
+  "FscbmpAxLxU",
+] as const
+
+const serviceVideoCovers = [
+  "/service-videos/regular.webp",
+  "/service-videos/kitchen-deep.webp",
+  "/service-videos/bathroom-scale.webp",
+  "/service-videos/move-out-before-after.webp",
+] as const
 
 function ServiceVideoGallerySection() {
   const { dict } = useI18n()
   const gallery = dict.serviceVideoGallery
+  const [activeVideoIndex, setActiveVideoIndex] = useState<number | null>(null)
+  const activeVideoId =
+    activeVideoIndex === null ? null : serviceVideoIds[activeVideoIndex]
+  const activeVideo =
+    activeVideoIndex === null ? null : gallery.items[activeVideoIndex]
 
   return (
     <Section className="py-10 sm:py-20" id="service-videos">
@@ -28,11 +56,13 @@ function ServiceVideoGallerySection() {
               aria-hidden={groupIndex === 1}
               className="flex shrink-0 gap-3 pr-3 sm:gap-4 sm:pr-4"
             >
-              {gallery.items.map((item) => (
-                <VideoPlaceholder
-                  key={`${groupIndex}-${item.title}`}
+              {gallery.items.map((item, index) => (
+                <ServiceVideoCard
+                  key={`${groupIndex}-${item.title}-${serviceVideoIds[index]}`}
+                  coverSrc={serviceVideoCovers[index] ?? serviceVideoCovers[0]}
                   description={item.description}
                   label={gallery.placeholder}
+                  onOpen={() => setActiveVideoIndex(index)}
                   title={item.title}
                 />
               ))}
@@ -40,25 +70,73 @@ function ServiceVideoGallerySection() {
           ))}
         </div>
       </div>
+
+      <Dialog
+        open={activeVideoIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) setActiveVideoIndex(null)
+        }}
+      >
+        {activeVideoId && activeVideo ? (
+          <DialogContent
+            className="max-w-none gap-0 overflow-hidden border-0 bg-black p-0 text-white"
+            style={{
+              width:
+                "min(calc(100vw - 1rem), calc((100dvh - 2rem) * 9 / 16), 430px)",
+            }}
+          >
+            <DialogHeader className="sr-only">
+              <DialogTitle>{activeVideo.title}</DialogTitle>
+              <DialogDescription>{activeVideo.description}</DialogDescription>
+            </DialogHeader>
+            <div className="aspect-[9/16] w-full bg-black">
+              <iframe
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="h-full w-full border-0"
+                referrerPolicy="strict-origin-when-cross-origin"
+                src={`https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=1&rel=0&playsinline=1`}
+                title={activeVideo.title}
+              />
+            </div>
+          </DialogContent>
+        ) : null}
+      </Dialog>
     </Section>
   )
 }
 
-type VideoPlaceholderProps = {
+type ServiceVideoCardProps = {
+  coverSrc: string
   description: string
   label: string
+  onOpen: () => void
   title: string
 }
 
-function VideoPlaceholder({
+function ServiceVideoCard({
+  coverSrc,
   description,
   label,
+  onOpen,
   title,
-}: VideoPlaceholderProps) {
+}: ServiceVideoCardProps) {
   return (
-    <div className="group relative aspect-video w-[min(78vw,320px)] shrink-0 overflow-hidden rounded-xl border border-border bg-slate-950 text-white shadow-xl shadow-blue-100/45 sm:w-[380px] lg:w-[420px] dark:border-white/10 dark:shadow-blue-950/25">
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(36,94,244,0.64),rgba(15,23,42,0.92)_42%,rgba(8,47,73,0.82))]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_24%_18%,rgba(255,255,255,0.2),transparent_30%),linear-gradient(90deg,rgba(255,255,255,0.09)_1px,transparent_1px),linear-gradient(180deg,rgba(255,255,255,0.07)_1px,transparent_1px)] bg-[size:auto,48px_48px,48px_48px] opacity-80" />
+    <button
+      aria-label={`${label}：${title}`}
+      className="group relative aspect-[9/16] w-[min(62vw,220px)] shrink-0 cursor-pointer overflow-hidden rounded-xl border border-border bg-slate-950 text-left text-white shadow-xl shadow-blue-100/45 sm:w-[240px] lg:w-[260px] dark:border-white/10 dark:shadow-blue-950/25"
+      onClick={onOpen}
+      type="button"
+    >
+      <Image
+        alt=""
+        aria-hidden="true"
+        className="object-cover transition duration-500 group-hover:scale-[1.025]"
+        fill
+        sizes="(max-width: 640px) 62vw, (max-width: 1024px) 240px, 260px"
+        src={coverSrc}
+      />
+      <div className="absolute inset-0 bg-slate-950/10 transition group-hover:bg-slate-950/20" />
       <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-slate-950 via-slate-950/72 to-transparent" />
 
       <div className="relative flex h-full flex-col justify-between p-4 sm:p-6">
@@ -82,7 +160,7 @@ function VideoPlaceholder({
           </p>
         </div>
       </div>
-    </div>
+    </button>
   )
 }
 

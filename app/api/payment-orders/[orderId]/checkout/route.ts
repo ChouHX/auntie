@@ -13,6 +13,11 @@ import {
   readCmsContent,
   updateCmsContent,
 } from "@/lib/cms-store"
+import {
+  createPaymentOrderExpiry,
+  expirePaymentOrder,
+  isPaymentOrderExpired,
+} from "@/lib/payment-order-lifecycle"
 import type { CmsPaymentOrder } from "@/types/cms"
 
 export const runtime = "nodejs"
@@ -22,6 +27,10 @@ export async function POST(
   context: { params: Promise<{ orderId: string }> }
 ) {
   const { orderId } = await context.params
+  const checkoutRequest = (await request.json().catch(() => ({}))) as {
+    tipAmount?: unknown
+  }
+  const requestedTipAmount = parseRequestedTipAmount(checkoutRequest.tipAmount)
   const content = await readCmsContent()
   const existingOrder = findPaymentOrder(content, orderId)
   const airwallexEnvironment = getAirwallexConfig().environment
@@ -44,6 +53,40 @@ export async function POST(
         message: "Payment is not enabled.",
       },
       { status: 403 }
+    )
+  }
+
+  if (isPaymentOrderExpired(existingOrder)) {
+    const expiredOrder = await cancelExpiredPaymentOrder(existingOrder.orderId)
+
+    return Response.json(
+      {
+        error: "payment_order_expired",
+        message: "This payment order has expired.",
+        order: toCheckoutPaymentOrder(expiredOrder ?? existingOrder),
+      },
+      { status: 409 }
+    )
+  }
+
+  if (existingOrder.status === "cancelled") {
+    return Response.json(
+      {
+        error: "payment_order_cancelled",
+        message: "This payment order has been cancelled.",
+        order: toCheckoutPaymentOrder(existingOrder),
+      },
+      { status: 409 }
+    )
+  }
+
+  if (checkoutRequest.tipAmount !== undefined && requestedTipAmount === null) {
+    return Response.json(
+      {
+        error: "invalid_tip_amount",
+        message: "Tip amount must be between 0 and 1000.",
+      },
+      { status: 400 }
     )
   }
 
@@ -70,18 +113,31 @@ export async function POST(
         currency: normalizePaymentCurrency(
           existingOrder.currency || content.paymentSettings.currency
         ),
-        environment:
-          airwallexEnvironment === "production" ? "prod" : "demo",
+        environment: airwallexEnvironment === "production" ? "prod" : "demo",
         id: existingOrder.airwallexPaymentIntentId,
       },
     })
   }
 
   try {
+    const baseAmountValue = getBaseAmountValue(existingOrder)
+    const tipAmount =
+      normalizeTipAmount(existingOrder.tipAmount) || requestedTipAmount || 0
+    const checkoutOrder: CmsPaymentOrder = {
+      ...existingOrder,
+      amount: formatPaymentAmount(
+        baseAmountValue + tipAmount,
+        existingOrder.amount
+      ),
+      amountValue: Number((baseAmountValue + tipAmount).toFixed(2)),
+      baseAmountValue,
+      paymentExpiresAt: createPaymentOrderExpiry(),
+      tipAmount,
+    }
     const returnUrl = createPaymentReturnUrl(request, existingOrder.orderId)
     const paymentIntent = await createAirwallexPaymentIntent({
       content,
-      order: existingOrder,
+      order: checkoutOrder,
       returnUrl,
     })
     let savedOrder: CmsPaymentOrder | null = null
@@ -95,13 +151,14 @@ export async function POST(
 
         const nextOrder: CmsPaymentOrder = {
           ...order,
+          amount: checkoutOrder.amount,
           airwallexPaymentIntentId:
-            paymentIntent.id ||
-            order.airwallexPaymentIntentId,
+            paymentIntent.id || order.airwallexPaymentIntentId,
           airwallexPaymentIntentClientSecret:
             paymentIntent.client_secret ||
             order.airwallexPaymentIntentClientSecret,
-          amountValue: parsePaymentAmountValue(order.amountValue, order.amount),
+          amountValue: checkoutOrder.amountValue,
+          baseAmountValue: checkoutOrder.baseAmountValue,
           currency: normalizePaymentCurrency(
             paymentIntent.currency ||
               order.currency ||
@@ -110,6 +167,7 @@ export async function POST(
           gatewayStatus: paymentIntent.status ?? order.gatewayStatus,
           provider: "airwallex",
           status: order.status === "paid" ? "paid" : "pending",
+          tipAmount: checkoutOrder.tipAmount,
           updatedAt: new Date().toISOString(),
         }
         savedOrder = nextOrder
@@ -124,20 +182,19 @@ export async function POST(
     })
 
     return Response.json({
-      order: toCheckoutPaymentOrder(savedOrder ?? existingOrder),
+      order: toCheckoutPaymentOrder(savedOrder ?? checkoutOrder),
       paymentIntent: {
         amount: parsePaymentAmountValue(
           paymentIntent.amount,
-          existingOrder.amount
+          checkoutOrder.amount
         ),
         clientSecret: paymentIntent.client_secret,
         currency: normalizePaymentCurrency(
           paymentIntent.currency ||
-            existingOrder.currency ||
+            checkoutOrder.currency ||
             content.paymentSettings.currency
         ),
-        environment:
-          airwallexEnvironment === "production" ? "prod" : "demo",
+        environment: airwallexEnvironment === "production" ? "prod" : "demo",
         id: paymentIntent.id,
       },
     })
@@ -162,6 +219,65 @@ export async function POST(
       { status: 502 }
     )
   }
+}
+
+async function cancelExpiredPaymentOrder(orderId: string) {
+  let expiredOrder: CmsPaymentOrder | null = null
+
+  await updateCmsContent((content) => {
+    const normalizedOrderId = normalizePaymentOrderId(orderId)
+    const nextOrders = content.paymentOrders.map((order) => {
+      if (normalizePaymentOrderId(order.orderId) !== normalizedOrderId) {
+        return order
+      }
+
+      const nextOrder = expirePaymentOrder(order)
+      expiredOrder = nextOrder
+      return nextOrder
+    })
+
+    return { ...content, paymentOrders: nextOrders }
+  })
+
+  return expiredOrder
+}
+
+function getBaseAmountValue(order: CmsPaymentOrder) {
+  const storedBaseAmount = Number(order.baseAmountValue)
+
+  if (Number.isFinite(storedBaseAmount) && storedBaseAmount >= 0) {
+    return storedBaseAmount
+  }
+
+  return parsePaymentAmountValue(order.amountValue, order.amount)
+}
+
+function parseRequestedTipAmount(value: unknown) {
+  if (value === undefined) {
+    return 0
+  }
+
+  const amount = Number(value)
+
+  if (!Number.isFinite(amount) || amount < 0 || amount > 1000) {
+    return null
+  }
+
+  return Number(amount.toFixed(2))
+}
+
+function normalizeTipAmount(value: unknown) {
+  const amount = Number(value)
+
+  return Number.isFinite(amount) && amount > 0
+    ? Number(Math.min(amount, 1000).toFixed(2))
+    : 0
+}
+
+function formatPaymentAmount(value: number, previousAmount: string) {
+  const prefix = previousAmount.trim().match(/[^\d.,\s-]+/)?.[0] ?? "$"
+
+  return `${prefix}${value.toFixed(2)}`
 }
 
 function createPaymentReturnUrl(request: NextRequest, orderId: string) {

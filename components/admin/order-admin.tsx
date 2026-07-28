@@ -10,6 +10,7 @@ import {
   Plus,
   Star,
   Trash,
+  X,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 
@@ -45,6 +46,11 @@ import {
 import { FormField } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -62,7 +68,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import type { CmsContent, CmsPaymentOrder } from "@/types/cms"
+import type {
+  CmsContent,
+  CmsPaymentOrder,
+  CmsPaymentOrderAmountItem,
+} from "@/types/cms"
 
 type OrderAdminRemotePagination = {
   onPageChange: (page: number) => void
@@ -84,6 +94,16 @@ const paymentStatusLabels: Record<CmsPaymentOrder["status"], string> = {
   pending: "支付中",
   unpaid: "待付款",
 }
+
+const paymentCurrencyOptions = [
+  { label: "USD 美元", value: "USD" },
+  { label: "CAD 加元", value: "CAD" },
+  { label: "AUD 澳元", value: "AUD" },
+  { label: "GBP 英镑", value: "GBP" },
+  { label: "HKD 港币", value: "HKD" },
+  { label: "SGD 新加坡元", value: "SGD" },
+  { label: "EUR 欧元", value: "EUR" },
+]
 
 function OrderStatusBadges({ order }: { order: CmsPaymentOrder }) {
   const isCompleted = isPaymentOrderCompleted(order)
@@ -187,8 +207,10 @@ function createPaymentOrderDraft(defaultCurrency = "USD"): CmsPaymentOrder {
 
   return {
     amount: "",
+    amountBreakdown: [],
     amountValue: 0,
     contact: "",
+    baseAmountValue: 0,
     createdAt: now,
     currency: normalizeAdminPaymentCurrency(defaultCurrency),
     customerName: "",
@@ -208,11 +230,17 @@ function createPaymentOrderDraft(defaultCurrency = "USD"): CmsPaymentOrder {
 
 function normalizePaymentOrderDraft(order: CmsPaymentOrder): CmsPaymentOrder {
   const now = new Date().toISOString()
+  const amountBreakdown = normalizeAdminAmountBreakdown(order.amountBreakdown)
+  const baseAmountValue = amountBreakdown.length
+    ? sumAmountBreakdown(amountBreakdown)
+    : getOrderBaseAmount(order)
 
   return {
     ...order,
-    amount: normalizeAdminPaymentAmount(order.amount),
-    amountValue: parsePaymentAmount(order.amount),
+    amount: normalizeAdminPaymentAmount(String(baseAmountValue)),
+    amountBreakdown,
+    amountValue: baseAmountValue,
+    baseAmountValue,
     contact: order.contact.trim(),
     currency: normalizeAdminPaymentCurrency(order.currency),
     customerName: order.customerName.trim(),
@@ -241,6 +269,46 @@ function parsePaymentAmount(value: string) {
   )
 
   return Number.isFinite(amount) ? amount : 0
+}
+
+function getOrderBaseAmount(order: CmsPaymentOrder) {
+  const storedBaseAmount = Number(order.baseAmountValue)
+
+  if (Number.isFinite(storedBaseAmount) && storedBaseAmount >= 0) {
+    return storedBaseAmount
+  }
+
+  const breakdownTotal = sumAmountBreakdown(order.amountBreakdown ?? [])
+
+  return breakdownTotal > 0
+    ? breakdownTotal
+    : Math.max(0, parsePaymentAmount(order.amount))
+}
+
+function normalizeAdminAmountBreakdown(
+  items: CmsPaymentOrderAmountItem[] | undefined
+) {
+  return (items ?? [])
+    .map((item) => ({
+      amount: Number(Number(item.amount).toFixed(2)),
+      label: item.label.trim().slice(0, 80),
+    }))
+    .filter(
+      (item) => item.label && Number.isFinite(item.amount) && item.amount >= 0
+    )
+    .slice(0, 20)
+}
+
+function sumAmountBreakdown(items: CmsPaymentOrderAmountItem[]) {
+  return Number(
+    items.reduce((sum, item) => sum + Number(item.amount || 0), 0).toFixed(2)
+  )
+}
+
+function formatAdminCurrencyAmount(amount: number, currency: string) {
+  const normalizedAmount = Number.isFinite(amount) ? amount : 0
+
+  return `${normalizeAdminPaymentCurrency(currency)} ${normalizedAmount.toFixed(2)}`
 }
 
 function normalizeAdminPaymentAmount(value: string) {
@@ -470,11 +538,17 @@ export function OrderAdmin({
       !normalized.serviceAddress ||
       !normalized.serviceType ||
       !normalized.serviceDate ||
-      !normalized.amount
+      !normalized.amount ||
+      Number(normalized.amountValue) <= 0
     ) {
       setOrderError(
         "请填写客户姓名、服务城市、详细地址、服务类型、服务日期和金额。"
       )
+      return
+    }
+
+    if (!existingEditingOrder && !normalized.amountBreakdown?.length) {
+      setOrderError("请至少添加一项订单金额明细。")
       return
     }
 
@@ -805,15 +879,27 @@ export function OrderAdmin({
                   serviceArea={editingOrder.serviceArea}
                 />
               </FormField>
-              <FormField label="已确认金额" required>
-                <Input
-                  className="h-9 rounded-md"
-                  disabled={isEditingCompletedOrder}
-                  onChange={(event) =>
-                    updateEditingOrder({ amount: event.target.value })
+              <FormField label="订单金额明细" required>
+                <OrderAmountBreakdownEditor
+                  currency={
+                    editingOrder.currency || content.paymentSettings.currency
                   }
-                  placeholder="$268.00"
-                  value={editingOrder.amount}
+                  disabled={
+                    isEditingCompletedOrder ||
+                    Boolean(editingOrder.airwallexPaymentIntentId)
+                  }
+                  fallbackAmount={getOrderBaseAmount(editingOrder)}
+                  items={editingOrder.amountBreakdown ?? []}
+                  onChange={(amountBreakdown, baseAmountValue) =>
+                    updateEditingOrder({
+                      amount: normalizeAdminPaymentAmount(
+                        String(baseAmountValue)
+                      ),
+                      amountBreakdown,
+                      amountValue: baseAmountValue,
+                      baseAmountValue,
+                    })
+                  }
                 />
               </FormField>
               <FormField label="币种">
@@ -937,9 +1023,9 @@ function PaymentCurrencySelect({
   value: string
 }) {
   const normalizedValue = normalizeAdminPaymentCurrency(value)
-  const commonCurrencies = ["USD", "HKD", "GBP", "CAD", "AUD", "SGD"]
-  const hasCustomValue =
-    normalizedValue && !commonCurrencies.includes(normalizedValue)
+  const hasCustomValue = !paymentCurrencyOptions.some(
+    (option) => option.value === normalizedValue
+  )
 
   return (
     <Select
@@ -952,9 +1038,9 @@ function PaymentCurrencySelect({
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          {commonCurrencies.map((currency) => (
-            <SelectItem key={currency} value={currency}>
-              {currency}
+          {paymentCurrencyOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
             </SelectItem>
           ))}
           {hasCustomValue ? (
@@ -963,6 +1049,144 @@ function PaymentCurrencySelect({
         </SelectGroup>
       </SelectContent>
     </Select>
+  )
+}
+
+function OrderAmountBreakdownEditor({
+  currency,
+  disabled,
+  fallbackAmount,
+  items,
+  onChange,
+}: {
+  currency: string
+  disabled: boolean
+  fallbackAmount: number
+  items: CmsPaymentOrderAmountItem[]
+  onChange: (
+    items: CmsPaymentOrderAmountItem[],
+    baseAmountValue: number
+  ) => void
+}) {
+  const [label, setLabel] = useState("")
+  const [amount, setAmount] = useState("")
+  const total = sumAmountBreakdown(items)
+
+  function updateItems(nextItems: CmsPaymentOrderAmountItem[]) {
+    const normalizedItems = normalizeAdminAmountBreakdown(nextItems)
+
+    onChange(normalizedItems, sumAmountBreakdown(normalizedItems))
+  }
+
+  function addItem() {
+    const nextAmount = Number(amount)
+    const nextLabel = label.trim()
+
+    if (!nextLabel || !Number.isFinite(nextAmount) || nextAmount <= 0) {
+      return
+    }
+
+    const initialItems =
+      items.length === 0 && fallbackAmount > 0
+        ? [{ amount: fallbackAmount, label: "基础费用" }]
+        : items
+
+    updateItems([...initialItems, { amount: nextAmount, label: nextLabel }])
+    setLabel("")
+    setAmount("")
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          className="h-9 w-full justify-between rounded-md px-3 text-left"
+          disabled={disabled}
+          type="button"
+          variant="outline"
+        >
+          <span className="truncate">
+            {items.length ? `${items.length} 项明细` : "添加金额组成"}
+          </span>
+          <span className="shrink-0 font-semibold text-foreground">
+            {formatAdminCurrencyAmount(total || fallbackAmount, currency)}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(26rem,calc(100vw-2rem))]">
+        <div className="text-sm font-semibold text-foreground">
+          订单金额明细
+        </div>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          逐项录入费用，合计将自动作为订单确认金额。
+        </p>
+        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_6rem_auto] gap-2">
+          <Input
+            className="h-8 rounded-md text-xs"
+            disabled={disabled}
+            onChange={(event) => setLabel(event.target.value)}
+            placeholder="例如：地毯清理"
+            value={label}
+          />
+          <Input
+            className="h-8 rounded-md text-xs"
+            disabled={disabled}
+            inputMode="decimal"
+            min="0.01"
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="50"
+            step="0.01"
+            type="number"
+            value={amount}
+          />
+          <Button
+            aria-label="添加金额项"
+            className="size-8 rounded-md"
+            disabled={disabled || !label.trim() || Number(amount) <= 0}
+            onClick={addItem}
+            size="icon-sm"
+            type="button"
+          >
+            <Plus size={15} weight="bold" />
+          </Button>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {items.length ? (
+            items.map((item, index) => (
+              <span
+                className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-foreground"
+                key={`${item.label}-${index}`}
+              >
+                {item.label} {formatAdminCurrencyAmount(item.amount, currency)}
+                <button
+                  aria-label={`删除${item.label}`}
+                  className="text-muted-foreground transition hover:text-foreground"
+                  disabled={disabled}
+                  onClick={() =>
+                    updateItems(
+                      items.filter((_, itemIndex) => itemIndex !== index)
+                    )
+                  }
+                  type="button"
+                >
+                  <X size={13} weight="bold" />
+                </button>
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              尚未添加金额项
+            </span>
+          )}
+        </div>
+        <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-sm">
+          <span className="text-muted-foreground">订单金额合计</span>
+          <span className="font-semibold text-foreground">
+            {formatAdminCurrencyAmount(total || fallbackAmount, currency)}
+          </span>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 

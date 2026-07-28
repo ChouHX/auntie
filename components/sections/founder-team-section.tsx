@@ -1,11 +1,13 @@
+import Image from "next/image"
+
 import { Section, SectionHeading } from "@/components/common/section"
 import { Card } from "@/components/ui/card"
 import { useI18n } from "@/lib/i18n"
 
 const founderImages = [
-  { src: "/founders/founder-will.png", position: "50% 22%" },
-  { src: "/founders/founder-isaac.png", position: "50% 18%" },
-  { src: "/founders/founder-fan.png", position: "50% 18%" },
+  { src: "/founders/founder-will.webp", position: "50% 22%" },
+  { src: "/founders/founder-isaac.webp", position: "50% 18%" },
+  { src: "/founders/founder-fan.webp", position: "50% 18%" },
 ] as const
 
 function FounderTeamSection() {
@@ -30,7 +32,7 @@ function FounderTeamSection() {
             style={{ animationDelay: `${index * 70}ms` }}
           >
             <div className="relative size-24 shrink-0 rounded-full bg-white p-1 shadow-sm ring-1 ring-blue-100 sm:size-44 sm:p-1.5 lg:size-48 dark:bg-slate-950 dark:ring-white/10">
-              <img
+              <Image
                 alt={`${founder.name} ${founder.role}`}
                 className="size-full rounded-full object-cover"
                 decoding="async"
@@ -38,6 +40,7 @@ function FounderTeamSection() {
                 height={384}
                 loading="lazy"
                 src={(founderImages[index] ?? founderImages[0]).src}
+                sizes="(max-width: 640px) 96px, (max-width: 1024px) 176px, 192px"
                 style={{
                   imageRendering: "auto",
                   objectPosition: (founderImages[index] ?? founderImages[0])

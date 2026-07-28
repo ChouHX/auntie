@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 import type { NextRequest } from "next/server"
 
 import {
@@ -10,6 +12,7 @@ import {
   parsePaymentAmountValue,
 } from "@/lib/airwallex"
 import { updateCmsContent } from "@/lib/cms-store"
+import { logServerEvent, serializeServerError } from "@/lib/server-log"
 import type { CmsContent, CmsPaymentOrder } from "@/types/cms"
 
 export const runtime = "nodejs"
@@ -31,7 +34,29 @@ type BookingOrderBody = {
 }
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => ({}))) as BookingOrderBody
+  const requestId = getRequestId(request)
+  const startedAt = Date.now()
+  let body: BookingOrderBody
+
+  logServerEvent("info", "booking.order.received", { requestId })
+
+  try {
+    body = (await request.json()) as BookingOrderBody
+  } catch (error) {
+    logServerEvent("warn", "booking.order.invalid_json", {
+      error: serializeServerError(error),
+      requestId,
+    })
+    return bookingJsonResponse(
+      {
+        error: "booking_order_invalid_json",
+        message: "Invalid JSON.",
+        requestId,
+      },
+      400,
+      requestId
+    )
+  }
   const now = new Date().toISOString()
   const orderDraft: Omit<CmsPaymentOrder, "orderId"> = {
     amount: normalizeAmount(body.amount),
@@ -54,79 +79,122 @@ export async function POST(request: NextRequest) {
     !orderDraft.serviceType ||
     !orderDraft.amount
   ) {
-    return Response.json(
+    return bookingJsonResponse(
       {
         error: "booking_order_invalid",
         message:
           "Please provide contact, service area, address, service type, and amount.",
+        requestId,
       },
-      { status: 400 }
+      400,
+      requestId
     )
   }
 
-  let savedOrder: CmsPaymentOrder | null = null
-  let assignmentError = ""
-  await updateCmsContent((content) => {
-    const amountValue = parsePaymentAmountValue(undefined, orderDraft.amount)
-    const currency = normalizePaymentCurrency(content.paymentSettings.currency)
-    const assignedAuntieId = resolveAssignedAuntieId(
-      body,
-      orderDraft.serviceArea,
-      content
-    )
+  try {
+    let savedOrder: CmsPaymentOrder | null = null
+    let assignmentError = ""
+    await updateCmsContent((content) => {
+      const amountValue = parsePaymentAmountValue(undefined, orderDraft.amount)
+      const currency = normalizePaymentCurrency(
+        content.paymentSettings.currency
+      )
+      const assignedAuntieId = resolveAssignedAuntieId(
+        body,
+        orderDraft.serviceArea,
+        content
+      )
 
-    if (assignedAuntieId.error) {
-      assignmentError = assignedAuntieId.error
-      return content
-    }
+      if (assignedAuntieId.error) {
+        assignmentError = assignedAuntieId.error
+        return content
+      }
 
-    const order: CmsPaymentOrder = {
-      ...orderDraft,
-      amountValue,
-      currency,
-      ...(assignedAuntieId.value
-        ? { assignedAuntieId: assignedAuntieId.value }
-        : null),
-      orderId: createPaymentOrderId(content.paymentOrders ?? []),
-      provider: "airwallex",
-    }
-    savedOrder = order
+      const order: CmsPaymentOrder = {
+        ...orderDraft,
+        amountValue,
+        currency,
+        ...(assignedAuntieId.value
+          ? { assignedAuntieId: assignedAuntieId.value }
+          : null),
+        orderId: createPaymentOrderId(content.paymentOrders ?? []),
+        provider: "airwallex",
+      }
+      savedOrder = order
 
-    return {
-      ...content,
-      paymentOrders: [order, ...(content.paymentOrders ?? [])],
-    }
-  })
+      return {
+        ...content,
+        paymentOrders: [order, ...(content.paymentOrders ?? [])],
+      }
+    })
 
-  if (!savedOrder) {
-    if (assignmentError) {
-      return Response.json(
+    if (!savedOrder) {
+      if (assignmentError) {
+        return bookingJsonResponse(
+          {
+            error: "booking_auntie_invalid",
+            message: assignmentError,
+          },
+          400,
+          requestId
+        )
+      }
+
+      return bookingJsonResponse(
         {
-          error: "booking_auntie_invalid",
-          message: assignmentError,
+          error: "booking_order_failed",
+          message: "Payment order could not be created.",
         },
-        { status: 400 }
+        500,
+        requestId
       )
     }
 
-    return Response.json(
+    const order = savedOrder as CmsPaymentOrder
+
+    logServerEvent("info", "booking.order.created", {
+      durationMs: Date.now() - startedAt,
+      orderId: order.orderId,
+      requestId,
+    })
+
+    return bookingJsonResponse(
+      {
+        order,
+        paymentPath: `/checkout?order=${encodeURIComponent(order.orderId)}`,
+      },
+      201,
+      requestId
+    )
+  } catch (error) {
+    logServerEvent("error", "booking.order.create_failed", {
+      durationMs: Date.now() - startedAt,
+      error: serializeServerError(error),
+      requestId,
+    })
+    return bookingJsonResponse(
       {
         error: "booking_order_failed",
         message: "Payment order could not be created.",
+        requestId,
       },
-      { status: 500 }
+      500,
+      requestId
     )
   }
+}
 
-  const order = savedOrder as CmsPaymentOrder
+function getRequestId(request: NextRequest) {
+  const value = request.headers.get("x-request-id")?.trim() ?? ""
+  return /^[A-Za-z0-9._:-]{1,128}$/.test(value) ? value : randomUUID()
+}
 
-  return Response.json(
-    {
-      order,
-      paymentPath: `/checkout?order=${encodeURIComponent(order.orderId)}`,
-    },
-    { status: 201 }
-  )
+function bookingJsonResponse(
+  body: Record<string, unknown>,
+  status: number,
+  requestId: string
+) {
+  return Response.json(body, { headers: { "x-request-id": requestId }, status })
 }
 
 function resolveAssignedAuntieId(

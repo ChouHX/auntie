@@ -9,10 +9,11 @@ import { regionsWithDerivedCities } from "@/lib/service-regions"
 import { cn } from "@/lib/utils"
 
 type AreasSectionProps = {
+  id?: string
   variant?: "home" | "page"
 }
 
-function AreasSection({ variant = "home" }: AreasSectionProps) {
+function AreasSection({ id = "areas", variant = "home" }: AreasSectionProps) {
   const { dict } = useI18n()
   const { content } = useCmsContent(["serviceLocations", "serviceRegions"])
   const serviceLocations =
@@ -30,7 +31,7 @@ function AreasSection({ variant = "home" }: AreasSectionProps) {
 
   return (
     <Section
-      id="areas"
+      id={id}
       className={cn(
         "overflow-hidden transition-colors duration-300",
         variant === "page" ? "pt-24 sm:pt-32" : "py-10 sm:py-20"

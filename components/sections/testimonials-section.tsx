@@ -1,3 +1,4 @@
+import Image from "next/image"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowRight, MagnifyingGlassPlus } from "@phosphor-icons/react"
 import { Link } from "@/lib/router-compat"
@@ -6,12 +7,15 @@ import { Section, SectionHeading } from "@/components/common/section"
 import { Button } from "@/components/ui/button"
 import { ImagePreviewer } from "@/components/ui/image-previewer"
 import { useCmsContent } from "@/hooks/use-cms-content"
+import { resolveReviewImageSources } from "@/lib/image-sources"
 import { useI18n } from "@/lib/i18n"
 
 type ReviewImageItem = {
   alt: string
+  detailSrc: string
   index: number
   src: string
+  thumbnailSrc: string
 }
 
 function TestimonialsSection() {
@@ -25,11 +29,17 @@ function TestimonialsSection() {
       content.reviewItems
         .filter((item) => item.status === "published")
         .toSorted((a, b) => a.sortOrder - b.sortOrder)
-        .map((item, index) => ({
-          alt: `客户好评聊天记录 ${index + 1}`,
-          index,
-          src: item.src,
-        })),
+        .map((item, index) => {
+          const sources = resolveReviewImageSources(item)
+
+          return {
+            alt: `客户好评聊天记录 ${index + 1}`,
+            detailSrc: sources.detailSrc,
+            index,
+            src: sources.thumbnailSrc,
+            thumbnailSrc: sources.thumbnailSrc,
+          }
+        }),
     [content.reviewItems]
   )
   const reviewScreenshotRows = useMemo(
@@ -139,11 +149,10 @@ const ReviewScreenshotMarquee = memo(function ReviewScreenshotMarquee({
         data-reverse={reverse ? "true" : undefined}
       >
         {[0, 1].map((groupIndex) => (
-          <div key={groupIndex} className="flex shrink-0 gap-4 pr-4">
-            {images.map((image, imageIndex) => (
+          <div key={groupIndex} className="flex shrink-0 gap-3 pr-3">
+            {images.map((image) => (
               <ReviewImageCard
-                key={`${groupIndex}-${image.src}`}
-                eager={groupIndex === 0 && imageIndex < 3}
+                key={`${groupIndex}-${image.thumbnailSrc}`}
                 image={image}
                 onOpen={onOpen}
               />
@@ -156,22 +165,21 @@ const ReviewScreenshotMarquee = memo(function ReviewScreenshotMarquee({
 })
 
 type ReviewImageCardProps = {
-  eager: boolean
   image: ReviewImageItem
   onOpen: (index: number) => void
 }
 
-function ReviewImageCard({ eager, image, onOpen }: ReviewImageCardProps) {
+function ReviewImageCard({ image, onOpen }: ReviewImageCardProps) {
   return (
     <button
       aria-label={`查看${image.alt}`}
-      className="group relative h-[220px] w-[152px] shrink-0 overflow-hidden rounded-xl border border-border bg-card/88 p-1.5 text-left shadow-lg shadow-blue-100/45 transition-[box-shadow] duration-300 hover:shadow-xl hover:shadow-blue-100/65 focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2 focus-visible:outline-none sm:h-[300px] sm:w-[208px] sm:rounded-2xl sm:p-2 lg:h-[330px] lg:w-[230px] dark:border-white/10 dark:bg-white/[0.08] dark:shadow-none dark:hover:shadow-blue-950/30 dark:focus-visible:ring-blue-300"
+      className="group relative h-[180px] w-[124px] shrink-0 overflow-hidden rounded-xl border border-border bg-card/88 p-1.5 text-left shadow-lg shadow-blue-100/45 transition-[box-shadow] duration-300 hover:shadow-xl hover:shadow-blue-100/65 focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2 focus-visible:outline-none sm:h-[250px] sm:w-[174px] sm:rounded-2xl sm:p-2 lg:h-[280px] lg:w-[194px] dark:border-white/10 dark:bg-white/[0.08] dark:shadow-none dark:hover:shadow-blue-950/30 dark:focus-visible:ring-blue-300"
       onClick={() => onOpen(image.index)}
-      onFocus={() => preloadReviewImage(image.src)}
-      onPointerEnter={() => preloadReviewImage(image.src)}
+      onFocus={() => preloadReviewImage(image.detailSrc)}
+      onPointerEnter={() => preloadReviewImage(image.detailSrc)}
       type="button"
     >
-      <LazyReviewImage src={image.src} alt={image.alt} eager={eager} />
+      <LazyReviewImage src={image.thumbnailSrc} alt={image.alt} />
       <span className="pointer-events-none absolute inset-1.5 flex items-center justify-center rounded-lg bg-black/0 opacity-0 transition duration-300 group-focus-within:bg-black/46 group-focus-within:opacity-100 group-hover:bg-black/46 group-hover:opacity-100 sm:inset-2 sm:rounded-xl">
         <MagnifyingGlassPlus
           aria-hidden="true"
@@ -187,16 +195,15 @@ function ReviewImageCard({ eager, image, onOpen }: ReviewImageCardProps) {
 
 type LazyReviewImageProps = {
   alt: string
-  eager?: boolean
   src: string
 }
 
-function LazyReviewImage({ alt, eager = false, src }: LazyReviewImageProps) {
+function LazyReviewImage({ alt, src }: LazyReviewImageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const [shouldLoad, setShouldLoad] = useState(eager)
+  const [shouldLoad, setShouldLoad] = useState(false)
 
   useEffect(() => {
-    if (shouldLoad || eager) {
+    if (shouldLoad) {
       return
     }
 
@@ -215,7 +222,7 @@ function LazyReviewImage({ alt, eager = false, src }: LazyReviewImageProps) {
         }
       },
       {
-        rootMargin: "900px 1200px",
+        rootMargin: "240px",
         threshold: 0.01,
       }
     )
@@ -223,21 +230,22 @@ function LazyReviewImage({ alt, eager = false, src }: LazyReviewImageProps) {
     observer.observe(element)
 
     return () => observer.disconnect()
-  }, [eager, shouldLoad])
+  }, [shouldLoad])
 
   return (
     <div
       ref={containerRef}
-      className="h-full w-full overflow-hidden rounded-xl bg-blue-50/60 dark:bg-slate-950/80"
+      className="relative h-full w-full overflow-hidden rounded-xl bg-blue-50/60 dark:bg-slate-950/80"
     >
       {shouldLoad ? (
-        <img
+        <Image
           src={src}
           alt={alt}
-          className="h-full w-full object-contain"
-          decoding="async"
-          fetchPriority={eager ? "high" : "low"}
-          loading={eager ? "eager" : "lazy"}
+          className="object-contain"
+          fill
+          fetchPriority="low"
+          loading="lazy"
+          sizes="(max-width: 640px) 124px, (max-width: 1024px) 174px, 194px"
         />
       ) : (
         <div className="review-image-placeholder h-full w-full" />
@@ -258,7 +266,7 @@ function preloadReviewImage(src?: string) {
   }
 
   preloadedReviewImages.add(src)
-  const image = new Image()
+  const image = new window.Image()
   image.decoding = "async"
   image.src = src
 }

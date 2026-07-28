@@ -50,6 +50,16 @@ import type {
   CmsPaymentSettings,
 } from "@/types/cms"
 
+const paymentCurrencyOptions = [
+  { label: "USD 美元", value: "USD" },
+  { label: "CAD 加元", value: "CAD" },
+  { label: "AUD 澳元", value: "AUD" },
+  { label: "GBP 英镑", value: "GBP" },
+  { label: "HKD 港币", value: "HKD" },
+  { label: "SGD 新加坡元", value: "SGD" },
+  { label: "EUR 欧元", value: "EUR" },
+]
+
 export function PaymentSettingsAdmin({
   content,
   isSaving,
@@ -442,9 +452,9 @@ function PaymentCurrencySelect({
   value: string
 }) {
   const normalizedValue = normalizeAdminPaymentCurrency(value)
-  const commonCurrencies = ["USD", "HKD", "GBP", "CAD", "AUD", "SGD"]
-  const hasCustomValue =
-    normalizedValue && !commonCurrencies.includes(normalizedValue)
+  const hasCustomValue = !paymentCurrencyOptions.some(
+    (option) => option.value === normalizedValue
+  )
 
   return (
     <Select onValueChange={onChange} value={normalizedValue}>
@@ -453,9 +463,9 @@ function PaymentCurrencySelect({
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          {commonCurrencies.map((currency) => (
-            <SelectItem key={currency} value={currency}>
-              {currency}
+          {paymentCurrencyOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
             </SelectItem>
           ))}
           {hasCustomValue ? (
