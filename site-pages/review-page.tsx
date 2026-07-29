@@ -414,6 +414,11 @@ function ReviewFormCard({
         >
           {isSubmitting ? "提交中..." : "提交评价"}
         </Button>
+        <Button asChild className="w-full" variant="outline">
+          <Link to={`/checkout?order=${encodeURIComponent(order.orderId)}`}>
+            暂不评价，查看订单
+          </Link>
+        </Button>
       </div>
     </Card>
   )

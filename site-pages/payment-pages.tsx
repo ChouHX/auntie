@@ -4,6 +4,7 @@ import {
   CreditCard,
   LockKey,
   ShieldCheck,
+  Star,
   WarningCircle,
 } from "@phosphor-icons/react"
 import { motion, type Variants } from "motion/react"
@@ -56,6 +57,7 @@ type PaymentOrder = {
   serviceType: string
   status: CmsPaymentOrder["status"]
   tipAmount: number
+  review?: CmsPaymentOrder["review"]
 }
 
 type PaymentCopy = {
@@ -76,6 +78,7 @@ type PaymentCopy = {
       | "gatewayStatus"
       | "status"
       | "tipAmount"
+      | "review"
     >,
     string
   >
@@ -482,6 +485,16 @@ function PaymentPage() {
     window.sessionStorage.removeItem(lastPaymentOrderStorageKey)
   }, [activeRemoteOrder?.status])
 
+  useEffect(() => {
+    if (activeRemoteOrder?.status !== "paid" || !shouldSyncOrder) {
+      return
+    }
+
+    navigate(`/review?order=${encodeURIComponent(activeRemoteOrder.orderId)}`, {
+      replace: true,
+    })
+  }, [activeRemoteOrder, navigate, shouldSyncOrder])
+
   return (
     <section
       data-scroll-reveal="false"
@@ -591,6 +604,26 @@ function ExclusiveOrderCard({
           order={paidOrder ?? order}
           onOpenReceipt={() => setIsReceiptOpen(true)}
         />
+        <OrderSummary
+          className="mt-4 max-w-none"
+          copy={copy}
+          includeIdentity
+          order={paidOrder ?? order}
+        />
+        {order.review ? (
+          <PaymentReviewSummary order={order} />
+        ) : (
+          <Button
+            asChild
+            className="mt-4 h-10 w-full rounded-lg"
+            variant="brand"
+          >
+            <Link to={`/review?order=${encodeURIComponent(order.orderId)}`}>
+              <Star weight="fill" />
+              {copy.reviewNotice}
+            </Link>
+          </Button>
+        )}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Button
             className="h-10 rounded-lg"
@@ -601,7 +634,7 @@ function ExclusiveOrderCard({
             {copy.viewReceipt}
           </Button>
           <Button asChild className="h-10 rounded-lg" variant="outline">
-            <Link to="/after-sales">{copy.reviewNotice}</Link>
+            <Link to="/after-sales">{copy.contactSupport}</Link>
           </Button>
         </div>
         {receiptDialog}
@@ -841,6 +874,7 @@ function AirwallexDropInPayment({
   order: PaymentOrder
   tipAmount: number
 }) {
+  const navigate = useNavigate()
   const containerId = `airwallex-dropin-${normalizeOrderId(
     order.orderId
   ).toLowerCase()}`
@@ -979,6 +1013,9 @@ function AirwallexDropInPayment({
 
           if (nextStatus === "paid") {
             resolvedAsPaid = true
+            navigate(`/review?order=${encodeURIComponent(order.orderId)}`, {
+              replace: true,
+            })
             return
           }
 
@@ -1022,6 +1059,7 @@ function AirwallexDropInPayment({
     copy,
     hasSubmittedPayment,
     language,
+    navigate,
     onOrderUpdate,
     order.orderId,
     retryKey,
@@ -1077,6 +1115,41 @@ function AirwallexDropInPayment({
               : copy.paymentFormRetry}
           </Button>
         </div>
+      ) : null}
+    </div>
+  )
+}
+
+function PaymentReviewSummary({ order }: { order: PaymentOrder }) {
+  const review = order.review
+
+  if (!review) return null
+
+  return (
+    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-400/20 dark:bg-amber-500/10">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-slate-900 dark:text-white">
+          订单评价
+        </span>
+        <span className="flex gap-0.5">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <Star
+              className={
+                value <= review.rating
+                  ? "text-amber-400"
+                  : "text-slate-300 dark:text-slate-600"
+              }
+              key={value}
+              size={16}
+              weight={value <= review.rating ? "fill" : "regular"}
+            />
+          ))}
+        </span>
+      </div>
+      {review.comment ? (
+        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+          {review.comment}
+        </p>
       ) : null}
     </div>
   )
@@ -1873,6 +1946,7 @@ function toPaymentOrder(
     serviceType: order.serviceType,
     status: order.status,
     tipAmount: order.tipAmount ?? 0,
+    review: order.review,
   }
 }
 
