@@ -777,7 +777,7 @@ function BookingRequestSection() {
                     size="sm"
                     variant="outline"
                   >
-                    <Link to="/contact">{copy.quoteRequiredAction}</Link>
+                    <Link to="/about#contact">{copy.quoteRequiredAction}</Link>
                   </Button>
                 </div>
               ) : null}
@@ -1200,7 +1200,7 @@ function MobileBookingFlow({
               <MobileMessage tone="amber">
                 <div className="font-medium">{copy.quoteRequiredTitle}</div>
                 <div className="mt-1">{copy.quoteRequired}</div>
-                <Link className="mt-2 inline-block font-semibold underline" to="/contact">
+                <Link className="mt-2 inline-block font-semibold underline" to="/about#contact">
                   {copy.quoteRequiredAction}
                 </Link>
               </MobileMessage>

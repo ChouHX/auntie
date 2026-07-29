@@ -100,8 +100,8 @@ export const adminSections: AdminNavItem<AdminSection>[] = [
   { id: "gallery", label: "画廊图片", icon: Images, group: "content" },
   { id: "reviews", label: "好评图片", icon: CheckCircle, group: "content" },
   { id: "faq", label: "QA管理", icon: ListChecks, group: "content" },
-  { id: "orders", label: "订单管理", icon: Wallet, group: "content" },
-  { id: "aunties", label: "阿姨管理", icon: Users, group: "content" },
+  { id: "orders", label: "订单管理", icon: Wallet, group: "main" },
+  { id: "aunties", label: "阿姨管理", icon: Users, group: "main" },
   {
     id: "serviceAreas",
     label: "服务区域",

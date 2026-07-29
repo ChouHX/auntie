@@ -9,7 +9,7 @@ function CtaSection() {
   const { dict } = useI18n()
 
   return (
-    <section id="contact" className="py-12 sm:py-24">
+    <section id="booking-cta" className="py-12 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="relative overflow-hidden rounded-[18px] border border-border bg-card/92 p-5 text-slate-950 shadow-xl shadow-blue-100/50 sm:rounded-[20px] sm:p-12 lg:p-14 dark:border-white/10 dark:bg-slate-900/90 dark:text-white dark:shadow-blue-950/30">
           <div className="absolute -top-24 -right-24 size-72 rounded-full bg-blue-100/70 opacity-70 dark:bg-white/10 dark:opacity-40" />

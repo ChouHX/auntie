@@ -1512,7 +1512,7 @@ function MissingOrderCard({
         <CheckoutPolicyLinks copy={copy} />
       </div>
       <Button asChild className="mt-6" variant="outline">
-        <Link to="/contact">{copy.contactSupport}</Link>
+        <Link to="/about#contact">{copy.contactSupport}</Link>
       </Button>
     </Card>
   )
@@ -1593,7 +1593,7 @@ function PaymentLinkRequiredCard({
         <CheckoutPolicyLinks copy={copy} />
       </div>
       <Button asChild className="mt-6" variant="outline">
-        <Link to="/contact">{copy.contactSupport}</Link>
+        <Link to="/about#contact">{copy.contactSupport}</Link>
       </Button>
     </Card>
   )

@@ -1,5 +1,5 @@
-"use client"
+import { permanentRedirect } from "next/navigation"
 
-import { JoinPage } from "@/site-pages/join-page"
-
-export default JoinPage
+export default function JoinPageRedirect() {
+  permanentRedirect("/about#join")
+}

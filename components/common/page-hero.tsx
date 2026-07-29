@@ -7,10 +7,17 @@ type PageHeroProps = {
   kicker: ReactNode
   title: ReactNode
   description?: ReactNode
+  children?: ReactNode
   className?: string
 }
 
-function PageHero({ kicker, title, description, className }: PageHeroProps) {
+function PageHero({
+  kicker,
+  title,
+  description,
+  children,
+  className,
+}: PageHeroProps) {
   return (
     <section
       data-scroll-reveal="false"
@@ -26,7 +33,7 @@ function PageHero({ kicker, title, description, className }: PageHeroProps) {
           <SectionKicker className="max-sm:text-[11px]">{kicker}</SectionKicker>
           <h1
             className={cn(
-              "mt-2 text-2xl leading-snug font-semibold tracking-[-0.04em] text-balance text-slate-950 sm:mt-4 sm:text-5xl sm:leading-tight dark:text-white"
+              "mt-2 text-2xl leading-snug font-semibold tracking-normal text-balance text-slate-950 sm:mt-4 sm:text-5xl sm:leading-tight dark:text-white"
             )}
           >
             {title}
@@ -40,6 +47,7 @@ function PageHero({ kicker, title, description, className }: PageHeroProps) {
               {description}
             </p>
           ) : null}
+          {children}
         </div>
       </div>
     </section>

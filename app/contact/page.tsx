@@ -1,5 +1,5 @@
-"use client"
+import { permanentRedirect } from "next/navigation"
 
-import { ContactPage } from "@/site-pages/contact-page"
-
-export default ContactPage
+export default function ContactPageRedirect() {
+  permanentRedirect("/about#contact")
+}

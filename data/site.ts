@@ -57,7 +57,7 @@ export const navItems: NavItem[] = [
   { label: "画廊", href: "/gallery" },
   { label: "常见问题", href: "/faq" },
   { label: "售后", href: "/after-sales" },
-  { label: "加入我们", href: "/join" },
+  { label: "加入我们", href: "/about#join" },
   { label: "关于我们", href: "/about" },
 ]
 

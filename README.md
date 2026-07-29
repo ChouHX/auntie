@@ -44,23 +44,6 @@ curl http://127.0.0.1:${APP_PORT:-4174}/api/health
 ```
 # Auntie Chen Home
 
-## Migrating CMS JSON to SQLite
-
-The production app stores CMS data in SQLite at `/app/data/cms.sqlite`. If an existing deployment still has `data/cms-content.json`, migrate it before starting the SQLite build:
-
-```bash
-pnpm migrate:json-to-sqlite
-```
-
-The migration does not overwrite an existing SQLite database. Back up the database first and use `--force` only when intentionally replacing its content:
-
-```bash
-cp data/cms.sqlite data/cms.sqlite.backup
-pnpm migrate:json-to-sqlite -- --force
-```
-
-Keep `data/cms.sqlite` on the host and mount it into the container with `./data:/app/data`. The original JSON file is not deleted.
-
 ## Docker deployment
 
 `docker-compose.yml` builds the image from local source. Use it for development or machines intended to compile the application:

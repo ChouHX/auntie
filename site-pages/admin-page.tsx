@@ -258,15 +258,40 @@ function AdminPage() {
     }
 
     const nextContent = updater(content)
+    const sectionParams = createAdminSectionParams(
+      activeSection,
+      {
+        page: orderPage,
+        pageSize: orderPageSize,
+        query: orderQuery,
+        status: orderStatusFilter,
+      },
+      {
+        category: genericCategory,
+        chartRange,
+        page: genericPage,
+        pageSize: genericPageSize,
+        query: genericQuery,
+        status: genericStatus,
+      }
+    )
     setIsSaving(true)
 
     try {
       const saved = await saveAdminContentSection(
         token,
         activeSection as AdminContentSection,
-        nextContent
+        nextContent,
+        sectionParams
       )
       const merged = mergeAdminContent(content, saved.content)
+      if (saved.pagination) {
+        if (activeSection === "orders") {
+          setOrderPage(saved.pagination.page)
+        } else if (activeSection === "aunties" || activeSection === "blogs") {
+          setGenericPage(saved.pagination.page)
+        }
+      }
       setContent(merged)
       applyAdminSectionMeta(saved, {
         activeSection,
@@ -376,6 +401,7 @@ function AdminPage() {
       })
       const merged = mergeAdminContent(content, saved.content)
       if (saved.pagination) {
+        setGenericPage(saved.pagination.page)
         setGenericPagination(saved.pagination)
       }
       setContent(merged)
@@ -414,6 +440,7 @@ function AdminPage() {
       })
       const merged = mergeAdminContent(content, saved.content)
       if (saved.pagination) {
+        setGenericPage(saved.pagination.page)
         setGenericPagination(saved.pagination)
       }
       setContent(merged)

@@ -42,14 +42,14 @@ const policyLinks = {
     { label: "服务条款", to: "/terms" },
     { label: "取消与退款政策", to: "/cancellation-refund" },
     { label: "服务履约说明", to: "/service-delivery" },
-    { label: "联系我们", to: "/contact" },
+    { label: "联系我们", to: "/about#contact" },
   ],
   en: [
     { label: "Privacy Policy", to: "/privacy" },
     { label: "Terms of Service", to: "/terms" },
     { label: "Cancellation & Refund", to: "/cancellation-refund" },
     { label: "Service Delivery", to: "/service-delivery" },
-    { label: "Contact Us", to: "/contact" },
+    { label: "Contact Us", to: "/about#contact" },
   ],
 } as const
 
@@ -97,7 +97,7 @@ function SiteFooter() {
         { label: dict.nav.gallery, to: "/gallery" },
         { label: dict.nav.faq, to: "/faq" },
         { label: dict.nav.afterSales, to: "/after-sales" },
-        { label: dict.nav.join, to: "/join" },
+        { label: dict.nav.join, to: "/about#join" },
         { label: dict.nav.about, to: "/about" },
       ],
     },

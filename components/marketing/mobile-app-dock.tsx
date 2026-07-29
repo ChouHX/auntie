@@ -58,9 +58,9 @@ function MobileAppDock() {
       label: dict.mobileApp.tabs.orders,
     },
     {
-      href: "/contact",
+      href: "/about#contact",
       icon: MessageCircle,
-      isActive: pathname.startsWith("/contact"),
+      isActive: pathname.startsWith("/about"),
       label: dict.mobileApp.tabs.contact,
     },
   ]

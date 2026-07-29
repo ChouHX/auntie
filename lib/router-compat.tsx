@@ -24,8 +24,7 @@ type LinkProps = Omit<React.ComponentPropsWithoutRef<"a">, "href"> & {
 
 type NavLinkProps = Omit<LinkProps, "className"> & {
   className?:
-    | string
-    | ((state: { isActive: boolean; isPending: boolean }) => string)
+    string | ((state: { isActive: boolean; isPending: boolean }) => string)
   end?: boolean
 }
 
@@ -92,16 +91,32 @@ function useLocation() {
   const pathname = usePathname() || "/"
   const searchParams = useNextSearchParams()
   const search = searchParams.toString()
+  const [hash, setHash] = React.useState("")
+
+  React.useEffect(() => {
+    function syncHash() {
+      setHash(window.location.hash)
+    }
+
+    syncHash()
+    window.addEventListener("hashchange", syncHash)
+    window.addEventListener("popstate", syncHash)
+
+    return () => {
+      window.removeEventListener("hashchange", syncHash)
+      window.removeEventListener("popstate", syncHash)
+    }
+  }, [pathname])
 
   return React.useMemo(
     () => ({
-      hash: typeof window === "undefined" ? "" : window.location.hash,
+      hash,
       key: pathname,
       pathname,
       search: search ? `?${search}` : "",
       state: null,
     }),
-    [pathname, search]
+    [hash, pathname, search]
   )
 }
 
@@ -156,17 +171,13 @@ function useSearchParams(): [
   return [searchParams, setSearchParams]
 }
 
-function useParams<TParams extends Record<string, string> = Record<string, string>>() {
+function useParams<
+  TParams extends Record<string, string> = Record<string, string>,
+>() {
   return useNextParams() as TParams
 }
 
-function Navigate({
-  replace,
-  to,
-}: {
-  replace?: boolean
-  to: To
-}) {
+function Navigate({ replace, to }: { replace?: boolean; to: To }) {
   const navigate = useNavigate()
 
   React.useEffect(() => {

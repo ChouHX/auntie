@@ -578,7 +578,7 @@ function LegalDocumentPage({ type }: { type: LegalPageType }) {
               {contactText}
             </p>
             <Link
-              to="/contact"
+              to="/about#contact"
               className="mt-4 inline-flex text-sm font-semibold text-blue-700 underline underline-offset-4 dark:text-blue-300"
             >
               {content.contactLink}

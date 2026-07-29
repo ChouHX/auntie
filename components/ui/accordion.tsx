@@ -37,7 +37,7 @@ function AccordionTrigger({
         {children}
         <CaretDown
           aria-hidden="true"
-          className="mt-1 size-4 shrink-0 text-slate-700 transition-transform duration-300 group-data-[state=open]:rotate-180 dark:text-slate-300"
+          className="mt-1 size-4 shrink-0 text-slate-700 transition-transform duration-[160ms] [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] group-data-[state=open]:rotate-180 motion-reduce:transition-none dark:text-slate-300"
           weight="bold"
         />
       </AccordionPrimitive.Trigger>
@@ -48,12 +48,19 @@ function AccordionTrigger({
 function AccordionContent({
   className,
   children,
+  motion = "height",
   ...props
-}: React.ComponentProps<typeof AccordionPrimitive.Content>) {
+}: React.ComponentProps<typeof AccordionPrimitive.Content> & {
+  motion?: "height" | "none"
+}) {
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"
-      className="overflow-hidden text-sm data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
+      className={cn(
+        "overflow-hidden text-sm",
+        motion === "height" &&
+          "data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
+      )}
       {...props}
     >
       <div className={cn("pt-0 pb-4", className)}>{children}</div>

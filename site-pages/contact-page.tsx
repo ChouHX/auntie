@@ -3,7 +3,11 @@
 import { EnvelopeSimple, MapPinLine, PhoneCall } from "@phosphor-icons/react"
 
 import { PageHero } from "@/components/common/page-hero"
-import { Section, SectionKicker } from "@/components/common/section"
+import {
+  Section,
+  SectionHeading,
+  SectionKicker,
+} from "@/components/common/section"
 import { Card } from "@/components/ui/card"
 import { defaultContactPage } from "@/data/cms-defaults"
 import { useCmsContent } from "@/hooks/use-cms-content"
@@ -108,7 +112,7 @@ const companyInfoCopy: Record<Language, CompanyInfoCopy> = {
   },
 }
 
-function ContactPage() {
+function ContactPage({ embedded = false }: { embedded?: boolean }) {
   const { language } = useI18n()
   const { content } = useCmsContent(["contactPage"])
   const pageFallback = defaultContactPage[language]
@@ -120,15 +124,32 @@ function ContactPage() {
 
   return (
     <>
-      <PageHero
-        kicker={pageContent.kicker || pageFallback.kicker}
-        title={pageContent.heroTitle || pageFallback.heroTitle}
-        description={
-          pageContent.heroDescription || pageFallback.heroDescription
-        }
-      />
+      {embedded ? null : (
+        <PageHero
+          kicker={pageContent.kicker || pageFallback.kicker}
+          title={pageContent.heroTitle || pageFallback.heroTitle}
+          description={
+            pageContent.heroDescription || pageFallback.heroDescription
+          }
+        />
+      )}
 
-      <Section className="py-8 sm:py-14" innerClassName="grid gap-5">
+      <Section
+        className="border-t border-border py-12 sm:py-20 dark:border-white/10"
+        id={embedded ? "contact" : undefined}
+        innerClassName="grid gap-5"
+      >
+        {embedded ? (
+          <SectionHeading
+            className="mb-3 max-w-3xl"
+            description={
+              pageContent.heroDescription || pageFallback.heroDescription
+            }
+            kicker={pageContent.kicker || pageFallback.kicker}
+            title={pageContent.heroTitle || pageFallback.heroTitle}
+            titleClassName="tracking-normal"
+          />
+        ) : null}
         <Card className="animate-fade-up rounded-xl bg-card/86 p-5 shadow-xl shadow-blue-100/45 sm:p-6 dark:bg-slate-900/82 dark:shadow-blue-950/22">
           <SectionKicker>
             {pageContent.contactTitle || copy.contactTitle}
@@ -138,7 +159,7 @@ function ContactPage() {
           </p>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div>
-              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              <div className="text-xs font-semibold tracking-normal text-muted-foreground uppercase">
                 {copy.phoneEmailLabel}
               </div>
               <div className="mt-1 flex flex-col gap-1 text-sm leading-6 font-semibold break-words text-slate-900 dark:text-white">
@@ -169,7 +190,7 @@ function ContactPage() {
               </div>
             </div>
             <div>
-              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              <div className="text-xs font-semibold tracking-normal text-muted-foreground uppercase">
                 {pageContent.serviceArea || pageFallback.serviceArea}
               </div>
               <div className="mt-1 text-sm leading-6 font-semibold break-words text-slate-900 dark:text-white">
@@ -192,7 +213,7 @@ function ContactPage() {
                 }
                 key={field.label}
               >
-                <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                <div className="text-xs font-semibold tracking-normal text-muted-foreground uppercase">
                   {field.label}
                 </div>
                 <div className="mt-1 inline-flex items-start gap-2 text-sm leading-6 font-semibold break-words text-slate-900 dark:text-white">

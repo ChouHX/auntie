@@ -7,7 +7,7 @@ import {
 } from "@phosphor-icons/react"
 
 import { PageHero } from "@/components/common/page-hero"
-import { Section } from "@/components/common/section"
+import { Section, SectionHeading } from "@/components/common/section"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -51,7 +51,7 @@ const serviceTypeValues = [
   "recurring",
 ]
 
-function JoinPage() {
+function JoinPage({ embedded = false }: { embedded?: boolean }) {
   const { dict, language } = useI18n()
   const { content } = useCmsContent(["contactPage"])
   const join = dict.joinPage
@@ -72,6 +72,7 @@ function JoinPage() {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
+  const contactFieldId = embedded ? "join-contact" : "contact"
 
   function updateForm<TField extends keyof AuntieApplicationState>(
     field: TField,
@@ -127,17 +128,31 @@ function JoinPage() {
 
   return (
     <>
-      <PageHero
-        kicker={join.kicker}
-        title={join.heroTitle}
-        description={join.heroDescription}
-      />
-      <Section className="py-6 sm:py-12">
+      {embedded ? null : (
+        <PageHero
+          kicker={join.kicker}
+          title={join.heroTitle}
+          description={join.heroDescription}
+        />
+      )}
+      <Section
+        className="border-t border-border py-12 sm:py-20 dark:border-white/10"
+        id={embedded ? "join" : undefined}
+      >
+        {embedded ? (
+          <SectionHeading
+            className="mb-8 max-w-3xl"
+            description={join.heroDescription}
+            kicker={join.kicker}
+            title={join.heroTitle}
+            titleClassName="tracking-normal"
+          />
+        ) : null}
         <div className="grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
           <Card className="overflow-hidden rounded-xl bg-card/84 shadow-xl shadow-blue-100/55 dark:bg-slate-900/80 dark:shadow-blue-950/25">
             <form onSubmit={handleSubmit}>
               <div className="border-b border-border px-4 py-4 sm:px-6 sm:py-5 dark:border-white/10">
-                <h2 className="text-lg font-semibold tracking-[-0.035em] text-slate-950 sm:text-xl dark:text-white">
+                <h2 className="text-lg font-semibold tracking-normal text-slate-950 sm:text-xl dark:text-white">
                   {join.formTitle}
                 </h2>
                 <p className="mt-1.5 text-xs leading-5 text-slate-600 sm:mt-2 sm:text-sm sm:leading-6 dark:text-slate-300">
@@ -158,10 +173,14 @@ function JoinPage() {
                   />
                 </FormField>
 
-                <FormField htmlFor="contact" label={join.contact} required>
+                <FormField
+                  htmlFor={contactFieldId}
+                  label={join.contact}
+                  required
+                >
                   <Input
                     className="h-9 rounded-md"
-                    id="contact"
+                    id={contactFieldId}
                     name="contact"
                     onChange={(event) =>
                       updateForm("contact", event.target.value)
@@ -319,7 +338,7 @@ function JoinPage() {
 
           <aside className="space-y-4 lg:sticky lg:top-24">
             <Card className="rounded-xl bg-card/84 p-4 shadow-lg shadow-blue-100/40 sm:p-5 sm:shadow-xl sm:shadow-blue-100/50 dark:bg-slate-900/80 dark:shadow-blue-950/25">
-              <h3 className="text-lg font-semibold tracking-[-0.03em]">
+              <h3 className="text-lg font-semibold tracking-normal">
                 {join.contactCardTitle}
               </h3>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
@@ -350,7 +369,7 @@ function JoinPage() {
             </Card>
 
             <Card className="rounded-xl bg-card/84 p-4 shadow-lg shadow-blue-100/40 sm:p-5 sm:shadow-xl sm:shadow-blue-100/50 dark:bg-slate-900/80 dark:shadow-blue-950/25">
-              <h3 className="text-lg font-semibold tracking-[-0.03em]">
+              <h3 className="text-lg font-semibold tracking-normal">
                 {join.sideTitle}
               </h3>
               <div className="mt-4 space-y-2">
@@ -369,7 +388,7 @@ function JoinPage() {
                 ))}
               </div>
               <div className="mt-4 border-t border-border pt-4 dark:border-white/10">
-                <h3 className="text-base font-semibold tracking-[-0.02em]">
+                <h3 className="text-base font-semibold tracking-normal">
                   {join.closingTitle}
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
@@ -398,7 +417,7 @@ function JoinPage() {
         </div>
 
         <Card className="mt-4 rounded-xl bg-white/60 p-4 shadow-lg shadow-blue-100/35 sm:p-5 dark:bg-white/[0.06] dark:shadow-none">
-          <h2 className="text-lg font-semibold tracking-[-0.03em] text-slate-950 sm:text-xl dark:text-white">
+          <h2 className="text-lg font-semibold tracking-normal text-slate-950 sm:text-xl dark:text-white">
             {join.principlesTitle}
           </h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -428,7 +447,7 @@ function CompactJoinCard({
 }) {
   return (
     <Card className="rounded-xl bg-card/84 p-4 shadow-lg shadow-blue-100/45 sm:p-5 dark:bg-slate-900/80 dark:shadow-blue-950/25">
-      <h2 className="text-lg font-semibold tracking-[-0.03em] text-slate-950 sm:text-xl dark:text-white">
+      <h2 className="text-lg font-semibold tracking-normal text-slate-950 sm:text-xl dark:text-white">
         {title}
       </h2>
       <div className="mt-3 grid gap-2.5 sm:mt-4 sm:grid-cols-2 sm:gap-3">
@@ -468,7 +487,7 @@ function CompactStringCard({
 }) {
   return (
     <Card className="rounded-xl bg-card/84 p-4 shadow-lg shadow-blue-100/45 sm:p-5 dark:bg-slate-900/80 dark:shadow-blue-950/25">
-      <h2 className="text-lg font-semibold tracking-[-0.03em] text-slate-950 sm:text-xl dark:text-white">
+      <h2 className="text-lg font-semibold tracking-normal text-slate-950 sm:text-xl dark:text-white">
         {title}
       </h2>
       <div className="mt-3 grid gap-2 sm:mt-4">
