@@ -60,3 +60,20 @@ pnpm migrate:json-to-sqlite -- --force
 ```
 
 Keep `data/cms.sqlite` on the host and mount it into the container with `./data:/app/data`. The original JSON file is not deleted.
+
+## Docker deployment
+
+`docker-compose.yml` builds the image from local source. Use it for development or machines intended to compile the application:
+
+```bash
+docker compose up -d --build
+```
+
+Production servers should pull the prebuilt GHCR image and avoid running Next.js builds locally:
+
+```bash
+docker compose -f docker-compose.server.yml pull
+docker compose -f docker-compose.server.yml up -d
+```
+
+The server compose file defaults to `ghcr.io/chouhx/auntie:latest`. Set `AUNTIE_IMAGE` to a commit-tagged image when a pinned deployment is required.
