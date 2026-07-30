@@ -58,9 +58,10 @@ export function isWecomConfigured() {
   )
 }
 
-export async function fetchWecomCustomerRelations(): Promise<
-  WecomCustomerRelation[]
-> {
+export async function fetchWecomCustomerRelations(): Promise<{
+  invalidFollowUserIds: string[]
+  relations: WecomCustomerRelation[]
+}> {
   const token = await getAccessToken()
   const userIds = await getFollowUsers(token)
   if (!userIds.length) {
@@ -71,21 +72,44 @@ export async function fetchWecomCustomerRelations(): Promise<
     userIds,
     5,
     async (userId) => {
-      const result = await requestJson("/externalcontact/list", {
-        query: { access_token: token, userid: userId },
-      })
+      let result: ApiRecord
+      try {
+        result = await requestJson("/externalcontact/list", {
+          query: { access_token: token, userid: userId },
+        })
+      } catch (error) {
+        if (error instanceof WecomApiError && error.errcode === 84061) {
+          return { invalid: true, relations: [], userId }
+        }
+        throw error
+      }
       if (!Array.isArray(result.external_userid)) {
         throw new WecomApiError(`成员 ${userId} 的客户列表缺少 external_userid`)
       }
-      return result.external_userid.map((externalUserId) => ({
-        externalUserId: String(externalUserId),
-        followUserId: userId,
-        relationId: createRelationId(String(externalUserId), userId),
-      }))
+      return {
+        invalid: false,
+        relations: result.external_userid.map((externalUserId) => ({
+          externalUserId: String(externalUserId),
+          followUserId: userId,
+          relationId: createRelationId(String(externalUserId), userId),
+        })),
+        userId,
+      }
     }
   )
+  const invalidFollowUserIds = relationGroups
+    .filter((group) => group.invalid)
+    .map((group) => group.userId)
+  if (invalidFollowUserIds.length === userIds.length) {
+    throw new WecomApiError(
+      "所有客户联系成员均已失效，已停止同步以保护本地客户数据"
+    )
+  }
 
-  return relationGroups.flat()
+  return {
+    invalidFollowUserIds,
+    relations: relationGroups.flatMap((group) => group.relations),
+  }
 }
 
 export async function fetchWecomCustomersByExternalIds(

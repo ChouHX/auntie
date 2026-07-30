@@ -153,7 +153,15 @@ async function runSync() {
   })
 
   try {
-    const listedRelations = await fetchWecomCustomerRelations()
+    const relationResult = await fetchWecomCustomerRelations()
+    const listedRelations = relationResult.relations
+    if (relationResult.invalidFollowUserIds.length) {
+      logServerEvent("warn", "wecom.members.invalid_contacts_skipped", {
+        followUserIds: relationResult.invalidFollowUserIds,
+        skippedMemberCount: relationResult.invalidFollowUserIds.length,
+        startedAt,
+      })
+    }
     const listedRelationIds = new Set(
       listedRelations.map((relation) => relation.relationId)
     )
