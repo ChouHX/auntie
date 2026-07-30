@@ -23,6 +23,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 type AdminNavItem<TSection extends string> = {
@@ -273,64 +279,66 @@ function AdminSidebarContent<TSection extends string>({
   }, [items])
 
   return (
-    <div className="flex h-full flex-col">
-      <div
-        className={cn(
-          "flex h-16 items-center gap-3 border-b border-border px-5",
-          collapsed && "justify-center px-3"
-        )}
-      >
-        <img
-          alt=""
-          className="size-10 rounded-xl object-cover"
-          src={logoImage}
-        />
-        <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
-          <div className="truncate text-base font-semibold tracking-[-0.03em]">
-            陈阿姨到家
-          </div>
-          <div className="truncate text-xs text-muted-foreground">Admin</div>
-        </div>
-        {onClose ? (
-          <Button
-            aria-label="关闭后台菜单"
-            className="size-8 rounded-md"
-            onClick={onClose}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <X size={17} weight="bold" />
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-5">
-        {groupedItems.map((group) => (
-          <div className="mb-6 last:mb-0" key={group.id}>
-            <div
-              className={cn(
-                "mb-3 text-center text-[11px] font-semibold tracking-[0.04em] text-muted-foreground uppercase",
-                collapsed && "sr-only"
-              )}
-            >
-              {group.label}
+    <TooltipProvider delayDuration={250} skipDelayDuration={100}>
+      <div className="flex h-full flex-col">
+        <div
+          className={cn(
+            "flex h-16 items-center gap-3 border-b border-border px-5",
+            collapsed && "justify-center px-3"
+          )}
+        >
+          <img
+            alt=""
+            className="size-10 rounded-xl object-cover"
+            src={logoImage}
+          />
+          <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
+            <div className="truncate text-base font-semibold tracking-[-0.03em]">
+              陈阿姨到家
             </div>
-            <nav className="grid gap-1.5">
-              {group.items.map((item) => (
-                <AdminSidebarButton
-                  active={activeSection === item.id}
-                  collapsed={collapsed}
-                  item={item}
-                  key={item.id}
-                  onClick={() => onSectionChange(item.id)}
-                />
-              ))}
-            </nav>
+            <div className="truncate text-xs text-muted-foreground">Admin</div>
           </div>
-        ))}
+          {onClose ? (
+            <Button
+              aria-label="关闭后台菜单"
+              className="size-8 rounded-md"
+              onClick={onClose}
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+            >
+              <X size={17} weight="bold" />
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-5">
+          {groupedItems.map((group) => (
+            <div className="mb-6 last:mb-0" key={group.id}>
+              <div
+                className={cn(
+                  "mb-3 text-center text-[11px] font-semibold tracking-[0.04em] text-muted-foreground uppercase",
+                  collapsed && "sr-only"
+                )}
+              >
+                {group.label}
+              </div>
+              <nav className="grid gap-1.5">
+                {group.items.map((item) => (
+                  <AdminSidebarButton
+                    active={activeSection === item.id}
+                    collapsed={collapsed}
+                    item={item}
+                    key={item.id}
+                    onClick={() => onSectionChange(item.id)}
+                  />
+                ))}
+              </nav>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }
 
@@ -347,8 +355,9 @@ function AdminSidebarButton<TSection extends string>({
 }) {
   const Icon = item.icon
 
-  return (
+  const button = (
     <Button
+      aria-label={collapsed ? item.label : undefined}
       className={cn(
         "h-10 w-full justify-center gap-3 rounded-full px-3 text-center text-sm font-medium text-foreground/75 hover:bg-primary/10 hover:text-primary",
         active && "bg-primary/10 text-primary"
@@ -363,6 +372,17 @@ function AdminSidebarButton<TSection extends string>({
         {item.label}
       </span>
     </Button>
+  )
+
+  if (!collapsed) {
+    return button
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
   )
 }
 

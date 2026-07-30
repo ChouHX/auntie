@@ -5,6 +5,7 @@ import {
   ArrowsClockwise,
   CheckCircle,
   Clock,
+  GearSix,
   WarningCircle,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
@@ -13,6 +14,14 @@ import { RecordsPanel } from "@/components/admin/admin-shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
@@ -51,6 +60,7 @@ export function CustomerAdmin({ token }: { token: string }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false)
   const [scheduleEnabled, setScheduleEnabled] = useState(false)
   const [scheduleTime, setScheduleTime] = useState("02:00")
   const [reloadKey, setReloadKey] = useState(0)
@@ -125,6 +135,7 @@ export function CustomerAdmin({ token }: { token: string }) {
         current ? { ...current, settings: result.settings } : current
       )
       toast.success(scheduleEnabled ? "每日同步时间已保存" : "定时同步已关闭")
+      setIsScheduleOpen(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "同步配置保存失败")
     } finally {
@@ -134,6 +145,14 @@ export function CustomerAdmin({ token }: { token: string }) {
 
   const settings = data?.settings
   const pagination = data?.pagination
+
+  function handleScheduleOpenChange(open: boolean) {
+    setIsScheduleOpen(open)
+    if (open && settings) {
+      setScheduleEnabled(settings.enabled)
+      setScheduleTime(formatTime(settings.hour, settings.minute))
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -154,36 +173,16 @@ export function CustomerAdmin({ token }: { token: string }) {
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
-              <input
-                checked={scheduleEnabled}
-                className="size-4 accent-blue-700"
-                disabled={!settings?.configured}
-                onChange={(event) => setScheduleEnabled(event.target.checked)}
-                type="checkbox"
-              />
-              每日自动同步
-            </label>
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              <span>北京时间</span>
-              <input
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                disabled={!scheduleEnabled || !settings?.configured}
-                onChange={(event) => setScheduleTime(event.target.value)}
-                type="time"
-                value={scheduleTime}
-              />
-            </label>
+          <div className="flex gap-3 sm:items-center">
             <Button
               className="h-9 rounded-md"
-              disabled={isSavingSchedule || !settings?.configured}
-              onClick={handleSaveSchedule}
+              disabled={!settings}
+              onClick={() => handleScheduleOpenChange(true)}
               type="button"
               variant="outline"
             >
-              <Clock size={16} weight="bold" />
-              {isSavingSchedule ? "保存中" : "保存计划"}
+              <GearSix size={16} weight="bold" />
+              同步设置
             </Button>
             <Button
               className="h-9 rounded-md"
@@ -202,6 +201,76 @@ export function CustomerAdmin({ token }: { token: string }) {
           </div>
         </div>
       </Card>
+
+      <Dialog onOpenChange={handleScheduleOpenChange} open={isScheduleOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>同步设置</DialogTitle>
+            <DialogDescription>
+              设置企业微信客户数据的每日自动同步时间，统一按北京时间执行。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <label className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/35 px-4 py-3">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">每日自动同步</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  容器重启后会自动恢复同步计划
+                </span>
+              </span>
+              <input
+                checked={scheduleEnabled}
+                className="size-4 shrink-0 accent-blue-700"
+                disabled={!settings?.configured}
+                onChange={(event) => setScheduleEnabled(event.target.checked)}
+                type="checkbox"
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-medium">
+              <span className="flex items-center gap-2">
+                <Clock className="text-muted-foreground" size={16} />
+                每日同步时间
+              </span>
+              <input
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                disabled={!scheduleEnabled || !settings?.configured}
+                onChange={(event) => setScheduleTime(event.target.value)}
+                type="time"
+                value={scheduleTime}
+              />
+              <span className="text-xs font-normal text-muted-foreground">
+                时区：Asia/Shanghai（北京时间）
+              </span>
+            </label>
+
+            {!settings?.configured ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
+                请先在服务器配置 WECOM_CORP_ID 和 WECOM_CORP_SECRET。
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={() => handleScheduleOpenChange(false)}
+              type="button"
+              variant="outline"
+            >
+              取消
+            </Button>
+            <Button
+              disabled={isSavingSchedule || !settings?.configured}
+              onClick={handleSaveSchedule}
+              type="button"
+              variant="brand"
+            >
+              {isSavingSchedule ? "保存中..." : "保存设置"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <RecordsPanel
         count={pagination?.totalCount ?? 0}
