@@ -94,7 +94,12 @@ type CmsPaymentSettings = {
 }
 
 type CmsPaymentOrderStatus =
-  "cancelled" | "failed" | "paid" | "pending" | "unpaid"
+  | "awaiting_confirmation"
+  | "cancelled"
+  | "failed"
+  | "paid"
+  | "pending"
+  | "unpaid"
 
 type CmsPaymentOrderAmountItem = {
   amount: number

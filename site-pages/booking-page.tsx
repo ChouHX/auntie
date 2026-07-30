@@ -1,32 +1,22 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react"
+import { type FormEvent, useMemo, useState } from "react"
 import {
-  Armchair,
-  Bathtub,
-  Broom,
   ChatCircleText,
-  CookingPot,
-  Garage,
-  Package,
+  Check,
+  ClipboardText,
+  EnvelopeSimple,
+  Info,
   PhoneCall,
-  Rug,
-  SquaresFour,
-  Sparkle,
-  type Icon,
   PaperPlaneTiltIcon,
 } from "@phosphor-icons/react"
 import { ChevronLeft, Minus, Plus } from "lucide-react"
-import { Link, useNavigate } from "@/lib/router-compat"
+import { toast } from "sonner"
+import { Link } from "@/lib/router-compat"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { AuntieAssignmentSelect } from "@/components/common/auntie-assignment-select"
+import { FooterContactBlock } from "@/components/marketing/site-footer"
 import { FormField } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -37,17 +27,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
 import { defaultCmsContent, defaultContactPage } from "@/data/cms-defaults"
 import { useCmsContent } from "@/hooks/use-cms-content"
 import { regionsWithDerivedCities } from "@/lib/service-regions"
-import { createBookingPaymentOrder, fetchAuntiesByArea } from "@/lib/cms-api"
-import type { AuntieAssignmentMode } from "@/lib/auntie-assignment"
+import { createBookingOrder } from "@/lib/cms-api"
 import { useI18n, type Language } from "@/lib/i18n"
-import type { CmsTeamMember } from "@/types/cms"
+import type { CmsPaymentOrder } from "@/types/cms"
 
 type BookingFormState = {
-  assignedAuntieId: string
-  assignmentMode: AuntieAssignmentMode
   bathrooms: string
   bedrooms: string
   contact: string
@@ -60,9 +48,6 @@ type BookingFormState = {
 }
 
 type BookingCopy = {
-  addOnTitle: string
-  auntieAssignment: string
-  auntieAssignmentDescription: string
   bathrooms: string
   bedrooms: string
   contact: string
@@ -93,9 +78,6 @@ type BookingCopy = {
   terms: string
   phoneTitle: string
   phoneText: string
-  quoteRequired: string
-  quoteRequiredAction: string
-  quoteRequiredTitle: string
 }
 
 type PricingTier = {
@@ -112,33 +94,23 @@ type PriceEstimate = {
   time: string
 }
 
-type AddOnService = {
-  icon: Icon
-  label: Record<Language, string>
-  price: string
-}
-
 const bookingCopy: Record<Language, BookingCopy> = {
   zh: {
-    addOnTitle: "附加服务",
-    auntieAssignment: "服务阿姨",
-    auntieAssignmentDescription:
-      "可自动按区域匹配空闲阿姨，也可以手动选择可服务该区域的阿姨。",
     bathrooms: "卫生间数量",
     bedrooms: "卧室数量",
     contact: "联系方式（电话 / 邮箱 / 微信至少一种）",
     details: "备注",
-    estimateCustom: "该户型或服务类型需要客服确认价格",
+    estimateCustom: "该户型或服务类型需要客服确认参考价格",
     estimateEmpty: "选择服务类型并输入卧室、卫生间数量后显示参考价。",
     estimateNote:
-      "价格表仅作预估参考，最终价格会根据城市、房屋状态、附加项目和现场情况由客服确认。",
+      "仅供预估参考，不会写入预约订单。最终费用由客服根据城市、房屋状态和服务细节确认。",
     estimateTitle: "参考时间与预估价格",
     formDescription:
-      "填写服务信息后，我们会根据参考价判断是否可直接付款；需要客服确认价格的订单，请先联系客服获取报价。",
+      "填写预约需求后，客服会与您确认服务细节、费用和阿姨安排。此步骤不会生成付款链接。",
     formTitle: "提交预约需求",
     fullName: "联系人姓名 / 称呼",
     heroDescription:
-      "请填写服务区域、卧室数量、卫生间数量和清洁需求。我们会根据您的信息确认合适的服务方案和大概价格。",
+      "请填写服务区域、房屋信息和清洁需求。提交后添加企业微信客服，由客服确认服务方案、费用和阿姨安排。",
     heroTitle: "预约清洁服务",
     kicker: "Booking",
     legalNotice: "提交即表示你同意",
@@ -158,41 +130,33 @@ const bookingCopy: Record<Language, BookingCopy> = {
       "其他",
     ],
     serviceAddress: "详细地址",
-    submit: "提交并前往支付",
+    submit: "提交预约需求",
     submitError: "提交失败，请稍后再试，或直接通过电话 / 微信联系我们。",
     submitted: "预约需求已提交",
     submitting: "发送中...",
     success:
-      "预约需求已提交。我们会根据您的服务城市、户型和清洁内容，进一步确认服务方案、价格和可预约时间。",
+      "预约需求已提交。请添加企业微信客服，并提供订单号以确认服务细节、费用和阿姨安排。",
     terms: "服务条款",
     phoneTitle: "需要更快沟通？",
     phoneText: "可先电话或企业微信联系，表单信息后续可同步给客服。",
-    quoteRequired:
-      "该户型或服务类型需要客服确认报价。请联系客服确认最终价格后，再使用客服发送的专属付款链接。",
-    quoteRequiredAction: "联系客服获取报价",
-    quoteRequiredTitle: "需要客服确认报价",
   },
   en: {
-    addOnTitle: "Add-on services",
-    auntieAssignment: "Assigned auntie",
-    auntieAssignmentDescription:
-      "Auto-match an available auntie by area, or select one who serves this area.",
     bathrooms: "Bathrooms",
     bedrooms: "Bedrooms",
     contact: "Contact method (phone / email / WeChat, at least one)",
     details: "Notes",
-    estimateCustom: "This home type or service needs support confirmation",
+    estimateCustom: "Contact support for a reference price for this request",
     estimateEmpty:
       "Select a service type and enter bedrooms and bathrooms to see a reference price.",
     estimateNote:
-      "The table is for reference only. Final pricing depends on city, home condition, add-ons, and on-site details confirmed by support.",
+      "For reference only and not saved as the booking amount. Support will confirm the final price based on location, home condition, and service details.",
     estimateTitle: "Reference time and estimated price",
     formDescription:
-      "After entering the service details, orders with a clear reference price can proceed to payment. Orders that need confirmation should contact support for a quote first.",
+      "Submit your booking request and support will confirm the service details, price, and auntie assignment. No payment link is created at this step.",
     formTitle: "Submit a booking request",
     fullName: "Contact name / nickname",
     heroDescription:
-      "Share your service area, bedroom count, bathroom count, and cleaning needs. We will confirm a suitable service plan and estimated price.",
+      "Share your service area, home details, and cleaning needs. Then add our WeCom support to confirm the plan, price, and auntie assignment.",
     heroTitle: "Book Cleaning Service",
     kicker: "Booking",
     legalNotice: "By submitting, you agree to the",
@@ -212,21 +176,17 @@ const bookingCopy: Record<Language, BookingCopy> = {
       "Other",
     ],
     serviceAddress: "Detailed address",
-    submit: "Submit and pay",
+    submit: "Submit booking request",
     submitError:
       "Submission failed. Please try again later or contact us by phone / WeChat.",
     submitted: "Booking request received",
     submitting: "Sending...",
     success:
-      "Your booking request has been submitted. We will confirm the service plan, price, and available time based on your city, home type, and cleaning needs.",
+      "Your request has been submitted. Add our WeCom support and share the order number to confirm service details, price, and auntie assignment.",
     terms: "Terms of Service",
     phoneTitle: "Need faster help?",
     phoneText:
       "You can contact us by phone or WeCom first, then share the form details with support.",
-    quoteRequired:
-      "This home type or service needs support confirmation. Please contact support for the final quote, then use the dedicated payment link sent by support.",
-    quoteRequiredAction: "Contact support for quote",
-    quoteRequiredTitle: "Quote confirmation required",
   },
 }
 
@@ -323,52 +283,7 @@ const pricingTable: Record<"deep" | "moveOut" | "regular", PricingTier[]> = {
   ],
 }
 
-const addOnServices: AddOnService[] = [
-  {
-    icon: SquaresFour,
-    label: { zh: "玻璃窗", en: "Windows" },
-    price: "$15/个",
-  },
-  {
-    icon: Rug,
-    label: { zh: "高温地毯清洗", en: "Steam carpet cleaning" },
-    price: "$45-60/房",
-  },
-  {
-    icon: CookingPot,
-    label: { zh: "冰箱", en: "Fridge" },
-    price: "$30-50",
-  },
-  {
-    icon: Garage,
-    label: { zh: "车库", en: "Garage" },
-    price: "$30-50",
-  },
-  {
-    icon: Sparkle,
-    label: { zh: "地毯精油养护", en: "Carpet essential oil care" },
-    price: "$40/房",
-  },
-  {
-    icon: Armchair,
-    label: { zh: "3人位沙发养护", en: "3-seat sofa care" },
-    price: "$50",
-  },
-  {
-    icon: Bathtub,
-    label: { zh: "浴室消毒", en: "Bathroom disinfection" },
-    price: "$40",
-  },
-  {
-    icon: Package,
-    label: { zh: "专业收纳", en: "Professional organizing" },
-    price: "$65/h",
-  },
-]
-
 const initialFormState: BookingFormState = {
-  assignedAuntieId: "",
-  assignmentMode: "auto",
   bathrooms: "",
   bedrooms: "",
   contact: "",
@@ -381,7 +296,94 @@ const initialFormState: BookingFormState = {
 }
 
 function BookingPage() {
+  const { language } = useI18n()
+  const { content, isLoading } = useCmsContent([
+    "contactPage",
+    "paymentSettings",
+  ])
+
+  if (isLoading) {
+    return <BookingAvailabilityLoading />
+  }
+
+  if (!content.paymentSettings.enabled) {
+    const contactSettings =
+      content.contactPage?.[language] ?? defaultContactPage[language]
+
+    return (
+      <BookingPaymentDisabled
+        contactEmail={contactSettings.contactEmail}
+        contactPhone={contactSettings.contactPhone}
+        contactQrImage={contactSettings.qrImage}
+        language={language}
+      />
+    )
+  }
+
   return <BookingRequestSection />
+}
+
+function BookingAvailabilityLoading() {
+  return (
+    <section className="pt-[calc(60px+2rem)] pb-12 md:pt-[calc(72px+3rem)]">
+      <div className="mx-auto max-w-3xl space-y-4 px-4 sm:px-6">
+        <Skeleton className="h-32 w-full rounded-xl" />
+        <Skeleton className="h-56 w-full rounded-xl" />
+      </div>
+    </section>
+  )
+}
+
+function BookingPaymentDisabled({
+  contactEmail,
+  contactPhone,
+  contactQrImage,
+  language,
+}: {
+  contactEmail: string
+  contactPhone: string
+  contactQrImage: string
+  language: Language
+}) {
+  const isZh = language === "zh"
+
+  return (
+    <section className="relative overflow-hidden pt-[calc(60px+2rem)] pb-12 md:pt-[calc(72px+3rem)] md:pb-16">
+      <div className="relative mx-auto max-w-3xl space-y-4 px-4 sm:px-6">
+        <Card className="animate-fade-up border-blue-200 bg-blue-50/80 p-5 shadow-lg shadow-blue-950/5 sm:p-6 dark:border-blue-400/20 dark:bg-blue-500/10">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white dark:bg-blue-500">
+              <Info size={20} weight="bold" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-slate-950 dark:text-white">
+                {isZh ? "预约请联系企业微信客服" : "Contact WeCom to book"}
+              </h1>
+              <p className="mt-2 text-sm leading-7 text-slate-700 dark:text-slate-200">
+                {isZh
+                  ? "如需预约，请扫描下方二维码添加企业微信客服。网站目前仅用于服务完成后的订单付款。"
+                  : "To make a booking, scan the QR code below and add our WeCom support. The website is currently only used for payment after a service is completed."}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="animate-fade-up p-5 shadow-lg shadow-blue-950/5 sm:p-6">
+          <FooterContactBlock
+            contactDescription={
+              isZh
+                ? "建议优先扫码添加企业微信客服，我们会协助确认服务范围与可预约时间。"
+                : "Scan the QR code to add our WeCom support team. We will help confirm the service scope and availability."
+            }
+            contactEmail={contactEmail}
+            contactPhone={contactPhone}
+            contactQrImage={contactQrImage}
+            title={isZh ? "联系我们" : "Contact Us"}
+          />
+        </Card>
+      </div>
+    </section>
+  )
 }
 
 function BookingRequestSection() {
@@ -400,13 +402,12 @@ function BookingRequestSection() {
     contactSettings.contactPhone || defaultContactPage[language].contactPhone
   const contactEmail =
     contactSettings.contactEmail || defaultContactPage[language].contactEmail
-  const navigate = useNavigate()
   const [form, setForm] = useState<BookingFormState>(initialFormState)
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const [needsQuote, setNeedsQuote] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
-  const [areaAunties, setAreaAunties] = useState<CmsTeamMember[]>([])
+  const [submittedOrder, setSubmittedOrder] = useState<CmsPaymentOrder | null>(
+    null
+  )
   const serviceRegions = useMemo(
     () =>
       regionsWithDerivedCities(
@@ -425,36 +426,6 @@ function BookingRequestSection() {
       }),
     [form.bathrooms, form.bedrooms, form.serviceType, language]
   )
-
-  useEffect(() => {
-    const area = form.serviceArea || (() => {
-      const firstRegion = serviceRegions[0]
-      const firstCity = firstRegion?.cities[0]
-      return firstCity ? `${firstCity} · ${firstRegion.name}` : ""
-    })()
-
-    if (!area) {
-      return
-    }
-
-    let cancelled = false
-    fetchAuntiesByArea(area)
-      .then((aunties) => {
-        if (!cancelled) {
-          setAreaAunties(aunties)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAreaAunties([])
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [form.serviceArea, serviceRegions])
-
   function updateForm<TField extends keyof BookingFormState>(
     field: TField,
     value: BookingFormState[TField]
@@ -462,12 +433,7 @@ function BookingRequestSection() {
     setForm((current) => ({
       ...current,
       [field]: value,
-      ...(field === "serviceArea"
-        ? { assignedAuntieId: "", assignmentMode: "auto" as const }
-        : null),
     }))
-    setIsSubmitted(false)
-    setNeedsQuote(false)
     setSubmitError("")
   }
 
@@ -477,37 +443,37 @@ function BookingRequestSection() {
     setSubmitError("")
 
     try {
-      if (!estimate) {
-        setNeedsQuote(true)
-        setIsSubmitted(false)
-        return
-      }
-
-      const priceEstimate = `${estimate.time} / ${estimate.label} / ${estimate.price}`
-      const result = await createBookingPaymentOrder({
-        amount: estimate.price,
-        assignedAuntieId: form.assignedAuntieId || undefined,
-        assignmentMode: form.assignmentMode,
+      const result = await createBookingOrder({
         bathrooms: form.bathrooms,
         bedrooms: form.bedrooms,
         contact: form.contact,
         customerName: form.fullName,
         note: form.notes,
-        priceEstimate,
         serviceAddress: form.serviceAddress,
         serviceArea: form.serviceArea,
         serviceDate: form.preferredDate,
         serviceType: form.serviceType,
       })
-      setIsSubmitted(true)
-      setNeedsQuote(false)
+      setSubmittedOrder(result.order)
       setForm(initialFormState)
-      navigate(result.paymentPath)
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : copy.submitError)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (submittedOrder) {
+    return (
+      <BookingSuccessPage
+        contactEmail={contactEmail}
+        contactPhone={contactPhone}
+        copy={copy}
+        language={language}
+        order={submittedOrder}
+        qrImage={contactQrImage}
+      />
+    )
   }
 
   return (
@@ -518,13 +484,10 @@ function BookingRequestSection() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_16%,rgba(37,99,235,0.12),transparent_28%),radial-gradient(circle_at_86%_18%,rgba(148,163,184,0.16),transparent_26%)] dark:bg-[radial-gradient(circle_at_14%_16%,rgba(59,130,246,0.18),transparent_28%),radial-gradient(circle_at_86%_18%,rgba(37,99,235,0.14),transparent_26%)]" />
       <div className="relative md:hidden">
         <MobileBookingFlow
-          areaAunties={areaAunties}
           copy={copy}
           estimate={estimate}
           form={form}
-          isSubmitted={isSubmitted}
           isSubmitting={isSubmitting}
-          needsQuote={needsQuote}
           onSubmit={handleSubmit}
           regions={serviceRegions}
           submitError={submitError}
@@ -614,32 +577,6 @@ function BookingRequestSection() {
                 </Select>
               </FormField>
 
-              {form.serviceArea ? (
-                <FormField
-                  className="sm:col-span-2"
-                  description={copy.auntieAssignmentDescription}
-                  label={copy.auntieAssignment}
-                >
-                  <AuntieAssignmentSelect
-                    assignedAuntieId={form.assignedAuntieId || undefined}
-                    aunties={areaAunties}
-                    enableReviews
-                    includeNone={false}
-                    mode={form.assignmentMode}
-                    onChange={(change) => {
-                      updateForm("assignmentMode", change.mode)
-                      updateForm(
-                        "assignedAuntieId",
-                        change.assignedAuntieId ?? ""
-                      )
-                    }}
-                    onlyAvailable
-                    preFiltered
-                    serviceArea={form.serviceArea}
-                  />
-                </FormField>
-              ) : null}
-
               <FormField htmlFor="bedrooms" label={copy.bedrooms} required>
                 <Input
                   className="h-9 rounded-md"
@@ -691,10 +628,6 @@ function BookingRequestSection() {
                   value={form.preferredDate}
                 />
               </FormField>
-
-              <div className="flex items-end">
-                <AddOnServicesPopover copy={copy} language={language} />
-              </div>
 
               <FormField
                 className="sm:col-span-2"
@@ -767,25 +700,6 @@ function BookingRequestSection() {
             </div>
 
             <div className="space-y-3 border-t border-border px-4 py-4 sm:px-6 dark:border-white/10">
-              {needsQuote ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-100">
-                  <div className="font-medium">{copy.quoteRequiredTitle}</div>
-                  <div className="mt-1">{copy.quoteRequired}</div>
-                  <Button
-                    asChild
-                    className="mt-3 h-9 rounded-md"
-                    size="sm"
-                    variant="outline"
-                  >
-                    <Link to="/about#contact">{copy.quoteRequiredAction}</Link>
-                  </Button>
-                </div>
-              ) : null}
-              {isSubmitted ? (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm leading-6 text-blue-900 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-100">
-                  {copy.success}
-                </div>
-              ) : null}
               {submitError ? (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-100">
                   {submitError}
@@ -798,15 +712,7 @@ function BookingRequestSection() {
                   type="submit"
                   variant="brand"
                 >
-                  <span>
-                    {isSubmitting
-                      ? copy.submitting
-                      : isSubmitted
-                        ? copy.submitted
-                        : estimate
-                          ? copy.submit
-                          : copy.quoteRequiredAction}
-                  </span>
+                  <span>{isSubmitting ? copy.submitting : copy.submit}</span>
                   <PaperPlaneTiltIcon weight="fill" className="h-3.5 w-3.5" />
                 </Button>
                 <p className="max-w-md text-xs leading-5 text-slate-500 sm:max-w-xl dark:text-slate-400">
@@ -870,13 +776,10 @@ function BookingRequestSection() {
 }
 
 type MobileBookingFlowProps = {
-  areaAunties: CmsTeamMember[]
   copy: BookingCopy
   estimate: PriceEstimate | null
   form: BookingFormState
-  isSubmitted: boolean
   isSubmitting: boolean
-  needsQuote: boolean
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   regions: ReturnType<typeof regionsWithDerivedCities>
   submitError: string
@@ -887,13 +790,10 @@ type MobileBookingFlowProps = {
 }
 
 function MobileBookingFlow({
-  areaAunties,
   copy,
   estimate,
   form,
-  isSubmitted,
   isSubmitting,
-  needsQuote,
   onSubmit,
   regions,
   submitError,
@@ -908,9 +808,9 @@ function MobileBookingFlow({
       : [copy.serviceType, "Home details", "Contact"]
   const hasHomeDetails = Boolean(
     form.bedrooms &&
-      form.bathrooms &&
-      form.preferredDate &&
-      form.serviceAddress.trim()
+    form.bathrooms &&
+    form.preferredDate &&
+    form.serviceAddress.trim()
   )
 
   function nextStep() {
@@ -1014,13 +914,20 @@ function MobileBookingFlow({
               }
               title={language === "zh" ? "选择服务" : "Your service"}
             >
-              <FormField htmlFor="mobile-service-area" label={copy.serviceArea} required>
+              <FormField
+                htmlFor="mobile-service-area"
+                label={copy.serviceArea}
+                required
+              >
                 <Select
                   name="serviceArea"
                   onValueChange={(value) => updateForm("serviceArea", value)}
                   value={form.serviceArea}
                 >
-                  <SelectTrigger className="h-11 rounded-lg text-sm" id="mobile-service-area">
+                  <SelectTrigger
+                    className="h-11 rounded-lg text-sm"
+                    id="mobile-service-area"
+                  >
                     <SelectValue placeholder={copy.serviceArea} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1030,14 +937,19 @@ function MobileBookingFlow({
                         {region.cities.map((city) => {
                           const value = `${city} · ${region.name}`
                           return (
-                            <SelectItem key={`${region.id}-${city}`} value={value}>
+                            <SelectItem
+                              key={`${region.id}-${city}`}
+                              value={value}
+                            >
                               {cityName(city)} · {regionName(region.name)}
                             </SelectItem>
                           )
                         })}
                       </SelectGroup>
                     ))}
-                    <SelectItem value={copy.otherCity}>{copy.otherCity}</SelectItem>
+                    <SelectItem value={copy.otherCity}>
+                      {copy.otherCity}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </FormField>
@@ -1067,28 +979,6 @@ function MobileBookingFlow({
                 </div>
               </div>
             </MobileBookingSection>
-
-            {form.serviceArea ? (
-              <MobileBookingSection
-                description={copy.auntieAssignmentDescription}
-                title={copy.auntieAssignment}
-              >
-                <AuntieAssignmentSelect
-                  assignedAuntieId={form.assignedAuntieId || undefined}
-                  aunties={areaAunties}
-                  enableReviews
-                  includeNone={false}
-                  mode={form.assignmentMode}
-                  onChange={(change) => {
-                    updateForm("assignmentMode", change.mode)
-                    updateForm("assignedAuntieId", change.assignedAuntieId ?? "")
-                  }}
-                  onlyAvailable
-                  preFiltered
-                  serviceArea={form.serviceArea}
-                />
-              </MobileBookingSection>
-            ) : null}
           </>
         ) : null}
 
@@ -1097,8 +987,8 @@ function MobileBookingFlow({
             <MobileBookingSection
               description={
                 language === "zh"
-                  ? "填写房屋信息后会显示参考价格。"
-                  : "Add your home details to see a reference price."
+                  ? "填写房屋信息，客服会据此确认服务细节和费用。"
+                  : "Add your home details so support can confirm the service and price."
               }
               title={language === "zh" ? "房屋信息" : "Home details"}
             >
@@ -1120,33 +1010,46 @@ function MobileBookingFlow({
                   value={form.bathrooms}
                 />
               </div>
-              <FormField className="mt-4" htmlFor="mobile-preferred-date" label={copy.preferredDate} required>
+              <FormField
+                className="mt-4"
+                htmlFor="mobile-preferred-date"
+                label={copy.preferredDate}
+                required
+              >
                 <Input
                   className="h-11 rounded-lg text-sm"
                   id="mobile-preferred-date"
                   min={new Date().toISOString().slice(0, 10)}
-                  onChange={(event) => updateForm("preferredDate", event.target.value)}
+                  onChange={(event) =>
+                    updateForm("preferredDate", event.target.value)
+                  }
                   type="date"
                   value={form.preferredDate}
                 />
               </FormField>
-              <FormField className="mt-4" htmlFor="mobile-service-address" label={copy.serviceAddress} required>
+              <FormField
+                className="mt-4"
+                htmlFor="mobile-service-address"
+                label={copy.serviceAddress}
+                required
+              >
                 <Input
                   className="h-11 rounded-lg text-sm"
                   id="mobile-service-address"
-                  onChange={(event) => updateForm("serviceAddress", event.target.value)}
+                  onChange={(event) =>
+                    updateForm("serviceAddress", event.target.value)
+                  }
                   placeholder={copy.serviceAddress}
                   value={form.serviceAddress}
                 />
               </FormField>
-              <div className="mt-4">
-                <AddOnServicesPopover copy={copy} language={language} />
-              </div>
             </MobileBookingSection>
             <PriceEstimatePanel
               copy={copy}
               estimate={estimate}
-              hasInputs={Boolean(form.serviceType && form.bedrooms && form.bathrooms)}
+              hasInputs={Boolean(
+                form.serviceType && form.bedrooms && form.bathrooms
+              )}
             />
           </>
         ) : null}
@@ -1166,16 +1069,24 @@ function MobileBookingFlow({
                   <Input
                     className="h-11 rounded-lg text-sm"
                     id="mobile-full-name"
-                    onChange={(event) => updateForm("fullName", event.target.value)}
+                    onChange={(event) =>
+                      updateForm("fullName", event.target.value)
+                    }
                     placeholder={copy.fullName}
                     value={form.fullName}
                   />
                 </FormField>
-                <FormField htmlFor="mobile-contact" label={copy.contact} required>
+                <FormField
+                  htmlFor="mobile-contact"
+                  label={copy.contact}
+                  required
+                >
                   <Input
                     className="h-11 rounded-lg text-sm"
                     id="mobile-contact"
-                    onChange={(event) => updateForm("contact", event.target.value)}
+                    onChange={(event) =>
+                      updateForm("contact", event.target.value)
+                    }
                     placeholder={copy.contact}
                     value={form.contact}
                   />
@@ -1184,7 +1095,9 @@ function MobileBookingFlow({
                   <Textarea
                     className="min-h-24 rounded-lg text-sm"
                     id="mobile-notes"
-                    onChange={(event) => updateForm("notes", event.target.value)}
+                    onChange={(event) =>
+                      updateForm("notes", event.target.value)
+                    }
                     placeholder={copy.details}
                     value={form.notes}
                   />
@@ -1194,33 +1107,41 @@ function MobileBookingFlow({
             <PriceEstimatePanel
               copy={copy}
               estimate={estimate}
-              hasInputs={Boolean(form.serviceType && form.bedrooms && form.bathrooms)}
+              hasInputs={Boolean(
+                form.serviceType && form.bedrooms && form.bathrooms
+              )}
             />
-            {needsQuote ? (
-              <MobileMessage tone="amber">
-                <div className="font-medium">{copy.quoteRequiredTitle}</div>
-                <div className="mt-1">{copy.quoteRequired}</div>
-                <Link className="mt-2 inline-block font-semibold underline" to="/about#contact">
-                  {copy.quoteRequiredAction}
-                </Link>
-              </MobileMessage>
+            {submitError ? (
+              <MobileMessage tone="red">{submitError}</MobileMessage>
             ) : null}
-            {isSubmitted ? <MobileMessage tone="blue">{copy.success}</MobileMessage> : null}
-            {submitError ? <MobileMessage tone="red">{submitError}</MobileMessage> : null}
             <p className="px-1 text-xs leading-5 text-muted-foreground">
-              {copy.legalNotice} <Link className="font-semibold text-primary" to="/privacy">{copy.privacy}</Link> /{" "}
-              <Link className="font-semibold text-primary" to="/terms">{copy.terms}</Link>
+              {copy.legalNotice}{" "}
+              <Link className="font-semibold text-primary" to="/privacy">
+                {copy.privacy}
+              </Link>{" "}
+              /{" "}
+              <Link className="font-semibold text-primary" to="/terms">
+                {copy.terms}
+              </Link>
             </p>
           </>
         ) : null}
 
-        {stepError ? <MobileMessage tone="red">{stepError}</MobileMessage> : null}
+        {stepError ? (
+          <MobileMessage tone="red">{stepError}</MobileMessage>
+        ) : null}
       </div>
 
       <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] border-y border-border bg-card/96 px-4 py-3 shadow-[0_-10px_24px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-slate-950/96">
         <div className="flex gap-2">
           {step > 1 ? (
-            <Button className="size-11 shrink-0 rounded-lg" onClick={previousStep} size="icon" type="button" variant="outline">
+            <Button
+              className="size-11 shrink-0 rounded-lg"
+              onClick={previousStep}
+              size="icon"
+              type="button"
+              variant="outline"
+            >
               <ChevronLeft className="size-4" />
               <span className="sr-only">
                 {language === "zh" ? "返回上一步" : "Previous step"}
@@ -1228,13 +1149,23 @@ function MobileBookingFlow({
             </Button>
           ) : null}
           {step < 3 ? (
-            <Button className="h-11 flex-1 rounded-lg" onClick={nextStep} type="button" variant="brand">
+            <Button
+              className="h-11 flex-1 rounded-lg"
+              onClick={nextStep}
+              type="button"
+              variant="brand"
+            >
               {language === "zh" ? "下一步" : "Continue"}
               <PaperPlaneTiltIcon size={16} weight="fill" />
             </Button>
           ) : (
-            <Button className="h-11 flex-1 rounded-lg" disabled={isSubmitting} type="submit" variant="brand">
-              {isSubmitting ? copy.submitting : estimate ? copy.submit : copy.quoteRequiredAction}
+            <Button
+              className="h-11 flex-1 rounded-lg"
+              disabled={isSubmitting}
+              type="submit"
+              variant="brand"
+            >
+              {isSubmitting ? copy.submitting : copy.submit}
               <PaperPlaneTiltIcon size={16} weight="fill" />
             </Button>
           )}
@@ -1254,9 +1185,11 @@ function MobileBookingSection({
   title: string
 }) {
   return (
-    <Card className="rounded-xl border-border/80 bg-card/90 p-4 shadow-sm [&_[data-slot=label]]:text-xs dark:border-white/10 dark:bg-slate-900/88">
+    <Card className="rounded-xl border-border/80 bg-card/90 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/88 [&_[data-slot=label]]:text-xs">
       <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{description}</p>
+      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+        {description}
+      </p>
       <div className="mt-4">{children}</div>
     </Card>
   )
@@ -1315,66 +1248,26 @@ function CountStepper({
   )
 }
 
-function MobileMessage({ children, tone }: { children: React.ReactNode; tone: "amber" | "blue" | "red" }) {
+function MobileMessage({
+  children,
+  tone,
+}: {
+  children: React.ReactNode
+  tone: "amber" | "blue" | "red"
+}) {
   const toneClass = {
-    amber: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-100",
+    amber:
+      "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-100",
     blue: "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-100",
     red: "border-red-200 bg-red-50 text-red-700 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-100",
   }[tone]
 
-  return <div className={`rounded-lg border px-3 py-2 text-sm leading-6 ${toneClass}`}>{children}</div>
-}
-
-function AddOnServicesPopover({
-  copy,
-  language,
-}: {
-  copy: BookingCopy
-  language: Language
-}) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          className="h-9 w-full justify-start rounded-md text-sm sm:w-auto"
-          type="button"
-          variant="outline"
-        >
-          <Broom size={17} weight="bold" />
-          {copy.addOnTitle}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-[min(22rem,calc(100vw-2rem))] p-2.5"
-      >
-        <div className="mb-2.5 text-sm font-semibold text-slate-950 dark:text-white">
-          {copy.addOnTitle}
-        </div>
-        <div className="grid gap-1.5">
-          {addOnServices.map((service) => {
-            const IconComponent = service.icon
-
-            return (
-              <div
-                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-border bg-card/70 px-2 py-1.5 dark:border-white/10 dark:bg-white/[0.04]"
-                key={service.label.zh}
-              >
-                <span className="flex size-7 items-center justify-center rounded-md bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">
-                  <IconComponent size={15} weight="bold" />
-                </span>
-                <span className="truncate text-xs font-medium text-slate-800 dark:text-slate-100">
-                  {service.label[language]}
-                </span>
-                <span className="text-xs font-semibold whitespace-nowrap text-blue-700 dark:text-blue-200">
-                  {service.price}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
+    <div
+      className={`rounded-lg border px-3 py-2 text-sm leading-6 ${toneClass}`}
+    >
+      {children}
+    </div>
   )
 }
 
@@ -1404,13 +1297,13 @@ function PriceEstimatePanel({
           </div>
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400">
-              Price
+              {copy.estimateTitle}
             </div>
             <div className="mt-0.5 text-lg font-bold text-blue-700 dark:text-blue-200">
               {estimate.price}
             </div>
           </div>
-          <div className="text-xs leading-5 text-slate-600 sm:col-span-1 dark:text-slate-300">
+          <div className="text-xs leading-5 text-slate-600 dark:text-slate-300">
             {copy.estimateNote}
           </div>
         </div>
@@ -1453,15 +1346,9 @@ function getPriceEstimate({
       bedroomCount <= item.maxBedrooms && bathroomCount <= item.maxBathrooms
   )
 
-  if (!tier) {
-    return null
-  }
-
-  return {
-    label: tier.label,
-    price: tier.price,
-    time: tier.time[language],
-  }
+  return tier
+    ? { label: tier.label, price: tier.price, time: tier.time[language] }
+    : null
 }
 
 function getPricingKey(serviceType: string) {
@@ -1485,6 +1372,123 @@ function getPricingKey(serviceType: string) {
   }
 
   return null
+}
+
+function BookingSuccessPage({
+  contactEmail,
+  contactPhone,
+  copy,
+  language,
+  order,
+  qrImage,
+}: {
+  contactEmail: string
+  contactPhone: string
+  copy: BookingCopy
+  language: Language
+  order: CmsPaymentOrder
+  qrImage: string
+}) {
+  const isZh = language === "zh"
+  const [isOrderIdCopied, setIsOrderIdCopied] = useState(false)
+
+  async function copyOrderId() {
+    try {
+      await navigator.clipboard.writeText(order.orderId)
+      setIsOrderIdCopied(true)
+      toast.success(isZh ? "订单号已复制" : "Order number copied")
+      window.setTimeout(() => setIsOrderIdCopied(false), 1800)
+    } catch {
+      toast.error(isZh ? "复制失败，请手动复制" : "Copy failed")
+    }
+  }
+
+  return (
+    <section className="relative overflow-hidden pt-[calc(60px+2rem)] pb-8 md:pt-[calc(72px+3rem)] md:pb-10">
+      <div className="relative mx-auto max-w-3xl px-4 sm:px-6">
+        <Card className="animate-fade-up overflow-hidden shadow-xl shadow-blue-950/8">
+          <div className="border-b border-border bg-blue-50/70 px-5 py-5 sm:px-7 sm:py-6 dark:bg-blue-500/10">
+            <div className="flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white dark:bg-blue-500">
+                <PaperPlaneTiltIcon size={20} weight="fill" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold text-foreground sm:text-2xl">
+                  {isZh ? "预约需求已提交" : "Booking request submitted"}
+                </h1>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {copy.success}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-6 p-5 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center sm:p-7">
+            <div>
+              <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-4 dark:border-blue-400/20 dark:bg-blue-500/10">
+                <div className="text-xs text-muted-foreground">
+                  {isZh ? "预约订单号" : "Booking order number"}
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="min-w-0 flex-1 font-mono text-lg font-semibold break-all text-foreground">
+                    {order.orderId}
+                  </div>
+                  <Button
+                    aria-label={isZh ? "复制订单号" : "Copy order number"}
+                    className="size-9 shrink-0"
+                    onClick={copyOrderId}
+                    size="icon"
+                    title={isZh ? "复制订单号" : "Copy order number"}
+                    type="button"
+                    variant="outline"
+                  >
+                    {isOrderIdCopied ? (
+                      <Check size={17} weight="bold" />
+                    ) : (
+                      <ClipboardText size={17} weight="bold" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">
+                {isZh
+                  ? "请扫码添加企业微信客服，并发送上方订单号。客服会为您分配阿姨，并确认服务细节与最终费用。"
+                  : "Scan to add our WeCom support and send the order number above. Support will assign an auntie and confirm the service details and final price."}
+              </p>
+              <div className="mt-4 grid gap-2 text-sm">
+                <a
+                  className="flex w-fit items-center gap-2 rounded-md px-1 py-1 font-medium text-blue-700 transition-colors hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
+                  href={`tel:${contactPhone.replace(/[^\d+]/g, "")}`}
+                >
+                  <PhoneCall className="shrink-0" size={17} weight="fill" />
+                  <span>{contactPhone}</span>
+                </a>
+                <a
+                  className="flex w-fit min-w-0 items-center gap-2 rounded-md px-1 py-1 font-medium text-blue-700 transition-colors hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
+                  href={`mailto:${contactEmail}`}
+                >
+                  <EnvelopeSimple
+                    className="shrink-0"
+                    size={17}
+                    weight="bold"
+                  />
+                  <span className="break-all">{contactEmail}</span>
+                </a>
+              </div>
+            </div>
+
+            <div className="mx-auto w-full max-w-52 rounded-xl border border-border bg-white p-2 shadow-sm dark:border-white/10">
+              <img
+                alt={isZh ? "企业微信客服二维码" : "WeCom support QR code"}
+                className="aspect-square w-full rounded-lg object-contain"
+                src={qrImage}
+              />
+            </div>
+          </div>
+        </Card>
+      </div>
+    </section>
+  )
 }
 
 export { BookingPage }

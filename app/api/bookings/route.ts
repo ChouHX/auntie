@@ -2,31 +2,18 @@ import { randomUUID } from "node:crypto"
 
 import type { NextRequest } from "next/server"
 
-import {
-  isAuntieServingArea,
-  pickAutoAssignedAuntie,
-  type AuntieAssignmentMode,
-} from "@/lib/auntie-assignment"
-import {
-  normalizePaymentCurrency,
-  parsePaymentAmountValue,
-} from "@/lib/airwallex"
 import { updateCmsContent } from "@/lib/cms-store"
 import { logServerEvent, serializeServerError } from "@/lib/server-log"
-import type { CmsContent, CmsPaymentOrder } from "@/types/cms"
+import type { CmsPaymentOrder } from "@/types/cms"
 
 export const runtime = "nodejs"
 
 type BookingOrderBody = {
-  amount?: string
-  assignedAuntieId?: string
-  assignmentMode?: AuntieAssignmentMode
   bathrooms?: string
   bedrooms?: string
   contact?: string
   customerName?: string
   note?: string
-  priceEstimate?: string
   serviceAddress?: string
   serviceArea?: string
   serviceDate?: string
@@ -59,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
   const now = new Date().toISOString()
   const orderDraft: Omit<CmsPaymentOrder, "orderId"> = {
-    amount: normalizeAmount(body.amount),
+    amount: "",
     contact: normalizeText(body.contact),
     createdAt: now,
     customerName: normalizeText(body.customerName) || "自主预约客户",
@@ -68,7 +55,7 @@ export async function POST(request: NextRequest) {
     serviceArea: normalizeText(body.serviceArea),
     serviceDate: normalizeText(body.serviceDate) || "待确认",
     serviceType: normalizeText(body.serviceType),
-    status: "unpaid",
+    status: "awaiting_confirmation",
     updatedAt: now,
   }
 
@@ -76,14 +63,13 @@ export async function POST(request: NextRequest) {
     !orderDraft.contact ||
     !orderDraft.serviceAddress ||
     !orderDraft.serviceArea ||
-    !orderDraft.serviceType ||
-    !orderDraft.amount
+    !orderDraft.serviceType
   ) {
     return bookingJsonResponse(
       {
         error: "booking_order_invalid",
         message:
-          "Please provide contact, service area, address, service type, and amount.",
+          "Please provide contact, service area, address, and service type.",
         requestId,
       },
       400,
@@ -93,32 +79,10 @@ export async function POST(request: NextRequest) {
 
   try {
     let savedOrder: CmsPaymentOrder | null = null
-    let assignmentError = ""
     await updateCmsContent((content) => {
-      const amountValue = parsePaymentAmountValue(undefined, orderDraft.amount)
-      const currency = normalizePaymentCurrency(
-        content.paymentSettings.currency
-      )
-      const assignedAuntieId = resolveAssignedAuntieId(
-        body,
-        orderDraft.serviceArea,
-        content
-      )
-
-      if (assignedAuntieId.error) {
-        assignmentError = assignedAuntieId.error
-        return content
-      }
-
       const order: CmsPaymentOrder = {
         ...orderDraft,
-        amountValue,
-        currency,
-        ...(assignedAuntieId.value
-          ? { assignedAuntieId: assignedAuntieId.value }
-          : null),
         orderId: createPaymentOrderId(content.paymentOrders ?? []),
-        provider: "airwallex",
       }
       savedOrder = order
 
@@ -129,17 +93,6 @@ export async function POST(request: NextRequest) {
     })
 
     if (!savedOrder) {
-      if (assignmentError) {
-        return bookingJsonResponse(
-          {
-            error: "booking_auntie_invalid",
-            message: assignmentError,
-          },
-          400,
-          requestId
-        )
-      }
-
       return bookingJsonResponse(
         {
           error: "booking_order_failed",
@@ -158,14 +111,7 @@ export async function POST(request: NextRequest) {
       requestId,
     })
 
-    return bookingJsonResponse(
-      {
-        order,
-        paymentPath: `/checkout?order=${encodeURIComponent(order.orderId)}`,
-      },
-      201,
-      requestId
-    )
+    return bookingJsonResponse({ order }, 201, requestId)
   } catch (error) {
     logServerEvent("error", "booking.order.create_failed", {
       durationMs: Date.now() - startedAt,
@@ -197,63 +143,15 @@ function bookingJsonResponse(
   return Response.json(body, { headers: { "x-request-id": requestId }, status })
 }
 
-function resolveAssignedAuntieId(
-  body: BookingOrderBody,
-  serviceArea: string,
-  content: CmsContent
-) {
-  const mode = body.assignmentMode === "manual" ? "manual" : "auto"
-
-  if (mode === "auto") {
-    return {
-      value: pickAutoAssignedAuntie(
-        serviceArea,
-        content.teamMembers ?? [],
-        content.paymentOrders ?? []
-      )?.id,
-    }
-  }
-
-  const requestedAuntieId = normalizeText(body.assignedAuntieId)
-
-  if (!requestedAuntieId) {
-    return { value: undefined }
-  }
-
-  const auntie = (content.teamMembers ?? []).find(
-    (member) => member.id === requestedAuntieId
-  )
-
-  if (!auntie) {
-    return { error: "Selected auntie was not found." }
-  }
-
-  if (auntie.status !== "available") {
-    return { error: "Selected auntie is not currently available." }
-  }
-
-  if (!isAuntieServingArea(auntie, serviceArea)) {
-    return { error: "Selected auntie does not serve this area." }
-  }
-
-  return { value: auntie.id }
-}
-
 function normalizeText(value: unknown) {
   return String(value ?? "").trim()
 }
 
-function normalizeAmount(value: unknown) {
-  const raw = normalizeText(value)
-
-  return raw || "$0.00"
-}
-
 function createOrderNote(body: BookingOrderBody) {
   const rows = [
+    ["预约来源", "网站自主预约"],
     ["卧室数量", body.bedrooms],
     ["卫生间数量", body.bathrooms],
-    ["预估价格", body.priceEstimate],
     ["备注", body.note],
   ]
     .map(([label, value]) => [label, normalizeText(value)] as const)

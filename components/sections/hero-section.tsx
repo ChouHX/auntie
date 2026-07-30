@@ -73,7 +73,7 @@ function HeroSection() {
               </Link>
             </Button>
             <Button asChild size="lg" className="px-7" variant="heroSecondary">
-              <Link to="/services">{dict.hero.secondaryCta}</Link>
+              <Link to="#services">{dict.hero.secondaryCta}</Link>
             </Button>
           </div>
 

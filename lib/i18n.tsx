@@ -77,6 +77,7 @@ const dictionaries = {
       orderId: "订单号",
       amount: "金额",
       status: {
+        awaiting_confirmation: "待客服确认",
         cancelled: "已取消",
         failed: "支付失败",
         paid: "已付款",
@@ -1038,6 +1039,7 @@ const dictionaries = {
       orderId: "Order",
       amount: "Amount",
       status: {
+        awaiting_confirmation: "Awaiting confirmation",
         cancelled: "Cancelled",
         failed: "Payment failed",
         paid: "Paid",

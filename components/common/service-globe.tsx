@@ -53,6 +53,20 @@ type CountryFeatureCollection = {
   }>
 }
 
+let countryDataPromise: Promise<CountryFeatureCollection> | null = null
+
+function loadCountryData() {
+  countryDataPromise ??= fetch("/data/countries.geojson").then((response) => {
+    if (!response.ok) {
+      throw new Error(`Failed to load country map: ${response.status}`)
+    }
+
+    return response.json() as Promise<CountryFeatureCollection>
+  })
+
+  return countryDataPromise
+}
+
 /* ── Constants ─────────────────────────────────────── */
 
 const MAP_WIDTH = 1400
@@ -250,9 +264,13 @@ function ServiceGlobe({
 }: ServiceGlobeProps) {
   const { cityName, dict, regionName } = useI18n()
   const { content } = useCmsContent(["serviceLocations", "serviceRegions"])
-  const serviceRegions = regionsWithDerivedCities(
-    content.serviceRegions ?? defaultCmsContent.serviceRegions,
+  const sourceRegions =
+    content.serviceRegions ?? defaultCmsContent.serviceRegions
+  const sourceLocations =
     content.serviceLocations ?? defaultCmsContent.serviceLocations
+  const serviceRegions = useMemo(
+    () => regionsWithDerivedCities(sourceRegions, sourceLocations),
+    [sourceLocations, sourceRegions]
   )
   const [focusedRegionId, setFocusedRegionId] = useState<string | null>(null)
   const center = activeLocation ?? locations[0]
@@ -390,7 +408,8 @@ function FlatServiceMap({
   regions,
 }: FlatServiceMapProps) {
   const { cityName, dict, regionName } = useI18n()
-  const [paths, setPaths] = useState<FlatMapPath[]>([])
+  const [countryData, setCountryData] =
+    useState<CountryFeatureCollection | null>(null)
   const [tooltipRegion, setTooltipRegion] = useState<ServiceRegion | null>(null)
   const [tooltipPos, setTooltipPos] = useState({ x: 16, y: 16 })
   const containerRef = useRef<HTMLDivElement>(null)
@@ -470,27 +489,27 @@ function FlatServiceMap({
     [locations, onLocationChange]
   )
 
+  const paths = useMemo(
+    () =>
+      countryData
+        ? createFlatMapPaths(countryData, serviceRegionIds, serviceRegionMap)
+        : [],
+    [countryData, serviceRegionIds, serviceRegionMap]
+  )
+
   useEffect(() => {
     let cancelled = false
 
     async function loadMap() {
       try {
-        const response = await fetch("/data/countries.geojson")
-        if (!response.ok) return
-
-        const data = (await response.json()) as CountryFeatureCollection
-        const nextPaths = createFlatMapPaths(
-          data,
-          serviceRegionIds,
-          serviceRegionMap
-        )
+        const data = await loadCountryData()
 
         if (!cancelled) {
-          setPaths(nextPaths)
+          setCountryData(data)
         }
       } catch {
         if (!cancelled) {
-          setPaths([])
+          setCountryData(null)
         }
       }
     }
@@ -500,7 +519,7 @@ function FlatServiceMap({
     return () => {
       cancelled = true
     }
-  }, [serviceRegionIds, serviceRegionMap])
+  }, [])
 
   useEffect(() => {
     if (!tooltipRegion) {

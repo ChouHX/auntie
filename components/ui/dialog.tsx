@@ -61,7 +61,7 @@ function DialogOverlay({
         data-slot="dialog-overlay"
         animate={{ opacity: 1 }}
         className={cn(
-          "fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]",
+          "fixed inset-0 z-50 bg-black/45",
           className
         )}
         exit={{ opacity: 0 }}
@@ -89,7 +89,6 @@ function DialogContent({
   const initialState = prefersReducedMotion
     ? { opacity: 0, x: "-50%", y: "-50%" }
     : {
-        filter: "blur(10px)",
         opacity: 0,
         scale: 0.92,
         x: "-50%",
@@ -98,7 +97,6 @@ function DialogContent({
   const animateState = prefersReducedMotion
     ? { opacity: 1, x: "-50%", y: "-50%" }
     : {
-        filter: "blur(0px)",
         opacity: 1,
         scale: 1,
         x: "-50%",
@@ -107,7 +105,6 @@ function DialogContent({
   const exitState = prefersReducedMotion
     ? { opacity: 0, x: "-50%", y: "-50%" }
     : {
-        filter: "blur(6px)",
         opacity: 0,
         scale: 0.94,
         x: "-50%",
@@ -158,7 +155,7 @@ function DialogContent({
               data-slot="dialog-content"
               animate={animateState}
               className={cn(
-                "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-xl border bg-background p-5 shadow-2xl will-change-[opacity,transform,filter] sm:p-6",
+                "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-xl border bg-background p-5 shadow-2xl will-change-[opacity,transform] sm:p-6",
                 className
               )}
               exit={exitState}

@@ -1,5 +1,4 @@
 import type { CmsContent, CmsPaymentOrder, CmsTeamMember } from "@/types/cms"
-import type { AuntieAssignmentMode } from "@/lib/auntie-assignment"
 import type {
   AdminAuntieStatsMap,
   AdminDashboardSummary,
@@ -107,15 +106,11 @@ type PublicContentSection =
 type PublicFormType = "estimate" | "join"
 type PublicFormPayload = Record<string, boolean | string | string[]>
 type BookingOrderPayload = {
-  amount: string
-  assignedAuntieId?: string
-  assignmentMode?: AuntieAssignmentMode
   bathrooms: string
   bedrooms: string
   contact: string
   customerName: string
   note: string
-  priceEstimate: string
   serviceAddress: string
   serviceArea: string
   serviceDate: string
@@ -402,14 +397,11 @@ async function submitPublicForm(
   })
 }
 
-async function createBookingPaymentOrder(payload: BookingOrderPayload) {
-  return request<{ order: CmsPaymentOrder; paymentPath: string }>(
-    "/api/bookings",
-    {
-      body: JSON.stringify(payload),
-      method: "POST",
-    }
-  )
+async function createBookingOrder(payload: BookingOrderPayload) {
+  return request<{ order: CmsPaymentOrder }>("/api/bookings", {
+    body: JSON.stringify(payload),
+    method: "POST",
+  })
 }
 
 async function startPaymentOrderCheckout(orderId: string, tipAmount = 0) {
@@ -589,7 +581,7 @@ export {
   ApiRequestError,
   clearStoredAdminToken,
   confirmPaymentOrder,
-  createBookingPaymentOrder,
+  createBookingOrder,
   deleteAdminAuntie,
   deleteAdminBlogPosts,
   deleteAdminPaymentOrder,

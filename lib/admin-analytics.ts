@@ -244,7 +244,11 @@ function createDashboardOrderGroups(
     (groups, order) => {
       addDashboardOrderMetric(groups.total, order)
 
-      if (order.status === "unpaid" || order.status === "pending") {
+      if (
+        order.status === "awaiting_confirmation" ||
+        order.status === "unpaid" ||
+        order.status === "pending"
+      ) {
         addDashboardOrderMetric(groups.pending, order)
         return groups
       }
@@ -360,7 +364,11 @@ function createOrderDailyStats(
 
     day.total += 1
 
-    if (order.status === "unpaid" || order.status === "pending") {
+    if (
+      order.status === "awaiting_confirmation" ||
+      order.status === "unpaid" ||
+      order.status === "pending"
+    ) {
       day.pending += 1
       return
     }
@@ -475,7 +483,11 @@ function createOrderCountryDistribution(
 function createActiveDashboardOrders(orders: CmsPaymentOrder[]) {
   return orders
     .filter((order) => {
-      if (order.status === "unpaid" || order.status === "pending") {
+      if (
+        order.status === "awaiting_confirmation" ||
+        order.status === "unpaid" ||
+        order.status === "pending"
+      ) {
         return true
       }
 

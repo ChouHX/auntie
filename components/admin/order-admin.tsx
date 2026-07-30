@@ -88,6 +88,7 @@ type OrderAdminRemotePagination = {
 }
 
 const paymentStatusLabels: Record<CmsPaymentOrder["status"], string> = {
+  awaiting_confirmation: "待客服确认",
   cancelled: "已取消",
   failed: "支付失败",
   paid: "已付款",
@@ -128,6 +129,7 @@ function getOrderStatusBadgeClass(
 ) {
   return cn(
     "gap-1 px-2 py-1 text-xs",
+    status === "awaiting_confirmation" && "bg-violet-50 text-violet-700",
     status === "paid" && "bg-emerald-50 text-emerald-600",
     status === "unpaid" && "bg-amber-50 text-amber-700",
     status === "failed" && "bg-destructive/10 text-destructive",
@@ -137,8 +139,12 @@ function getOrderStatusBadgeClass(
   )
 }
 
-function PaymentLinkCell({ orderId }: { orderId: string }) {
-  const link = getPaymentOrderLink(orderId)
+function PaymentLinkCell({ order }: { order: CmsPaymentOrder }) {
+  if (order.status === "awaiting_confirmation") {
+    return <span className="text-xs text-muted-foreground">确认报价后生成</span>
+  }
+
+  const link = getPaymentOrderLink(order.orderId)
 
   async function copyLink() {
     if (!link) {
@@ -256,6 +262,7 @@ function normalizePaymentOrderDraft(order: CmsPaymentOrder): CmsPaymentOrder {
     serviceDate: order.serviceDate.trim(),
     serviceType: order.serviceType.trim(),
     provider: "airwallex",
+    status: order.status === "awaiting_confirmation" ? "unpaid" : order.status,
     updatedAt: now,
     webhookEventIds: Array.isArray(order.webhookEventIds)
       ? order.webhookEventIds
@@ -718,7 +725,7 @@ export function OrderAdmin({
                     <TableCell>{order.serviceDate || "待确认"}</TableCell>
                     <TableCell>
                       <div className="font-semibold">
-                        {order.amount || "$0.00"}
+                        {order.amount || "待客服报价"}
                       </div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">
                         {normalizeAdminPaymentCurrency(
@@ -730,7 +737,7 @@ export function OrderAdmin({
                       <OrderStatusBadges order={order} />
                     </TableCell>
                     <TableCell>
-                      <PaymentLinkCell orderId={order.orderId} />
+                      <PaymentLinkCell order={order} />
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
@@ -792,12 +799,14 @@ export function OrderAdmin({
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              {isEditingCompletedOrder ? "订单详情" : "付款订单"}
+              {isEditingCompletedOrder ? "订单详情" : "订单确认"}
             </DialogTitle>
             <DialogDescription>
               {isEditingCompletedOrder
                 ? "该订单已完成，只能查看详情，不能再修改订单内容。"
-                : "保存后把专属链接发给客户，客户打开后只看到自己的订单信息和支付按钮。"}
+                : editingOrder?.status === "awaiting_confirmation"
+                  ? "分配阿姨并填写金额明细后保存，订单会转为待付款并生成专属付款链接。"
+                  : "保存后把专属链接发给客户，客户打开后只看到自己的订单信息和支付按钮。"}
             </DialogDescription>
           </DialogHeader>
           {editingOrder ? (
@@ -1002,6 +1011,7 @@ function OrderFilters({
       <SelectContent>
         <SelectGroup>
           <SelectItem value="all">全部状态</SelectItem>
+          <SelectItem value="awaiting_confirmation">待客服确认</SelectItem>
           <SelectItem value="unpaid">待付款</SelectItem>
           <SelectItem value="pending">支付中</SelectItem>
           <SelectItem value="paid">已付款</SelectItem>

@@ -56,6 +56,21 @@ export async function POST(
     )
   }
 
+  if (
+    existingOrder.status === "awaiting_confirmation" ||
+    parsePaymentAmountValue(existingOrder.amountValue, existingOrder.amount) <=
+      0
+  ) {
+    return Response.json(
+      {
+        error: "payment_order_not_ready",
+        message: "The booking is awaiting service and price confirmation.",
+        order: toCheckoutPaymentOrder(existingOrder),
+      },
+      { status: 409 }
+    )
+  }
+
   if (isPaymentOrderExpired(existingOrder)) {
     const expiredOrder = await cancelExpiredPaymentOrder(existingOrder.orderId)
 

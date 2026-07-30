@@ -1,3 +1,5 @@
+import { useMemo } from "react"
+
 import { defaultCmsContent } from "@/data/cms-defaults"
 import { CountUp } from "@/components/common/count-up"
 import { Section } from "@/components/common/section"
@@ -18,9 +20,11 @@ function AreasSection({ id = "areas", variant = "home" }: AreasSectionProps) {
   const { content } = useCmsContent(["serviceLocations", "serviceRegions"])
   const serviceLocations =
     content.serviceLocations ?? defaultCmsContent.serviceLocations
-  const serviceRegions = regionsWithDerivedCities(
-    content.serviceRegions ?? defaultCmsContent.serviceRegions,
-    serviceLocations
+  const sourceRegions =
+    content.serviceRegions ?? defaultCmsContent.serviceRegions
+  const serviceRegions = useMemo(
+    () => regionsWithDerivedCities(sourceRegions, serviceLocations),
+    [serviceLocations, sourceRegions]
   )
   const { activeLocation, locations, setActiveLocationId } =
     useNearestServiceLocation(serviceLocations)

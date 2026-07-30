@@ -38,7 +38,7 @@ function FaqPage() {
   const content = cmsContent.faq[language]
   const copy = faqInterfaceCopy[language]
   const [query, setQuery] = useState("")
-  const [openItem, setOpenItem] = useState<string | undefined>(() =>
+  const [openItem, setOpenItem] = useState<string>(() =>
     getInitialOpenItem(content.items.length)
   )
   const [activeAnchor, setActiveAnchor] = useState<string | undefined>(() =>
@@ -87,13 +87,20 @@ function FaqPage() {
   }
 
   function handleOpenChange(nextItem: string) {
-    const value = nextItem || undefined
-    setOpenItem(value)
+    setOpenItem(nextItem)
 
-    if (value) {
-      setActiveAnchor(value)
-      window.history.replaceState(null, "", `#${value}`)
+    if (nextItem) {
+      setActiveAnchor(nextItem)
+      window.history.replaceState(null, "", `#${nextItem}`)
+      return
     }
+
+    setActiveAnchor(undefined)
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`
+    )
   }
 
   return (
@@ -266,7 +273,7 @@ function FaqPage() {
 
 function getInitialOpenItem(itemCount: number) {
   if (typeof window === "undefined") {
-    return itemCount > 0 ? "faq-1" : undefined
+    return itemCount > 0 ? "faq-1" : ""
   }
 
   const hashValue = window.location.hash.replace("#", "")
@@ -277,7 +284,7 @@ function getInitialOpenItem(itemCount: number) {
     hashIndex >= 1 &&
     hashIndex <= itemCount
 
-  return isValidFaqHash ? hashValue : itemCount > 0 ? "faq-1" : undefined
+  return isValidFaqHash ? hashValue : itemCount > 0 ? "faq-1" : ""
 }
 
 function getInitialActiveAnchor(itemCount: number) {
@@ -287,7 +294,7 @@ function getInitialActiveAnchor(itemCount: number) {
     if (hashValue === "service-details") return hashValue
   }
 
-  return getInitialOpenItem(itemCount)
+  return getInitialOpenItem(itemCount) || undefined
 }
 
 function formatFaqQuestion(question: string, index: number) {

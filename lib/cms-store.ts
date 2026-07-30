@@ -181,9 +181,14 @@ function normalizePaymentCurrency(value: string | undefined) {
 }
 
 function normalizePaymentOrderStatus(value: unknown): CmsPaymentOrderStatus {
-  return ["cancelled", "failed", "paid", "pending", "unpaid"].includes(
-    String(value)
-  )
+  return [
+    "awaiting_confirmation",
+    "cancelled",
+    "failed",
+    "paid",
+    "pending",
+    "unpaid",
+  ].includes(String(value))
     ? (value as CmsPaymentOrderStatus)
     : "unpaid"
 }

@@ -6,10 +6,82 @@ import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+let openSelectCount = 0
+let selectUnlockObserver: MutationObserver | null = null
+
+function syncSelectScrollLock() {
+  if (openSelectCount > 0) {
+    selectUnlockObserver?.disconnect()
+    selectUnlockObserver = null
+    document.body.setAttribute("data-select-scroll-unlocked", "")
+    return
+  }
+
+  if (!document.body.hasAttribute("data-scroll-locked")) {
+    selectUnlockObserver?.disconnect()
+    selectUnlockObserver = null
+    document.body.removeAttribute("data-select-scroll-unlocked")
+    return
+  }
+
+  if (selectUnlockObserver) {
+    return
+  }
+
+  selectUnlockObserver = new MutationObserver(() => {
+    if (
+      openSelectCount === 0 &&
+      !document.body.hasAttribute("data-scroll-locked")
+    ) {
+      document.body.removeAttribute("data-select-scroll-unlocked")
+      selectUnlockObserver?.disconnect()
+      selectUnlockObserver = null
+    }
+  })
+  selectUnlockObserver.observe(document.body, {
+    attributeFilter: ["data-scroll-locked"],
+  })
+}
+
 function Select({
+  defaultOpen,
+  onOpenChange,
+  open: controlledOpen,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(
+    defaultOpen ?? false
+  )
+  const open = controlledOpen ?? uncontrolledOpen
+
+  React.useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+
+    openSelectCount += 1
+    syncSelectScrollLock()
+
+    return () => {
+      openSelectCount = Math.max(0, openSelectCount - 1)
+      syncSelectScrollLock()
+    }
+  }, [open])
+
+  return (
+    <SelectPrimitive.Root
+      data-slot="select"
+      defaultOpen={defaultOpen}
+      onOpenChange={(nextOpen) => {
+        if (controlledOpen === undefined) {
+          setUncontrolledOpen(nextOpen)
+        }
+        onOpenChange?.(nextOpen)
+      }}
+      open={controlledOpen}
+      {...props}
+    />
+  )
 }
 
 function SelectGroup({

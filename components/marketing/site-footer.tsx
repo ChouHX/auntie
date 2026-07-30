@@ -8,12 +8,12 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@phosphor-icons/react"
-import { Link, useLocation, useNavigate } from "@/lib/router-compat"
+import { Link, useLocation } from "@/lib/router-compat"
 
-import { serviceAnchorIds } from "@/data/site"
 import { useCmsContent } from "@/hooks/use-cms-content"
 import { useI18n } from "@/lib/i18n"
 import { getSiteLogo } from "@/lib/site-settings"
+import { cn } from "@/lib/utils"
 
 type FooterColumn = {
   links: Array<{
@@ -27,6 +27,15 @@ type SocialItem = {
   href?: string
   icon: ReactNode
   label: string
+}
+
+type FooterContactBlockProps = {
+  className?: string
+  contactDescription: string
+  contactEmail: string
+  contactPhone: string
+  contactQrImage: string
+  title: string
 }
 
 const socialLinks = {
@@ -57,14 +66,12 @@ function SiteFooter() {
   const { dict, language } = useI18n()
   const { content } = useCmsContent(["contactPage"])
   const location = useLocation()
-  const navigate = useNavigate()
   const contactSettings =
     content.contactPage?.[language] ?? content.contactPage?.zh
   const contactEmail =
     contactSettings?.contactEmail || "auntiechenhome@gmail.com"
   const contactPhone = contactSettings?.contactPhone || "+1 9492798310"
   const contactQrImage = contactSettings?.qrImage || "/wechat_qrcode.jpg"
-  const contactPhoneHref = contactPhone.replace(/[^\d+]/g, "")
   const logoImage = getSiteLogo(content)
 
   function handleHashLinkClick(
@@ -83,9 +90,16 @@ function SiteFooter() {
     }
 
     event.preventDefault()
-    navigate(to, { preventScrollReset: true })
-    window.requestAnimationFrame(() => {
-      target.scrollIntoView({ block: "start" })
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `#${targetId}`
+    )
+    target.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "center",
     })
   }
 
@@ -113,13 +127,10 @@ function SiteFooter() {
     {
       title: dict.footer.helpTitle,
       links: [
-        ...dict.servicesSection.items.slice(0, 4).map((service, index) => ({
+        ...dict.servicesSection.items.map((service) => ({
           label: service.title,
-          to: `/#${serviceAnchorIds[index]}`,
+          to: "/#services",
         })),
-        { label: dict.nav.process, to: "/process" },
-        { label: dict.nav.areas, to: "/#areas" },
-        { label: dict.nav.afterSales, to: "/after-sales" },
       ],
     },
   ]
@@ -150,40 +161,13 @@ function SiteFooter() {
     <footer className="relative overflow-hidden border-t border-blue-100/80 text-slate-700 transition-colors duration-300 dark:border-white/10 dark:text-slate-200">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-12">
         <div className="hidden gap-9 pb-10 lg:grid lg:grid-cols-[1.25fr_0.75fr_0.95fr_1.2fr] lg:gap-12">
-          <section>
-            <FooterHeading>{dict.nav.contact}</FooterHeading>
-            <div className="mt-4 space-y-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
-              <p>{dict.footer.contactDescription}</p>
-              <div className="flex items-start gap-4">
-                <img
-                  alt="微信二维码"
-                  className="size-24 shrink-0 rounded-xl bg-white object-cover p-1.5 shadow-sm ring-1 ring-blue-100 dark:ring-white/10"
-                  loading="lazy"
-                  src={contactQrImage}
-                />
-                <div className="grid min-w-0 gap-2 pt-1">
-                  <a
-                    className="flex w-fit items-center gap-2 font-semibold text-slate-700 transition hover:text-blue-700 dark:text-slate-200 dark:hover:text-blue-200"
-                    href={`tel:${contactPhoneHref}`}
-                  >
-                    <PhoneCall className="shrink-0" size={17} weight="fill" />
-                    {contactPhone}
-                  </a>
-                  <a
-                    className="flex w-fit min-w-0 items-center gap-2 font-semibold text-slate-700 transition hover:text-blue-700 dark:text-slate-200 dark:hover:text-blue-200"
-                    href={`mailto:${contactEmail}`}
-                  >
-                    <EnvelopeSimple
-                      className="shrink-0"
-                      size={17}
-                      weight="bold"
-                    />
-                    <span className="truncate">{contactEmail}</span>
-                  </a>
-                </div>
-              </div>
-            </div>
-          </section>
+          <FooterContactBlock
+            contactDescription={dict.footer.contactDescription}
+            contactEmail={contactEmail}
+            contactPhone={contactPhone}
+            contactQrImage={contactQrImage}
+            title={dict.nav.contact}
+          />
 
           {footerColumns.map((column) => (
             <nav
@@ -266,6 +250,50 @@ function FooterHeading({ children }: { children: ReactNode }) {
   )
 }
 
+function FooterContactBlock({
+  className,
+  contactDescription,
+  contactEmail,
+  contactPhone,
+  contactQrImage,
+  title,
+}: FooterContactBlockProps) {
+  const contactPhoneHref = contactPhone.replace(/[^\d+]/g, "")
+
+  return (
+    <section className={cn("min-w-0", className)}>
+      <FooterHeading>{title}</FooterHeading>
+      <div className="mt-4 space-y-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
+        <p>{contactDescription}</p>
+        <div className="flex items-start gap-4">
+          <img
+            alt="微信二维码"
+            className="size-24 shrink-0 rounded-xl bg-white object-cover p-1.5 shadow-sm ring-1 ring-blue-100 dark:ring-white/10"
+            loading="lazy"
+            src={contactQrImage}
+          />
+          <div className="grid min-w-0 gap-2 pt-1">
+            <a
+              className="flex w-fit items-center gap-2 font-semibold text-slate-700 transition hover:text-blue-700 dark:text-slate-200 dark:hover:text-blue-200"
+              href={`tel:${contactPhoneHref}`}
+            >
+              <PhoneCall className="shrink-0" size={17} weight="fill" />
+              {contactPhone}
+            </a>
+            <a
+              className="flex w-fit min-w-0 items-center gap-2 font-semibold text-slate-700 transition hover:text-blue-700 dark:text-slate-200 dark:hover:text-blue-200"
+              href={`mailto:${contactEmail}`}
+            >
+              <EnvelopeSimple className="shrink-0" size={17} weight="bold" />
+              <span className="truncate">{contactEmail}</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function SocialAssetIcon({ src }: { src: string }) {
   return <img alt="" className="size-5 rounded-[4px]" src={src} />
 }
@@ -301,4 +329,4 @@ function SocialDisplay({ item }: { item: SocialItem }) {
   )
 }
 
-export { SiteFooter }
+export { FooterContactBlock, SiteFooter }

@@ -33,7 +33,7 @@ import {
   saveLocalPaymentOrder,
   type LocalPaymentOrder,
 } from "@/lib/local-orders"
-import { Link } from "@/lib/router-compat"
+import { Link, useNavigate } from "@/lib/router-compat"
 import { getSiteLogo } from "@/lib/site-settings"
 import { cn } from "@/lib/utils"
 
@@ -85,6 +85,7 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
   const pathname = usePathname() || "/"
   const { content } = useCmsContent(["siteSettings"])
   const { dict, language, toggleLanguage } = useI18n()
+  const navigate = useNavigate()
   const { setTheme, theme } = useTheme()
   const copy = copyByLanguage[language]
   const logoImage = getSiteLogo(content)
@@ -172,6 +173,7 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
     }
 
     let isMounted = true
+    let redirected = false
 
     async function loadSharedOrder() {
       try {
@@ -182,6 +184,26 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
         }
 
         saveLocalPaymentOrder(order)
+
+        if (order.status === "paid") {
+          redirected = true
+          navigate(
+            order.review
+              ? `/checkout?order=${encodeURIComponent(order.orderId)}`
+              : `/review?order=${encodeURIComponent(order.orderId)}`,
+            { replace: true }
+          )
+          return
+        }
+
+        if (order.status === "cancelled") {
+          redirected = true
+          navigate(`/checkout?order=${encodeURIComponent(order.orderId)}`, {
+            replace: true,
+          })
+          return
+        }
+
         setOrders(readLocalPaymentOrders())
         setIsPromptVisible(
           order.status === "unpaid" || order.status === "pending"
@@ -194,7 +216,7 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
         }
         // A stale or malformed shared link should still leave the visitor on home.
       } finally {
-        if (!isMounted) {
+        if (!isMounted || redirected) {
           return
         }
 
@@ -214,7 +236,7 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [navigate])
 
   function toggleTheme() {
     setTheme(isDarkTheme ? "light" : "dark")

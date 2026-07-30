@@ -1,14 +1,20 @@
 import type { CmsPaymentOrder } from "@/types/cms"
 
 const paymentOrderTimeoutMs = 30 * 60 * 1000
+const unpaidOrderTimeoutMs = 24 * 60 * 60 * 1000
 
 function createPaymentOrderExpiry(now = Date.now()) {
   return new Date(now + paymentOrderTimeoutMs).toISOString()
 }
 
 function isPaymentOrderExpired(order: CmsPaymentOrder, now = Date.now()) {
-  if (order.status !== "pending" || !order.paymentExpiresAt) return false
-  const expiresAt = new Date(order.paymentExpiresAt).getTime()
+  if (order.status === "pending" && order.paymentExpiresAt) {
+    const expiresAt = new Date(order.paymentExpiresAt).getTime()
+    return Number.isFinite(expiresAt) && expiresAt <= now
+  }
+
+  if (order.status !== "unpaid" || !order.createdAt) return false
+  const expiresAt = new Date(order.createdAt).getTime() + unpaidOrderTimeoutMs
   return Number.isFinite(expiresAt) && expiresAt <= now
 }
 

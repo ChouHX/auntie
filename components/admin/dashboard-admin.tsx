@@ -126,6 +126,7 @@ const orderChartConfig = {
 } satisfies ChartConfig
 
 const paymentStatusLabels: Record<CmsPaymentOrder["status"], string> = {
+  awaiting_confirmation: "待客服确认",
   cancelled: "已取消",
   failed: "支付失败",
   paid: "已付款",
@@ -174,7 +175,11 @@ function createDashboardOrderGroups(
     (groups, order) => {
       addDashboardOrderMetric(groups.total, order)
 
-      if (order.status === "unpaid" || order.status === "pending") {
+      if (
+        order.status === "awaiting_confirmation" ||
+        order.status === "unpaid" ||
+        order.status === "pending"
+      ) {
         addDashboardOrderMetric(groups.pending, order)
         return groups
       }
@@ -310,7 +315,11 @@ function createOrderDailyStats(
 
     day.total += 1
 
-    if (order.status === "unpaid" || order.status === "pending") {
+    if (
+      order.status === "awaiting_confirmation" ||
+      order.status === "unpaid" ||
+      order.status === "pending"
+    ) {
       day.pending += 1
       return
     }
@@ -432,7 +441,11 @@ function createOrderCountryDistribution(
 function createActiveDashboardOrders(orders: CmsPaymentOrder[]) {
   return orders
     .filter((order) => {
-      if (order.status === "unpaid" || order.status === "pending") {
+      if (
+        order.status === "awaiting_confirmation" ||
+        order.status === "unpaid" ||
+        order.status === "pending"
+      ) {
         return true
       }
 
@@ -479,6 +492,7 @@ function PaymentStatusBadge({ status }: { status: CmsPaymentOrder["status"] }) {
 function getPaymentStatusBadgeClass(status: CmsPaymentOrder["status"]) {
   return cn(
     "px-2 py-1 text-xs",
+    status === "awaiting_confirmation" && "bg-violet-50 text-violet-700",
     status === "paid" && "bg-emerald-50 text-emerald-600",
     status === "unpaid" && "bg-amber-50 text-amber-700",
     status === "failed" && "bg-destructive/10 text-destructive",
@@ -728,9 +742,11 @@ function DashboardActiveOrdersTable({ orders }: { orders: CmsPaymentOrder[] }) {
                 </div>
               </TableCell>
               <TableCell>{order.serviceDate || "待确认"}</TableCell>
-              <TableCell>{order.amount || "$0.00"}</TableCell>
+              <TableCell>{order.amount || "待报价"}</TableCell>
               <TableCell>
-                {order.status === "unpaid" || order.status === "pending" ? (
+                {order.status === "awaiting_confirmation" ||
+                order.status === "unpaid" ||
+                order.status === "pending" ? (
                   <PaymentStatusBadge status={order.status} />
                 ) : (
                   <Badge className={getPaymentStatusBadgeClass("pending")}>
