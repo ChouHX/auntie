@@ -467,14 +467,15 @@ function ReviewFormCard({
 
           <div className="grid grid-cols-2 gap-3">
             <Button
-              className="w-full"
+              className="h-10 w-full rounded-lg"
               disabled={isSubmitting || rating === 0 || !comment.trim()}
               onClick={onSubmit}
               variant="brand"
             >
+              <CheckCircle size={17} weight="fill" />
               {isSubmitting ? "提交中..." : "提交评价"}
             </Button>
-            <Button asChild className="w-full" variant="outline">
+            <Button asChild className="h-10 w-full rounded-lg" variant="brand">
               <Link to="/about#contact">
                 <ChatCircleText size={17} weight="fill" />
                 联系客服
