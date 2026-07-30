@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react"
 import {
+  ChatCircleText,
   CheckCircle,
   HouseLine,
+  Receipt,
   Star,
   WarningCircle,
 } from "@phosphor-icons/react"
@@ -11,6 +13,15 @@ import { Link, useSearchParams } from "@/lib/router-compat"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { AuntieProfilePopover } from "@/components/common/auntie-profile-popover"
 import {
@@ -356,103 +367,308 @@ function ReviewFormCard({
   onSubmit: () => void
   isSubmitting: boolean
 }) {
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false)
+
   if (!order) return null
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-white shadow-lg shadow-slate-200/60 dark:border-white/10 dark:bg-slate-900 dark:shadow-black/30">
-      <div className="border-b border-slate-100 bg-slate-50 px-6 py-5 dark:border-white/10 dark:bg-slate-800/50">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
-          服务评价
-        </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          感谢您选择陈阿姨到家，请对本次服务进行评价
-        </p>
-      </div>
+    <>
+      <Card className="overflow-hidden border-slate-200 bg-white shadow-lg shadow-slate-200/60 dark:border-white/10 dark:bg-slate-900 dark:shadow-black/30">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 px-5 py-5 sm:px-6 dark:border-white/10 dark:bg-slate-800/50">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
+              服务评价
+            </h1>
+            <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              感谢您选择陈阿姨到家，请对本次服务进行评价
+            </p>
+          </div>
+          <Button
+            className="h-9 shrink-0 px-3"
+            onClick={() => setIsReceiptOpen(true)}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <Receipt size={16} weight="bold" />
+            查看订单
+          </Button>
+        </div>
 
-      <div className="space-y-6 p-6">
-        <OrderInfoSection order={order} auntie={auntie} />
+        <div className="space-y-6 p-5 sm:p-6">
+          <OrderInfoSection order={order} auntie={auntie} />
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-            服务评分
-          </label>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
+              服务评分
+            </label>
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  aria-label={`${star} 星`}
+                  className="p-1 transition-transform hover:scale-110"
+                  key={star}
+                  onClick={() => setRating(star)}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  type="button"
+                >
+                  <Star
+                    className={cn(
+                      star <= (hoverRating || rating)
+                        ? "text-amber-400"
+                        : "text-slate-300 dark:text-slate-600"
+                    )}
+                    size={32}
+                    weight={
+                      star <= (hoverRating || rating) ? "fill" : "regular"
+                    }
+                  />
+                </button>
+              ))}
+              {rating > 0 ? (
+                <span className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                  {rating === 5
+                    ? "非常满意"
+                    : rating === 4
+                      ? "满意"
+                      : rating === 3
+                        ? "一般"
+                        : rating === 2
+                          ? "不太满意"
+                          : "不满意"}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
+              评价内容
+            </label>
+            <Textarea
+              className="min-h-[120px] resize-none"
+              maxLength={500}
+              onChange={(event) => setComment(event.target.value)}
+              placeholder="请分享您的服务体验..."
+              value={comment}
+            />
+            <div className="mt-1 text-right text-xs text-slate-400 dark:text-slate-500">
+              {comment.length}/500
+            </div>
+          </div>
+
+          {error ? (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-400/10 dark:text-red-300">
+              <WarningCircle size={16} />
+              {error}
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              className="w-full"
+              disabled={isSubmitting || rating === 0 || !comment.trim()}
+              onClick={onSubmit}
+              variant="brand"
+            >
+              {isSubmitting ? "提交中..." : "提交评价"}
+            </Button>
+            <Button asChild className="w-full" variant="outline">
+              <Link to="/about#contact">
+                <ChatCircleText size={17} weight="fill" />
+                联系客服
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <ReviewOrderReceiptDialog
+        onOpenChange={setIsReceiptOpen}
+        open={isReceiptOpen}
+        order={order}
+      />
+    </>
+  )
+}
+
+function ReviewOrderReceiptDialog({
+  onOpenChange,
+  open,
+  order,
+}: {
+  onOpenChange: (open: boolean) => void
+  open: boolean
+  order: CmsPaymentOrder
+}) {
+  const currency = normalizeReceiptCurrency(order.currency)
+  const baseAmount = getReceiptBaseAmount(order)
+  const amountItems = order.amountBreakdown?.length
+    ? order.amountBreakdown
+    : [{ amount: baseAmount, label: "服务费用" }]
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="max-w-xl gap-5">
+        <DialogHeader className="pr-8">
           <div className="flex items-center gap-2">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => setRating(star)}
-                onMouseEnter={() => setHoverRating(star)}
-                onMouseLeave={() => setHoverRating(0)}
-                className="p-1 transition-transform hover:scale-110"
-                aria-label={`${star} 星`}
-              >
-                <Star
-                  size={32}
-                  weight={star <= (hoverRating || rating) ? "fill" : "regular"}
-                  className={cn(
-                    star <= (hoverRating || rating)
-                      ? "text-amber-400"
-                      : "text-slate-300 dark:text-slate-600"
-                  )}
-                />
-              </button>
+            <Receipt className="text-blue-700 dark:text-blue-300" size={20} />
+            <DialogTitle>订单账单</DialogTitle>
+          </div>
+          <DialogDescription>
+            订单 {order.orderId} 的付款与服务信息
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-400/20 dark:bg-emerald-500/10">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-xs text-emerald-700 dark:text-emerald-300">
+                已支付金额
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">
+                {order.amount || formatReceiptAmount(0, currency)}
+              </div>
+            </div>
+            <span className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white dark:bg-emerald-500">
+              已付款
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-white/10">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-white">
+            付款明细
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-white/10">
+            {amountItems.map((item, index) => (
+              <ReceiptRow
+                key={`${item.label}-${index}`}
+                label={item.label || "服务费用"}
+                value={formatReceiptAmount(item.amount, currency)}
+              />
             ))}
-            {rating > 0 ? (
-              <span className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                {rating === 5
-                  ? "非常满意"
-                  : rating === 4
-                    ? "满意"
-                    : rating === 3
-                      ? "一般"
-                      : rating === 2
-                        ? "不太满意"
-                        : "不满意"}
-              </span>
+            {(order.tipAmount ?? 0) > 0 ? (
+              <ReceiptRow
+                label="小费"
+                value={formatReceiptAmount(order.tipAmount ?? 0, currency)}
+              />
             ) : null}
           </div>
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">
-            评价内容
-          </label>
-          <Textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="请分享您的服务体验..."
-            className="min-h-[120px] resize-none"
-            maxLength={500}
+        <div className="grid gap-x-6 gap-y-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-2 dark:border-white/10">
+          <ReceiptDetail label="客户姓名" value={order.customerName} />
+          <ReceiptDetail label="联系方式" value={order.contact} />
+          <ReceiptDetail label="服务类型" value={order.serviceType} />
+          <ReceiptDetail label="服务日期" value={order.serviceDate} />
+          <ReceiptDetail label="服务区域" value={order.serviceArea} />
+          <ReceiptDetail
+            label="付款时间"
+            value={formatReceiptDate(order.paidAt || order.updatedAt)}
           />
-          <div className="mt-1 text-right text-xs text-slate-400 dark:text-slate-500">
-            {comment.length}/500
-          </div>
+          <ReceiptDetail
+            className="sm:col-span-2"
+            label="服务地址"
+            value={order.serviceAddress}
+          />
+          {order.note ? (
+            <ReceiptDetail
+              className="sm:col-span-2"
+              label="订单备注"
+              value={order.note}
+            />
+          ) : null}
         </div>
 
-        {error ? (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-400/10 dark:text-red-300">
-            <WarningCircle size={16} />
-            {error}
-          </div>
-        ) : null}
-
-        <Button
-          className="w-full"
-          disabled={isSubmitting || rating === 0 || !comment.trim()}
-          onClick={onSubmit}
-          variant="brand"
-        >
-          {isSubmitting ? "提交中..." : "提交评价"}
-        </Button>
-        <Button asChild className="w-full" variant="outline">
-          <Link to={`/checkout?order=${encodeURIComponent(order.orderId)}`}>
-            暂不评价，查看订单
-          </Link>
-        </Button>
-      </div>
-    </Card>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button className="w-full sm:w-auto" variant="outline">
+              关闭账单
+            </Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
+}
+
+function ReceiptRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+      <span className="text-slate-600 dark:text-slate-300">{label}</span>
+      <span className="font-medium text-slate-950 dark:text-white">
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function ReceiptDetail({
+  className,
+  label,
+  value,
+}: {
+  className?: string
+  label: string
+  value?: string
+}) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      <div className="text-xs text-slate-400 dark:text-slate-500">{label}</div>
+      <div className="mt-1 whitespace-pre-wrap break-words text-sm font-medium text-slate-900 dark:text-white">
+        {value || "未填写"}
+      </div>
+    </div>
+  )
+}
+
+function getReceiptBaseAmount(order: CmsPaymentOrder) {
+  if (Number.isFinite(order.baseAmountValue)) {
+    return Math.max(0, order.baseAmountValue ?? 0)
+  }
+
+  if (Number.isFinite(order.amountValue)) {
+    return Math.max(0, (order.amountValue ?? 0) - (order.tipAmount ?? 0))
+  }
+
+  const parsedAmount = Number(
+    order.amount.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/)?.[0] ?? 0
+  )
+  return Number.isFinite(parsedAmount)
+    ? Math.max(0, parsedAmount - (order.tipAmount ?? 0))
+    : 0
+}
+
+function normalizeReceiptCurrency(currency?: string) {
+  const normalizedCurrency = currency?.trim().toUpperCase() ?? ""
+  return /^[A-Z]{3}$/.test(normalizedCurrency) ? normalizedCurrency : "USD"
+}
+
+function formatReceiptAmount(amount: number, currency: string) {
+  return new Intl.NumberFormat("zh-CN", {
+    currency,
+    currencyDisplay: "symbol",
+    style: "currency",
+  }).format(Number.isFinite(amount) ? amount : 0)
+}
+
+function formatReceiptDate(value?: string) {
+  const date = value ? new Date(value) : null
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return "待确认"
+  }
+
+  return date.toLocaleString("zh-CN", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
 }
 
 function OrderInfoSection({
