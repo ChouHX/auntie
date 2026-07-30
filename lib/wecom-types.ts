@@ -7,7 +7,6 @@ export type WecomCustomer = {
   description: string
   externalUserId: string
   followUser: string
-  followUserAvatar: string
   followUserId: string
   gender: "female" | "male" | "unknown"
   nameAndType: string

@@ -260,6 +260,14 @@ export function CustomerAdmin({ token }: { token: string }) {
           </div>
         }
         count={pagination?.totalCount ?? 0}
+        countExtra={
+          settings?.lastStatus === "success" ? (
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+              <CheckCircle size={14} weight="fill" />
+              同步成功
+            </span>
+          ) : null
+        }
         description={
           settings?.configured ? getSyncSummary(settings) : undefined
         }
@@ -268,18 +276,16 @@ export function CustomerAdmin({ token }: { token: string }) {
         setQuery={setQueryInput}
         title="客户列表"
       >
-        <Table className="min-w-[1640px] text-xs [&_td]:px-2 [&_th]:px-2">
+        <Table className="min-w-[1440px] text-xs [&_td]:px-2 [&_th]:px-2">
           <TableHeader>
             <TableRow>
               <TableHead>客户名称@客户类型</TableHead>
               <TableHead>性别</TableHead>
-              <TableHead>职位</TableHead>
               <TableHead>客户企业</TableHead>
               <TableHead>学员区分</TableHead>
               <TableHead>地区</TableHead>
               <TableHead>对接阿姨</TableHead>
-              <TableHead>添加人</TableHead>
-              <TableHead>添加人账号</TableHead>
+              <TableHead>添加人（添加人账号）</TableHead>
               <TableHead>描述</TableHead>
               <TableHead>备注手机号</TableHead>
               <TableHead>添加时间</TableHead>
@@ -291,7 +297,7 @@ export function CustomerAdmin({ token }: { token: string }) {
               <TableRow>
                 <TableCell
                   className="h-28 text-center text-muted-foreground"
-                  colSpan={13}
+                  colSpan={11}
                 >
                   正在加载客户数据...
                 </TableCell>
@@ -304,7 +310,7 @@ export function CustomerAdmin({ token }: { token: string }) {
               <TableRow>
                 <TableCell
                   className="h-28 text-center text-muted-foreground"
-                  colSpan={13}
+                  colSpan={11}
                 >
                   {settings?.configured
                     ? "暂无客户数据，请先执行同步"
@@ -373,39 +379,25 @@ function CustomerRow({ customer }: { customer: WecomCustomer }) {
               : "•"}
         </span>
       </TableCell>
-      <CompactCell value={customer.position} />
-      <CompactCell value={customer.corpName} />
-      <TagCell value={customer.studentType} />
-      <TagCell value={customer.region} />
-      <TagCell value={customer.auntie} />
+      <CompactCell
+        value={
+          customer.corpName && customer.position
+            ? `${customer.corpName}（${customer.position}）`
+            : customer.corpName || customer.position
+        }
+      />
+      <TagCell tone="student" value={customer.studentType} />
+      <TagCell tone="region" value={customer.region} />
+      <TagCell tone="auntie" value={customer.auntie} />
       <TableCell>
-        <div className="flex max-w-64 items-center gap-2 overflow-hidden">
-          {customer.followUserAvatar ? (
-            // eslint-disable-next-line @next/next/no-img-element -- WeCom supplies remote avatar URLs.
-            <img
-              alt=""
-              className="size-7 shrink-0 rounded-full bg-muted object-cover"
-              loading="lazy"
-              src={customer.followUserAvatar}
-            />
-          ) : (
-            <span className="size-7 shrink-0 rounded-full bg-muted" />
-          )}
+        <div className="flex max-w-64 items-center gap-1 overflow-hidden">
           <span className="shrink-0 font-medium text-foreground">
             {customer.followUser || "-"}
           </span>
-          {customer.remarkCorpName ? (
-            <span
-              className="truncate text-muted-foreground"
-              title={customer.remarkCorpName}
-            >
-              ({customer.remarkCorpName})
-            </span>
-          ) : null}
+          <span className="truncate text-muted-foreground">
+            （{customer.followUserId || "-"}）
+          </span>
         </div>
-      </TableCell>
-      <TableCell className="font-mono text-[11px] text-muted-foreground">
-        {customer.followUserId || "-"}
       </TableCell>
       <CompactCell value={customer.description} />
       <CompactCell value={customer.remarkMobiles} />
@@ -423,7 +415,13 @@ function CompactCell({ value }: { value: string }) {
   )
 }
 
-function TagCell({ value }: { value: string }) {
+function TagCell({
+  tone,
+  value,
+}: {
+  tone: "auntie" | "region" | "student"
+  value: string
+}) {
   const tags = value
     .split(/[,，]/)
     .map((tag) => tag.trim())
@@ -435,7 +433,15 @@ function TagCell({ value }: { value: string }) {
         <div className="flex max-w-52 flex-nowrap gap-1 overflow-hidden">
           {tags.map((tag) => (
             <Badge
-              className="h-5 shrink-0 rounded px-1.5 text-[10px] font-medium"
+              className={cn(
+                "h-6 shrink-0 rounded px-2 py-0 text-xs font-medium",
+                tone === "student" &&
+                  "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-300",
+                tone === "region" &&
+                  "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300",
+                tone === "auntie" &&
+                  "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-300"
+              )}
               key={tag}
               variant="secondary"
             >

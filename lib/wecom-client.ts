@@ -35,7 +35,6 @@ type CustomerRelationship = {
   followInfo: ApiRecord
 }
 export type WecomMemberProfile = {
-  avatar: string
   name: string
   userId: string
 }
@@ -222,12 +221,11 @@ async function getMemberProfiles(token: string, userIds: string[]) {
           query: { access_token: token, userid: userId },
         })
         return {
-          avatar: String(member.avatar || ""),
           name: String(member.name || userId),
           userId,
         }
       } catch {
-        return { avatar: "", name: userId, userId }
+        return { name: userId, userId }
       }
     })
   )
@@ -342,7 +340,6 @@ function buildCustomer(
     description: String(followInfo.description || ""),
     externalUserId,
     followUser: memberProfile?.name ?? followUserId,
-    followUserAvatar: memberProfile?.avatar ?? "",
     followUserId,
     gender,
     nameAndType: `${String(customer.name || "")}@${customerType}`,

@@ -212,6 +212,7 @@ export function RecordsPanel({
   bulkActions,
   children,
   count,
+  countExtra,
   description,
   filters,
   hideSearch,
@@ -225,6 +226,7 @@ export function RecordsPanel({
   bulkActions?: ReactNode
   children: ReactNode
   count: number
+  countExtra?: ReactNode
   description?: string
   filters?: ReactNode
   hideSearch?: boolean
@@ -250,6 +252,7 @@ export function RecordsPanel({
                 {showCount ? (
                   <Badge variant="secondary">{count} 条</Badge>
                 ) : null}
+                {countExtra}
               </div>
               {description ? (
                 <p className="mt-1 text-xs text-muted-foreground">

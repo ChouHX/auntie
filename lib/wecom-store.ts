@@ -33,7 +33,6 @@ type CustomerRow = Record<
   | "description"
   | "external_user_id"
   | "follow_user"
-  | "follow_user_avatar"
   | "follow_user_id"
   | "gender"
   | "name_and_type"
@@ -244,9 +243,9 @@ async function runSync() {
         `INSERT INTO wecom_customers (
           relation_id, external_user_id, follow_user_id, avatar, name_and_type,
           gender, position, corp_name, description, remark_mobiles,
-          student_type, region, auntie, follow_user, follow_user_avatar,
-          remark_corp_name, add_time, add_way, synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          student_type, region, auntie, follow_user, remark_corp_name,
+          add_time, add_way, synced_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(relation_id) DO UPDATE SET
           external_user_id = excluded.external_user_id,
           follow_user_id = excluded.follow_user_id,
@@ -261,7 +260,6 @@ async function runSync() {
           region = excluded.region,
           auntie = excluded.auntie,
           follow_user = excluded.follow_user,
-          follow_user_avatar = excluded.follow_user_avatar,
           remark_corp_name = excluded.remark_corp_name,
           add_time = excluded.add_time,
           add_way = excluded.add_way,
@@ -283,7 +281,6 @@ async function runSync() {
           customer.region,
           customer.auntie,
           customer.followUser,
-          customer.followUserAvatar,
           customer.remarkCorpName,
           customer.addTime,
           customer.addWay,
@@ -351,7 +348,7 @@ async function readExternalUserIdsNeedingProfile() {
       .prepare(
         `SELECT DISTINCT external_user_id
          FROM wecom_customers
-         WHERE follow_user_avatar IS NULL OR remark_corp_name IS NULL`
+         WHERE remark_corp_name IS NULL`
       )
       .all() as Array<{ external_user_id: string }>
     return rows.map((row) => row.external_user_id)
@@ -417,7 +414,6 @@ function mapCustomerRow(row: CustomerRow): WecomCustomer {
     description: row.description,
     externalUserId: row.external_user_id,
     followUser: row.follow_user,
-    followUserAvatar: row.follow_user_avatar ?? "",
     followUserId: row.follow_user_id,
     gender: row.gender as WecomCustomer["gender"],
     nameAndType: row.name_and_type,
