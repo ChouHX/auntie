@@ -33,7 +33,7 @@ import {
   saveLocalPaymentOrder,
   type LocalPaymentOrder,
 } from "@/lib/local-orders"
-import { Link, useNavigate } from "@/lib/router-compat"
+import { Link } from "@/lib/router-compat"
 import { getSiteLogo } from "@/lib/site-settings"
 import { cn } from "@/lib/utils"
 
@@ -85,7 +85,6 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
   const pathname = usePathname() || "/"
   const { content } = useCmsContent(["siteSettings"])
   const { dict, language, toggleLanguage } = useI18n()
-  const navigate = useNavigate()
   const { setTheme, theme } = useTheme()
   const copy = copyByLanguage[language]
   const logoImage = getSiteLogo(content)
@@ -162,81 +161,6 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
       window.removeEventListener(localOrdersUpdatedEvent, syncOrders)
     }
   }, [])
-
-  useEffect(() => {
-    const query = new URLSearchParams(window.location.search)
-    const orderId =
-      query.get("order")?.trim() || query.get("paymentOrder")?.trim() || ""
-
-    if (!orderId) {
-      return
-    }
-
-    let isMounted = true
-    let redirected = false
-
-    async function loadSharedOrder() {
-      try {
-        const order = await fetchPaymentOrder(orderId)
-
-        if (!isMounted) {
-          return
-        }
-
-        saveLocalPaymentOrder(order)
-
-        if (order.status === "paid") {
-          redirected = true
-          navigate(
-            order.review
-              ? `/checkout?order=${encodeURIComponent(order.orderId)}`
-              : `/review?order=${encodeURIComponent(order.orderId)}`,
-            { replace: true }
-          )
-          return
-        }
-
-        if (order.status === "cancelled") {
-          redirected = true
-          navigate(`/checkout?order=${encodeURIComponent(order.orderId)}`, {
-            replace: true,
-          })
-          return
-        }
-
-        setOrders(readLocalPaymentOrders())
-        setIsPromptVisible(
-          order.status === "unpaid" || order.status === "pending"
-        )
-      } catch (error) {
-        if (isApiRequestError(error, 404)) {
-          removeLocalPaymentOrder(orderId)
-          setOrders(readLocalPaymentOrders())
-          setIsPromptVisible(false)
-        }
-        // A stale or malformed shared link should still leave the visitor on home.
-      } finally {
-        if (!isMounted || redirected) {
-          return
-        }
-
-        query.delete("order")
-        query.delete("paymentOrder")
-        const search = query.toString()
-        window.history.replaceState(
-          null,
-          "",
-          `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
-        )
-      }
-    }
-
-    void loadSharedOrder()
-
-    return () => {
-      isMounted = false
-    }
-  }, [navigate])
 
   function toggleTheme() {
     setTheme(isDarkTheme ? "light" : "dark")

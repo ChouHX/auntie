@@ -35,7 +35,9 @@ function MobileAppDock() {
     [orders]
   )
   const isOrderRoute =
-    pathname.startsWith("/orders") || pathname.startsWith("/pay")
+    pathname.startsWith("/orders") ||
+    pathname.startsWith("/pay") ||
+    pathname.startsWith("/review")
   const shouldShowOrderPrompt = isPromptVisible && activeOrder && !isOrderRoute
   const activeOrderHref = activeOrder
     ? `/checkout?order=${encodeURIComponent(activeOrder.orderId)}`
@@ -106,6 +108,11 @@ function MobileAppDock() {
       const incomingOrderId =
         query.get("order")?.trim() || query.get("paymentOrder")?.trim() || ""
 
+      if (incomingOrderId && isOrderRoute) {
+        setOrders(cachedOrders)
+        return
+      }
+
       if (incomingOrderId) {
         setOrders(
           cachedOrders.filter((order) => !isActiveCachedPaymentOrder(order))
@@ -143,7 +150,7 @@ function MobileAppDock() {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [cacheRemoteOrder])
+  }, [cacheRemoteOrder, isOrderRoute])
 
   return (
     <>

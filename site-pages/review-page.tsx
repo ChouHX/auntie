@@ -16,6 +16,7 @@ import { AuntieProfilePopover } from "@/components/common/auntie-profile-popover
 import {
   fetchPaymentOrder,
   fetchPublicAuntie,
+  isApiRequestError,
   submitOrderReview,
 } from "@/lib/cms-api"
 import { cn } from "@/lib/utils"
@@ -23,6 +24,7 @@ import type { CmsPaymentOrder, CmsTeamMember } from "@/types/cms"
 
 type ReviewState =
   | "loading"
+  | "load_error"
   | "not_found"
   | "not_paid"
   | "already_reviewed"
@@ -44,6 +46,7 @@ function ReviewPage() {
   const [hoverRating, setHoverRating] = useState(0)
   const [comment, setComment] = useState("")
   const [error, setError] = useState("")
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const displayState: ReviewState = rawOrderId ? state : "not_found"
 
   useEffect(() => {
@@ -54,14 +57,8 @@ function ReviewPage() {
     let isMounted = true
 
     fetchPaymentOrder(rawOrderId)
-      .catch(() => null)
       .then((orderData) => {
         if (!isMounted) return
-
-        if (!orderData) {
-          setState("not_found")
-          return
-        }
 
         setOrder(orderData)
 
@@ -89,11 +86,18 @@ function ReviewPage() {
           setState("form")
         }
       })
+      .catch((requestError) => {
+        if (!isMounted) return
+
+        setState(
+          isApiRequestError(requestError, 404) ? "not_found" : "load_error"
+        )
+      })
 
     return () => {
       isMounted = false
     }
-  }, [rawOrderId])
+  }, [loadAttempt, rawOrderId])
 
   async function handleSubmit() {
     if (rating < 1) {
@@ -123,6 +127,14 @@ function ReviewPage() {
       <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
         {displayState === "loading" ? (
           <ReviewLoadingCard />
+        ) : displayState === "load_error" ? (
+          <ReviewLoadErrorCard
+            onRetry={() => {
+              setState("loading")
+              setOrder(undefined)
+              setLoadAttempt((value) => value + 1)
+            }}
+          />
         ) : displayState === "not_found" ? (
           <ReviewNotFoundCard />
         ) : displayState === "not_paid" ? (
@@ -160,6 +172,25 @@ function ReviewLoadingCard() {
       <div className="text-sm text-slate-400 dark:text-slate-500">
         正在加载订单信息...
       </div>
+    </Card>
+  )
+}
+
+function ReviewLoadErrorCard({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Card className="flex flex-col items-center gap-4 border-slate-200 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-slate-900">
+      <WarningCircle size={40} className="text-amber-500" />
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+          订单加载失败
+        </h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          暂时无法连接服务器，请检查网络后重新加载。
+        </p>
+      </div>
+      <Button onClick={onRetry} variant="brand">
+        重新加载
+      </Button>
     </Card>
   )
 }

@@ -153,6 +153,23 @@ function getOrderTimestamp(order: CmsPaymentOrder) {
   return Number.isFinite(timestamp) ? timestamp : 0
 }
 
+function formatOrderCreatedTime(order: CmsPaymentOrder) {
+  const date = order.createdAt ? new Date(order.createdAt) : null
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return "待确认"
+  }
+
+  return date.toLocaleString("zh-CN", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+}
+
 function createDashboardOrderMetric(): DashboardOrderMetric {
   return {
     amount: 0,
@@ -714,10 +731,11 @@ const DashboardCountryChart = memo(function DashboardCountryChart({
 function DashboardActiveOrdersTable({ orders }: { orders: CmsPaymentOrder[] }) {
   return (
     <div className="max-w-full overflow-hidden rounded-xl border border-border bg-muted/50 [&_[data-slot=table-cell]]:px-2.5 [&_[data-slot=table-cell]]:py-1.5 [&_[data-slot=table-cell]]:text-xs [&_[data-slot=table-cell]]:leading-tight [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table-head]]:h-7 [&_[data-slot=table-head]]:px-2.5 [&_[data-slot=table-head]]:text-[11px] [&_[data-slot=table-row]]:h-9">
-      <Table className="min-w-[640px] text-xs">
+      <Table className="min-w-[760px] text-xs">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead>订单号</TableHead>
+            <TableHead>创建时间</TableHead>
             <TableHead>客户</TableHead>
             <TableHead>服务</TableHead>
             <TableHead>日期</TableHead>
@@ -729,6 +747,9 @@ function DashboardActiveOrdersTable({ orders }: { orders: CmsPaymentOrder[] }) {
           {orders.map((order) => (
             <TableRow key={order.orderId}>
               <TableCell className="font-semibold">{order.orderId}</TableCell>
+              <TableCell className="whitespace-nowrap text-muted-foreground">
+                {formatOrderCreatedTime(order)}
+              </TableCell>
               <TableCell>{order.customerName || "未填写客户"}</TableCell>
               <TableCell className="max-w-[220px]">
                 <div className="flex min-w-0 items-center gap-1.5">
