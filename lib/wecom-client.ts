@@ -34,6 +34,10 @@ type CustomerRelationship = {
   customer: ApiRecord
   followInfo: ApiRecord
 }
+type MemberProfile = {
+  avatar: string
+  name: string
+}
 export type WecomCustomerRelation = {
   externalUserId: string
   followUserId: string
@@ -150,15 +154,15 @@ export async function fetchWecomCustomersByExternalIds(
       relationships.map(({ followInfo }) => String(followInfo.userid))
     ),
   ]
-  const [memberNames, tagMap] = await Promise.all([
-    getMemberNames(token, followUserIds),
+  const [memberProfiles, tagMap] = await Promise.all([
+    getMemberProfiles(token, followUserIds),
     getCorpTags(token),
   ])
   const syncedAt = new Date().toISOString()
 
   return {
     customers: relationships.map(({ customer, followInfo }) =>
-      buildCustomer(customer, followInfo, memberNames, tagMap, syncedAt)
+      buildCustomer(customer, followInfo, memberProfiles, tagMap, syncedAt)
     ),
     invalidExternalUserIds,
   }
@@ -205,20 +209,26 @@ async function getFollowUsers(token: string) {
   return result.follow_user.map(String)
 }
 
-async function getMemberNames(token: string, userIds: string[]) {
+async function getMemberProfiles(token: string, userIds: string[]) {
   const entries = await Promise.all(
     userIds.map(async (userId) => {
       try {
         const member = await requestJson("/user/get", {
           query: { access_token: token, userid: userId },
         })
-        return [userId, String(member.name || userId)] as const
+        return [
+          userId,
+          {
+            avatar: String(member.avatar || ""),
+            name: String(member.name || userId),
+          },
+        ] as const
       } catch {
-        return [userId, userId] as const
+        return [userId, { avatar: "", name: userId }] as const
       }
     })
   )
-  return new Map(entries)
+  return new Map<string, MemberProfile>(entries)
 }
 
 async function getCorpTags(token: string) {
@@ -294,12 +304,13 @@ async function getCustomerDetail(token: string, externalUserId: string) {
 function buildCustomer(
   customer: ApiRecord,
   followInfo: ApiRecord,
-  memberNames: Map<string, string>,
+  memberProfiles: Map<string, MemberProfile>,
   tagMap: Map<string, { group: string; name: string }>,
   syncedAt: string
 ): WecomCustomer {
   const externalUserId = String(customer.external_userid || "")
   const followUserId = String(followInfo.userid || "")
+  const memberProfile = memberProfiles.get(followUserId)
   const groupedTags = resolveGroupedTags(followInfo, tagMap)
   const customerType =
     Number(customer.type) === 1
@@ -327,7 +338,8 @@ function buildCustomer(
     ),
     description: String(followInfo.description || ""),
     externalUserId,
-    followUser: memberNames.get(followUserId) ?? followUserId,
+    followUser: memberProfile?.name ?? followUserId,
+    followUserAvatar: memberProfile?.avatar ?? "",
     followUserId,
     gender,
     nameAndType: `${String(customer.name || "")}@${customerType}`,
@@ -335,6 +347,7 @@ function buildCustomer(
     region: groupedTags.get("地区")?.join(", ") ?? "",
     relationId: createRelationId(externalUserId, followUserId),
     remarkMobiles: joinValues(followInfo.remark_mobiles),
+    remarkCorpName: String(followInfo.remark_corp_name || ""),
     studentType: groupedTags.get("学员区分")?.join(", ") ?? "",
     syncedAt,
   }

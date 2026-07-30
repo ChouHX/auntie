@@ -268,7 +268,7 @@ export function CustomerAdmin({ token }: { token: string }) {
         setQuery={setQueryInput}
         title="客户列表"
       >
-        <Table className="min-w-[1500px]">
+        <Table className="min-w-[1640px] text-xs [&_td]:px-2 [&_th]:px-2">
           <TableHeader>
             <TableRow>
               <TableHead>客户名称@客户类型</TableHead>
@@ -279,6 +279,7 @@ export function CustomerAdmin({ token }: { token: string }) {
               <TableHead>地区</TableHead>
               <TableHead>对接阿姨</TableHead>
               <TableHead>添加人</TableHead>
+              <TableHead>添加人账号</TableHead>
               <TableHead>描述</TableHead>
               <TableHead>备注手机号</TableHead>
               <TableHead>添加时间</TableHead>
@@ -290,7 +291,7 @@ export function CustomerAdmin({ token }: { token: string }) {
               <TableRow>
                 <TableCell
                   className="h-28 text-center text-muted-foreground"
-                  colSpan={12}
+                  colSpan={13}
                 >
                   正在加载客户数据...
                 </TableCell>
@@ -303,7 +304,7 @@ export function CustomerAdmin({ token }: { token: string }) {
               <TableRow>
                 <TableCell
                   className="h-28 text-center text-muted-foreground"
-                  colSpan={12}
+                  colSpan={13}
                 >
                   {settings?.configured
                     ? "暂无客户数据，请先执行同步"
@@ -335,19 +336,19 @@ export function CustomerAdmin({ token }: { token: string }) {
 
 function CustomerRow({ customer }: { customer: WecomCustomer }) {
   return (
-    <TableRow>
+    <TableRow className="[&>td]:h-9 [&>td]:py-1">
       <TableCell>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {customer.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element -- WeCom supplies remote avatar URLs.
             <img
               alt=""
-              className="size-9 rounded-full bg-muted object-cover"
+              className="size-7 rounded-full bg-muted object-cover"
               loading="lazy"
               src={customer.avatar}
             />
           ) : (
-            <span className="size-9 rounded-full bg-muted" />
+            <span className="size-7 rounded-full bg-muted" />
           )}
           <span className="font-medium text-foreground">
             {customer.nameAndType || "-"}
@@ -372,23 +373,80 @@ function CustomerRow({ customer }: { customer: WecomCustomer }) {
               : "•"}
         </span>
       </TableCell>
-      {[
-        customer.position,
-        customer.corpName,
-        customer.studentType,
-        customer.region,
-        customer.auntie,
-        customer.followUser,
-        customer.description,
-        customer.remarkMobiles,
-        customer.addTime,
-        customer.addWay,
-      ].map((value, index) => (
-        <TableCell className="max-w-56 truncate" key={index} title={value}>
-          {value || "-"}
-        </TableCell>
-      ))}
+      <CompactCell value={customer.position} />
+      <CompactCell value={customer.corpName} />
+      <TagCell value={customer.studentType} />
+      <TagCell value={customer.region} />
+      <TagCell value={customer.auntie} />
+      <TableCell>
+        <div className="flex max-w-64 items-center gap-2 overflow-hidden">
+          {customer.followUserAvatar ? (
+            // eslint-disable-next-line @next/next/no-img-element -- WeCom supplies remote avatar URLs.
+            <img
+              alt=""
+              className="size-7 shrink-0 rounded-full bg-muted object-cover"
+              loading="lazy"
+              src={customer.followUserAvatar}
+            />
+          ) : (
+            <span className="size-7 shrink-0 rounded-full bg-muted" />
+          )}
+          <span className="shrink-0 font-medium text-foreground">
+            {customer.followUser || "-"}
+          </span>
+          {customer.remarkCorpName ? (
+            <span
+              className="truncate text-muted-foreground"
+              title={customer.remarkCorpName}
+            >
+              ({customer.remarkCorpName})
+            </span>
+          ) : null}
+        </div>
+      </TableCell>
+      <TableCell className="font-mono text-[11px] text-muted-foreground">
+        {customer.followUserId || "-"}
+      </TableCell>
+      <CompactCell value={customer.description} />
+      <CompactCell value={customer.remarkMobiles} />
+      <CompactCell value={customer.addTime} />
+      <CompactCell value={customer.addWay} />
     </TableRow>
+  )
+}
+
+function CompactCell({ value }: { value: string }) {
+  return (
+    <TableCell className="max-w-56 truncate" title={value}>
+      {value || "-"}
+    </TableCell>
+  )
+}
+
+function TagCell({ value }: { value: string }) {
+  const tags = value
+    .split(/[,，]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+
+  return (
+    <TableCell title={value}>
+      {tags.length ? (
+        <div className="flex max-w-52 flex-nowrap gap-1 overflow-hidden">
+          {tags.map((tag) => (
+            <Badge
+              className="h-5 shrink-0 rounded px-1.5 text-[10px] font-medium"
+              key={tag}
+              variant="secondary"
+            >
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        "-"
+      )}
+    </TableCell>
   )
 }
 

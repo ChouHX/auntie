@@ -32,6 +32,7 @@ type CustomerRow = Record<
   | "description"
   | "external_user_id"
   | "follow_user"
+  | "follow_user_avatar"
   | "follow_user_id"
   | "gender"
   | "name_and_type"
@@ -39,6 +40,7 @@ type CustomerRow = Record<
   | "region"
   | "relation_id"
   | "remark_mobiles"
+  | "remark_corp_name"
   | "student_type"
   | "synced_at",
   string
@@ -77,10 +79,12 @@ export async function listWecomCustomers(options: {
           OR region LIKE ? ESCAPE '\\'
           OR auntie LIKE ? ESCAPE '\\'
           OR follow_user LIKE ? ESCAPE '\\'
+          OR follow_user_id LIKE ? ESCAPE '\\'
+          OR remark_corp_name LIKE ? ESCAPE '\\'
           OR description LIKE ? ESCAPE '\\'
           OR remark_mobiles LIKE ? ESCAPE '\\'`
       : ""
-    const filterParams = query ? Array(8).fill(`%${escapeLike(query)}%`) : []
+    const filterParams = query ? Array(10).fill(`%${escapeLike(query)}%`) : []
     const countRow = database
       .prepare(`SELECT COUNT(*) AS count FROM wecom_customers ${filter}`)
       .get(...filterParams) as { count: number }
@@ -174,8 +178,13 @@ async function runSync() {
         listedMissingRelations.map((relation) => relation.externalUserId)
       ),
     ]
+    const externalUserIdsNeedingProfile =
+      await readExternalUserIdsNeedingProfile()
+    const externalUserIdsToFetch = [
+      ...new Set([...newExternalUserIds, ...externalUserIdsNeedingProfile]),
+    ]
     const detailResult = await fetchWecomCustomersByExternalIds(
-      newExternalUserIds,
+      externalUserIdsToFetch,
       listedRelationIds
     )
     const invalidExternalUserIds = new Set(detailResult.invalidExternalUserIds)
@@ -226,8 +235,9 @@ async function runSync() {
         `INSERT INTO wecom_customers (
           relation_id, external_user_id, follow_user_id, avatar, name_and_type,
           gender, position, corp_name, description, remark_mobiles,
-          student_type, region, auntie, follow_user, add_time, add_way, synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          student_type, region, auntie, follow_user, follow_user_avatar,
+          remark_corp_name, add_time, add_way, synced_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(relation_id) DO UPDATE SET
           external_user_id = excluded.external_user_id,
           follow_user_id = excluded.follow_user_id,
@@ -242,6 +252,8 @@ async function runSync() {
           region = excluded.region,
           auntie = excluded.auntie,
           follow_user = excluded.follow_user,
+          follow_user_avatar = excluded.follow_user_avatar,
+          remark_corp_name = excluded.remark_corp_name,
           add_time = excluded.add_time,
           add_way = excluded.add_way,
           synced_at = excluded.synced_at`
@@ -262,6 +274,8 @@ async function runSync() {
           customer.region,
           customer.auntie,
           customer.followUser,
+          customer.followUserAvatar,
+          customer.remarkCorpName,
           customer.addTime,
           customer.addWay,
           completedAt
@@ -316,6 +330,22 @@ async function readExistingRelationIds() {
       .prepare("SELECT relation_id FROM wecom_customers")
       .all() as Array<{ relation_id: string }>
     return new Set(rows.map((row) => row.relation_id))
+  } finally {
+    database.close()
+  }
+}
+
+async function readExternalUserIdsNeedingProfile() {
+  const database = await openDatabase()
+  try {
+    const rows = database
+      .prepare(
+        `SELECT DISTINCT external_user_id
+         FROM wecom_customers
+         WHERE follow_user_avatar IS NULL OR remark_corp_name IS NULL`
+      )
+      .all() as Array<{ external_user_id: string }>
+    return rows.map((row) => row.external_user_id)
   } finally {
     database.close()
   }
@@ -378,6 +408,7 @@ function mapCustomerRow(row: CustomerRow): WecomCustomer {
     description: row.description,
     externalUserId: row.external_user_id,
     followUser: row.follow_user,
+    followUserAvatar: row.follow_user_avatar ?? "",
     followUserId: row.follow_user_id,
     gender: row.gender as WecomCustomer["gender"],
     nameAndType: row.name_and_type,
@@ -385,6 +416,7 @@ function mapCustomerRow(row: CustomerRow): WecomCustomer {
     region: row.region,
     relationId: row.relation_id,
     remarkMobiles: row.remark_mobiles,
+    remarkCorpName: row.remark_corp_name ?? "",
     studentType: row.student_type,
     syncedAt: row.synced_at,
   }
@@ -434,6 +466,8 @@ async function openDatabase() {
       region TEXT NOT NULL,
       auntie TEXT NOT NULL,
       follow_user TEXT NOT NULL,
+      follow_user_avatar TEXT,
+      remark_corp_name TEXT,
       add_time TEXT NOT NULL,
       add_way TEXT NOT NULL,
       synced_at TEXT NOT NULL
@@ -455,7 +489,30 @@ async function openDatabase() {
     INSERT OR IGNORE INTO wecom_sync_settings (id, updated_at)
       VALUES (1, CURRENT_TIMESTAMP);
   `)
+  ensureCustomerColumn(database, "follow_user_avatar")
+  ensureCustomerColumn(database, "remark_corp_name")
   return database
+}
+
+function ensureCustomerColumn(
+  database: Database,
+  column: "follow_user_avatar" | "remark_corp_name"
+) {
+  const columns = database
+    .prepare("PRAGMA table_info(wecom_customers)")
+    .all() as Array<{
+    name: string
+  }>
+  if (!columns.some((item) => item.name === column)) {
+    try {
+      database.exec(`ALTER TABLE wecom_customers ADD COLUMN ${column} TEXT`)
+    } catch (error) {
+      const refreshedColumns = database
+        .prepare("PRAGMA table_info(wecom_customers)")
+        .all() as Array<{ name: string }>
+      if (!refreshedColumns.some((item) => item.name === column)) throw error
+    }
+  }
 }
 
 async function loadDatabaseConstructor(): Promise<DatabaseConstructor> {
