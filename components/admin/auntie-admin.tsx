@@ -6,12 +6,14 @@ import {
   CaretLeft,
   CaretRight,
   ChatsCircle,
+  CircleNotch,
   FloppyDisk,
   PencilSimple,
   Plus,
   Star,
   Trash,
 } from "@phosphor-icons/react"
+import { AnimatePresence, motion } from "motion/react"
 import { toast } from "sonner"
 
 import {
@@ -461,14 +463,16 @@ export function AuntieAdmin({
                   <TableHead>状态</TableHead>
                   <TableHead>评分</TableHead>
                   <TableHead>完成单数</TableHead>
-                  <TableHead className="w-24 text-right">操作</TableHead>
+                  <TableHead className="sticky right-0 z-20 w-28 min-w-28 border-l border-border bg-card text-right">
+                    操作
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visibleAunties.map((auntie) => {
                   const stats = getStats(auntie)
                   return (
-                    <TableRow key={auntie.id}>
+                    <TableRow className="group" key={auntie.id}>
                       <TableCell>
                         <div className="flex items-center gap-2.5">
                           {(auntie.avatarThumb ?? auntie.avatar) ? (
@@ -553,7 +557,7 @@ export function AuntieAdmin({
                       <TableCell className="text-sm font-medium">
                         {stats.completedCount}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="sticky right-0 z-10 border-l border-border bg-card group-hover:bg-muted/45">
                         <div className="flex justify-end gap-1">
                           <Button
                             aria-label="编辑阿姨"
@@ -924,66 +928,85 @@ export function AuntieAdmin({
                       </div>
                     </div>
 
-                    {isReviewLoading ? (
-                      <div className="py-10 text-center text-sm text-muted-foreground">
-                        加载中...
-                      </div>
-                    ) : reviews.length ? (
-                      <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-1">
-                        {reviews.map((review) => (
-                          <div
-                            key={review.orderId}
-                            className="rounded-lg border border-border bg-card p-3"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-foreground">
-                                  {review.customerName || "匿名客户"}
-                                </span>
-                                <span className="flex items-center gap-0.5">
-                                  {Array.from({ length: 5 }).map((_, i) => (
-                                    <Star
-                                      key={i}
-                                      className={cn(
-                                        "size-3",
-                                        i < review.rating
-                                          ? "text-amber-500"
-                                          : "text-muted-foreground/30"
-                                      )}
-                                      weight="fill"
-                                    />
-                                  ))}
+                    <div className="relative min-h-44">
+                      {reviews.length ? (
+                        <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-1">
+                          {reviews.map((review) => (
+                            <div
+                              key={review.orderId}
+                              className="rounded-lg border border-border bg-card p-3"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-foreground">
+                                    {review.customerName || "匿名客户"}
+                                  </span>
+                                  <span className="flex items-center gap-0.5">
+                                    {Array.from({ length: 5 }).map((_, i) => (
+                                      <Star
+                                        key={i}
+                                        className={cn(
+                                          "size-3",
+                                          i < review.rating
+                                            ? "text-amber-500"
+                                            : "text-muted-foreground/30"
+                                        )}
+                                        weight="fill"
+                                      />
+                                    ))}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  {review.createdAt
+                                    ? new Date(
+                                        review.createdAt
+                                      ).toLocaleDateString("zh-CN")
+                                    : ""}
                                 </span>
                               </div>
-                              <span className="text-xs text-muted-foreground">
-                                {review.createdAt
-                                  ? new Date(
-                                      review.createdAt
-                                    ).toLocaleDateString("zh-CN")
-                                  : ""}
-                              </span>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {review.serviceType} · {review.serviceArea} ·{" "}
+                                {review.serviceDate}
+                              </div>
+                              {review.comment ? (
+                                <p className="mt-2 text-sm leading-6 text-foreground">
+                                  {review.comment}
+                                </p>
+                              ) : (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                  （客户未留言）
+                                </p>
+                              )}
                             </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {review.serviceType} · {review.serviceArea} ·{" "}
-                              {review.serviceDate}
+                          ))}
+                        </div>
+                      ) : !isReviewLoading ? (
+                        <div className="flex min-h-44 items-center justify-center text-sm text-muted-foreground">
+                          暂无评价
+                        </div>
+                      ) : null}
+
+                      <AnimatePresence>
+                        {isReviewLoading ? (
+                          <motion.div
+                            animate={{ opacity: 1 }}
+                            className="absolute inset-0 flex min-h-44 items-center justify-center rounded-lg bg-background/90"
+                            exit={{ opacity: 0 }}
+                            initial={{ opacity: 0 }}
+                            transition={{ duration: 0.18, ease: "easeOut" }}
+                          >
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <CircleNotch
+                                className="animate-spin text-primary"
+                                size={18}
+                                weight="bold"
+                              />
+                              正在加载评价...
                             </div>
-                            {review.comment ? (
-                              <p className="mt-2 text-sm leading-6 text-foreground">
-                                {review.comment}
-                              </p>
-                            ) : (
-                              <p className="mt-2 text-xs text-muted-foreground">
-                                （客户未留言）
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-10 text-center text-sm text-muted-foreground">
-                        暂无评价
-                      </div>
-                    )}
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
 
                     {!isReviewLoading && reviews.length > 0 ? (
                       <ReviewPagination

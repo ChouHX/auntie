@@ -12,7 +12,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 export type AdminNoticeDialogState = {
@@ -33,7 +32,12 @@ export type AdminNoticeDialogOptions = {
 }
 
 export function useAdminNoticeDialog() {
-  const [dialog, setDialog] = useState<AdminNoticeDialogState | null>(null)
+  const [dialog, setDialog] = useState<AdminNoticeDialogState>({
+    confirmLabel: "确认",
+    kind: "confirm",
+    title: "",
+  })
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const resolverRef = useRef<((confirmed: boolean) => void) | null>(null)
 
   function openDialog(
@@ -47,13 +51,14 @@ export function useAdminNoticeDialog() {
         kind,
         ...options,
       })
+      setIsDialogOpen(true)
     })
   }
 
   function resolveDialog(confirmed: boolean) {
     resolverRef.current?.(confirmed)
     resolverRef.current = null
-    setDialog(null)
+    setIsDialogOpen(false)
   }
 
   async function showAlert(options: AdminNoticeDialogOptions) {
@@ -72,6 +77,7 @@ export function useAdminNoticeDialog() {
   const noticeDialog = (
     <AdminNoticeDialog
       dialog={dialog}
+      open={isDialogOpen}
       onOpenChange={(open) => {
         if (!open) {
           resolveDialog(false)
@@ -86,43 +92,43 @@ export function useAdminNoticeDialog() {
 
 export function AdminNoticeDialog({
   dialog,
+  open,
   onOpenChange,
   onResolve,
 }: {
-  dialog: AdminNoticeDialogState | null
+  dialog: AdminNoticeDialogState
+  open: boolean
   onOpenChange: (open: boolean) => void
   onResolve: (confirmed: boolean) => void
 }) {
   return (
-    <AlertDialog onOpenChange={onOpenChange} open={Boolean(dialog)}>
-      {dialog ? (
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
-            {dialog.description ? (
-              <AlertDialogDescription>
-                {dialog.description}
-              </AlertDialogDescription>
-            ) : null}
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            {dialog.kind === "confirm" ? (
-              <AlertDialogCancel onClick={() => onResolve(false)}>
-                {dialog.cancelLabel ?? "取消"}
-              </AlertDialogCancel>
-            ) : null}
-            <AlertDialogAction
-              className={cn(
-                dialog.variant === "destructive" &&
-                  "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/30"
-              )}
-              onClick={() => onResolve(true)}
-            >
-              {dialog.confirmLabel}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      ) : null}
+    <AlertDialog onOpenChange={onOpenChange} open={open}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
+          {dialog.description ? (
+            <AlertDialogDescription>
+              {dialog.description}
+            </AlertDialogDescription>
+          ) : null}
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          {dialog.kind === "confirm" ? (
+            <AlertDialogCancel onClick={() => onResolve(false)}>
+              {dialog.cancelLabel ?? "取消"}
+            </AlertDialogCancel>
+          ) : null}
+          <AlertDialogAction
+            className={cn(
+              dialog.variant === "destructive" &&
+                "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/30"
+            )}
+            onClick={() => onResolve(true)}
+          >
+            {dialog.confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
     </AlertDialog>
   )
 }

@@ -1,7 +1,11 @@
 import fs from "node:fs"
 import path from "node:path"
 
-import { fetchAllWecomCustomers, isWecomConfigured } from "@/lib/wecom-client"
+import {
+  fetchWecomCustomerRelations,
+  fetchWecomCustomersByExternalIds,
+  isWecomConfigured,
+} from "@/lib/wecom-client"
 import { logServerEvent } from "@/lib/server-log"
 import type {
   WecomCustomer,
@@ -149,21 +153,73 @@ async function runSync() {
   })
 
   try {
-    const customers = await fetchAllWecomCustomers()
+    const relations = await fetchWecomCustomerRelations()
+    const desiredRelationIds = new Set(
+      relations.map((relation) => relation.relationId)
+    )
+    const existingRelationIds = await readExistingRelationIds()
+    const deletedRelationIds = [...existingRelationIds].filter(
+      (relationId) => !desiredRelationIds.has(relationId)
+    )
+    const missingRelations = relations.filter(
+      (relation) => !existingRelationIds.has(relation.relationId)
+    )
+    const newExternalUserIds = [
+      ...new Set(missingRelations.map((relation) => relation.externalUserId)),
+    ]
+    const customers = await fetchWecomCustomersByExternalIds(
+      newExternalUserIds,
+      desiredRelationIds
+    )
+    const fetchedRelationIds = new Set(
+      customers.map((customer) => customer.relationId)
+    )
+    const unresolvedRelations = missingRelations.filter(
+      (relation) => !fetchedRelationIds.has(relation.relationId)
+    )
+    if (unresolvedRelations.length) {
+      throw new Error(
+        `有 ${unresolvedRelations.length} 条新增客户关系未能获取详情，请稍后重试`
+      )
+    }
     const database = await openDatabase()
     const completedAt = new Date().toISOString()
+    let totalCount = 0
     try {
       database.exec("BEGIN IMMEDIATE")
-      database.exec("DELETE FROM wecom_customers")
-      const insert = database.prepare(
+      const remove = database.prepare(
+        "DELETE FROM wecom_customers WHERE relation_id = ?"
+      )
+      for (const relationId of deletedRelationIds) {
+        remove.run(relationId)
+      }
+
+      const upsert = database.prepare(
         `INSERT INTO wecom_customers (
           relation_id, external_user_id, follow_user_id, avatar, name_and_type,
           gender, position, corp_name, description, remark_mobiles,
           student_type, region, auntie, follow_user, add_time, add_way, synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(relation_id) DO UPDATE SET
+          external_user_id = excluded.external_user_id,
+          follow_user_id = excluded.follow_user_id,
+          avatar = excluded.avatar,
+          name_and_type = excluded.name_and_type,
+          gender = excluded.gender,
+          position = excluded.position,
+          corp_name = excluded.corp_name,
+          description = excluded.description,
+          remark_mobiles = excluded.remark_mobiles,
+          student_type = excluded.student_type,
+          region = excluded.region,
+          auntie = excluded.auntie,
+          follow_user = excluded.follow_user,
+          add_time = excluded.add_time,
+          add_way = excluded.add_way,
+          synced_at = excluded.synced_at`
       )
       for (const customer of customers) {
-        insert.run(
+        upsert.run(
           customer.relationId,
           customer.externalUserId,
           customer.followUserId,
@@ -183,13 +239,22 @@ async function runSync() {
           completedAt
         )
       }
+      const countRow = database
+        .prepare("SELECT COUNT(*) AS count FROM wecom_customers")
+        .get() as { count: number }
+      totalCount = Number(countRow.count) || 0
+      if (totalCount !== desiredRelationIds.size) {
+        throw new Error(
+          `客户关系校验失败：企业微信返回 ${desiredRelationIds.size} 条，本地写入 ${totalCount} 条`
+        )
+      }
       database
         .prepare(
           `UPDATE wecom_sync_settings
            SET last_completed_at = ?, last_count = ?, last_error = '',
                last_status = 'success', updated_at = ? WHERE id = 1`
         )
-        .run(completedAt, customers.length, completedAt)
+        .run(completedAt, totalCount, completedAt)
       database.exec("COMMIT")
     } catch (error) {
       database.exec("ROLLBACK")
@@ -199,7 +264,9 @@ async function runSync() {
     }
 
     logServerEvent("info", "wecom.customers.sync_completed", {
-      customerCount: customers.length,
+      addedRelationshipCount: missingRelations.length,
+      customerCount: totalCount,
+      removedRelationshipCount: deletedRelationIds.length,
       startedAt,
     })
     return getWecomSyncSettings()
@@ -211,6 +278,18 @@ async function runSync() {
       startedAt,
     })
     throw error
+  }
+}
+
+async function readExistingRelationIds() {
+  const database = await openDatabase()
+  try {
+    const rows = database
+      .prepare("SELECT relation_id FROM wecom_customers")
+      .all() as Array<{ relation_id: string }>
+    return new Set(rows.map((row) => row.relation_id))
+  } finally {
+    database.close()
   }
 }
 

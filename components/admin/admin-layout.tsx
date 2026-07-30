@@ -204,7 +204,7 @@ function AdminLayout<TSection extends string>({
           </div>
         </header>
 
-        <main className="min-w-0 p-4 sm:p-6 lg:p-8">
+        <main className="min-w-0 p-3 sm:p-5 lg:p-6">
           <div className="mx-auto max-w-[1440px] min-w-0">{children}</div>
         </main>
       </div>

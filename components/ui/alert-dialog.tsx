@@ -82,7 +82,6 @@ function AlertDialogContent({
   const initialState = prefersReducedMotion
     ? { opacity: 0, x: "-50%", y: "-50%" }
     : {
-        filter: "blur(10px)",
         opacity: 0,
         scale: 0.92,
         x: "-50%",
@@ -91,7 +90,6 @@ function AlertDialogContent({
   const animateState = prefersReducedMotion
     ? { opacity: 1, x: "-50%", y: "-50%" }
     : {
-        filter: "blur(0px)",
         opacity: 1,
         scale: 1,
         x: "-50%",
@@ -100,7 +98,6 @@ function AlertDialogContent({
   const exitState = prefersReducedMotion
     ? { opacity: 0, x: "-50%", y: "-50%" }
     : {
-        filter: "blur(6px)",
         opacity: 0,
         scale: 0.94,
         x: "-50%",
@@ -127,7 +124,7 @@ function AlertDialogContent({
               data-slot="alert-dialog-content"
               animate={animateState}
               className={cn(
-                "fixed top-1/2 left-1/2 z-[61] grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md gap-4 overflow-y-auto rounded-xl border bg-background p-5 shadow-2xl will-change-[opacity,transform,filter] sm:p-6",
+                "fixed top-1/2 left-1/2 z-[61] grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md gap-4 overflow-y-auto rounded-xl border bg-background p-5 shadow-2xl will-change-[opacity,transform] sm:p-6",
                 className
               )}
               exit={exitState}

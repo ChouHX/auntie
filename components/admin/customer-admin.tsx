@@ -13,7 +13,6 @@ import { toast } from "sonner"
 import { RecordsPanel } from "@/components/admin/admin-shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -155,53 +154,7 @@ export function CustomerAdmin({ token }: { token: string }) {
   }
 
   return (
-    <div className="space-y-5">
-      <Card className="rounded-xl border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold">企业微信客户同步</h2>
-              <SyncStatusBadge settings={settings} />
-            </div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {getSyncSummary(settings)}
-            </p>
-            {settings?.lastError ? (
-              <p className="mt-2 max-w-3xl text-xs leading-5 text-destructive">
-                {settings.lastError}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex gap-3 sm:items-center">
-            <Button
-              className="h-9 rounded-md"
-              disabled={!settings}
-              onClick={() => handleScheduleOpenChange(true)}
-              type="button"
-              variant="outline"
-            >
-              <GearSix size={16} weight="bold" />
-              同步设置
-            </Button>
-            <Button
-              className="h-9 rounded-md"
-              disabled={isSyncing || !settings?.configured}
-              onClick={handleSync}
-              type="button"
-              variant="brand"
-            >
-              <ArrowsClockwise
-                className={cn(isSyncing && "animate-spin")}
-                size={16}
-                weight="bold"
-              />
-              {isSyncing ? "同步中" : "立即同步"}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
+    <div>
       <Dialog onOpenChange={handleScheduleOpenChange} open={isScheduleOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -273,8 +226,43 @@ export function CustomerAdmin({ token }: { token: string }) {
       </Dialog>
 
       <RecordsPanel
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            {settings?.configured ? (
+              <SyncStatusBadge settings={settings} />
+            ) : null}
+            <Button
+              className="h-8 rounded-md px-2.5 text-xs"
+              disabled={!settings}
+              onClick={() => handleScheduleOpenChange(true)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <GearSix size={14} weight="bold" />
+              同步设置
+            </Button>
+            <Button
+              className="h-8 rounded-md px-2.5 text-xs"
+              disabled={isSyncing || !settings?.configured}
+              onClick={handleSync}
+              size="sm"
+              type="button"
+              variant="brand"
+            >
+              <ArrowsClockwise
+                className={cn(isSyncing && "animate-spin")}
+                size={14}
+                weight="bold"
+              />
+              {isSyncing ? "同步中" : "立即同步"}
+            </Button>
+          </div>
+        }
         count={pagination?.totalCount ?? 0}
-        description="数据来自企业微信客户联系接口，仅供查看，不可在此编辑。"
+        description={
+          settings?.configured ? getSyncSummary(settings) : undefined
+        }
         query={queryInput}
         searchPlaceholder="搜索客户、地区、标签或添加人"
         setQuery={setQueryInput}
@@ -480,7 +468,10 @@ function SyncStatusBadge({ settings }: { settings?: WecomSyncSettings }) {
   }
   if (settings.lastStatus === "failed") {
     return (
-      <Badge className="gap-1 bg-red-50 text-red-700">
+      <Badge
+        className="gap-1 bg-red-50 text-red-700"
+        title={settings.lastError || "企业微信同步失败"}
+      >
         <WarningCircle size={12} />
         同步失败
       </Badge>

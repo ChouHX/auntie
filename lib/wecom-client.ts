@@ -34,6 +34,11 @@ type CustomerRelationship = {
   customer: ApiRecord
   followInfo: ApiRecord
 }
+export type WecomCustomerRelation = {
+  externalUserId: string
+  followUserId: string
+  relationId: string
+}
 
 let cachedToken: { expiresAt: number; value: string } | null = null
 
@@ -50,17 +55,66 @@ export function isWecomConfigured() {
   )
 }
 
-export async function fetchAllWecomCustomers(): Promise<WecomCustomer[]> {
+export async function fetchWecomCustomerRelations(): Promise<
+  WecomCustomerRelation[]
+> {
   const token = await getAccessToken()
   const userIds = await getFollowUsers(token)
   if (!userIds.length) {
     throw new WecomApiError("没有找到已配置客户联系功能的成员")
   }
 
-  const [memberNames, tagMap, relationships] = await Promise.all([
-    getMemberNames(token, userIds),
+  const relationGroups = await mapWithConcurrency(
+    userIds,
+    5,
+    async (userId) => {
+      const result = await requestJson("/externalcontact/list", {
+        query: { access_token: token, userid: userId },
+      })
+      if (!Array.isArray(result.external_userid)) {
+        throw new WecomApiError(`成员 ${userId} 的客户列表缺少 external_userid`)
+      }
+      return result.external_userid.map((externalUserId) => ({
+        externalUserId: String(externalUserId),
+        followUserId: userId,
+        relationId: createRelationId(String(externalUserId), userId),
+      }))
+    }
+  )
+
+  return relationGroups.flat()
+}
+
+export async function fetchWecomCustomersByExternalIds(
+  externalUserIds: string[],
+  allowedRelationIds: Set<string>
+): Promise<WecomCustomer[]> {
+  if (!externalUserIds.length) return []
+
+  const token = await getAccessToken()
+  const detailGroups = await mapWithConcurrency(
+    externalUserIds,
+    5,
+    async (externalUserId) => getCustomerDetail(token, externalUserId)
+  )
+  const relationships = detailGroups
+    .flat()
+    .filter(({ customer, followInfo }) =>
+      allowedRelationIds.has(
+        createRelationId(
+          String(customer.external_userid || ""),
+          String(followInfo.userid || "")
+        )
+      )
+    )
+  const followUserIds = [
+    ...new Set(
+      relationships.map(({ followInfo }) => String(followInfo.userid))
+    ),
+  ]
+  const [memberNames, tagMap] = await Promise.all([
+    getMemberNames(token, followUserIds),
     getCorpTags(token),
-    getCustomersByUsers(token, userIds),
   ])
   const syncedAt = new Date().toISOString()
 
@@ -152,34 +206,36 @@ async function getCorpTags(token: string) {
   return tags
 }
 
-async function getCustomersByUsers(token: string, userIds: string[]) {
-  const customers: CustomerRelationship[] = []
-  for (let offset = 0; offset < userIds.length; offset += 100) {
-    const batch = userIds.slice(offset, offset + 100)
-    let cursor = ""
-    do {
-      const result = await requestJson("/externalcontact/batch/get_by_user", {
-        body: {
-          ...(cursor ? { cursor } : {}),
-          limit: 100,
-          userid_list: batch,
-        },
-        method: "POST",
-        query: { access_token: token },
-      })
-      if (!Array.isArray(result.external_contact_list)) {
-        throw new WecomApiError("批量客户响应中缺少 external_contact_list")
-      }
-      for (const rawItem of result.external_contact_list) {
-        const item = toRecord(rawItem)
-        const customer = toRecord(item?.external_contact)
-        const followInfo = toRecord(item?.follow_info)
-        if (customer && followInfo) customers.push({ customer, followInfo })
-      }
-      cursor = String(result.next_cursor || "")
-    } while (cursor)
-  }
-  return customers
+async function getCustomerDetail(token: string, externalUserId: string) {
+  const relationships: CustomerRelationship[] = []
+  let customer: ApiRecord | null = null
+  let cursor = ""
+
+  do {
+    const result = await requestJson("/externalcontact/get", {
+      query: {
+        access_token: token,
+        ...(cursor ? { cursor } : {}),
+        external_userid: externalUserId,
+      },
+    })
+    customer ??= toRecord(result.external_contact)
+    if (!customer) {
+      throw new WecomApiError(
+        `客户 ${externalUserId} 的详情缺少 external_contact`
+      )
+    }
+    if (!Array.isArray(result.follow_user)) {
+      throw new WecomApiError(`客户 ${externalUserId} 的详情缺少 follow_user`)
+    }
+    for (const rawFollowInfo of result.follow_user) {
+      const followInfo = toRecord(rawFollowInfo)
+      if (followInfo) relationships.push({ customer, followInfo })
+    }
+    cursor = String(result.next_cursor || "")
+  } while (cursor)
+
+  return relationships
 }
 
 function buildCustomer(
@@ -224,7 +280,7 @@ function buildCustomer(
     nameAndType: `${String(customer.name || "")}@${customerType}`,
     position: String(customer.position || ""),
     region: groupedTags.get("地区")?.join(", ") ?? "",
-    relationId: `${externalUserId}:${followUserId}`,
+    relationId: createRelationId(externalUserId, followUserId),
     remarkMobiles: joinValues(followInfo.remark_mobiles),
     studentType: groupedTags.get("学员区分")?.join(", ") ?? "",
     syncedAt,
@@ -280,6 +336,32 @@ function joinValues(value: unknown) {
 
 function toRecord(value: unknown): ApiRecord | null {
   return value && typeof value === "object" ? (value as ApiRecord) : null
+}
+
+function createRelationId(externalUserId: string, followUserId: string) {
+  return `${externalUserId}:${followUserId}`
+}
+
+async function mapWithConcurrency<TInput, TOutput>(
+  items: TInput[],
+  concurrency: number,
+  mapper: (item: TInput) => Promise<TOutput>
+) {
+  const results = new Array<TOutput>(items.length)
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index])
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, worker)
+  )
+  return results
 }
 
 async function requestJson(

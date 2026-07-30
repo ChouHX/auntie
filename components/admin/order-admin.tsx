@@ -683,12 +683,14 @@ export function OrderAdmin({
                   <TableHead>金额</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>专属链接</TableHead>
-                  <TableHead className="w-24 text-right">操作</TableHead>
+                  <TableHead className="sticky right-0 z-20 w-24 min-w-24 border-l border-border bg-card text-right">
+                    操作
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visibleOrders.map((order) => (
-                  <TableRow key={order.orderId}>
+                  <TableRow className="group" key={order.orderId}>
                     <TableCell>
                       <div className="font-semibold">{order.orderId}</div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">
@@ -739,7 +741,7 @@ export function OrderAdmin({
                     <TableCell>
                       <PaymentLinkCell order={order} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="sticky right-0 z-10 border-l border-border bg-card group-hover:bg-muted/45">
                       <div className="flex justify-end gap-1">
                         {isPaymentOrderCompleted(order) ? (
                           <Button
