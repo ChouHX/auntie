@@ -43,9 +43,12 @@ export type WecomCustomerRelation = {
 let cachedToken: { expiresAt: number; value: string } | null = null
 
 export class WecomApiError extends Error {
-  constructor(message: string) {
+  readonly errcode?: number
+
+  constructor(message: string, errcode?: number) {
     super(message)
     this.name = "WecomApiError"
+    this.errcode = errcode
   }
 }
 
@@ -88,8 +91,13 @@ export async function fetchWecomCustomerRelations(): Promise<
 export async function fetchWecomCustomersByExternalIds(
   externalUserIds: string[],
   allowedRelationIds: Set<string>
-): Promise<WecomCustomer[]> {
-  if (!externalUserIds.length) return []
+): Promise<{
+  customers: WecomCustomer[]
+  invalidExternalUserIds: string[]
+}> {
+  if (!externalUserIds.length) {
+    return { customers: [], invalidExternalUserIds: [] }
+  }
 
   const token = await getAccessToken()
   const detailGroups = await mapWithConcurrency(
@@ -97,8 +105,11 @@ export async function fetchWecomCustomersByExternalIds(
     5,
     async (externalUserId) => getCustomerDetail(token, externalUserId)
   )
+  const invalidExternalUserIds = detailGroups
+    .filter((detail) => detail.invalid)
+    .map((detail) => detail.externalUserId)
   const relationships = detailGroups
-    .flat()
+    .flatMap((detail) => detail.relationships)
     .filter(({ customer, followInfo }) =>
       allowedRelationIds.has(
         createRelationId(
@@ -107,6 +118,9 @@ export async function fetchWecomCustomersByExternalIds(
         )
       )
     )
+  if (!relationships.length) {
+    return { customers: [], invalidExternalUserIds }
+  }
   const followUserIds = [
     ...new Set(
       relationships.map(({ followInfo }) => String(followInfo.userid))
@@ -118,9 +132,12 @@ export async function fetchWecomCustomersByExternalIds(
   ])
   const syncedAt = new Date().toISOString()
 
-  return relationships.map(({ customer, followInfo }) =>
-    buildCustomer(customer, followInfo, memberNames, tagMap, syncedAt)
-  )
+  return {
+    customers: relationships.map(({ customer, followInfo }) =>
+      buildCustomer(customer, followInfo, memberNames, tagMap, syncedAt)
+    ),
+    invalidExternalUserIds,
+  }
 }
 
 async function getAccessToken() {
@@ -212,13 +229,25 @@ async function getCustomerDetail(token: string, externalUserId: string) {
   let cursor = ""
 
   do {
-    const result = await requestJson("/externalcontact/get", {
-      query: {
-        access_token: token,
-        ...(cursor ? { cursor } : {}),
-        external_userid: externalUserId,
-      },
-    })
+    let result: ApiRecord
+    try {
+      result = await requestJson("/externalcontact/get", {
+        query: {
+          access_token: token,
+          ...(cursor ? { cursor } : {}),
+          external_userid: externalUserId,
+        },
+      })
+    } catch (error) {
+      if (error instanceof WecomApiError && error.errcode === 84061) {
+        return {
+          externalUserId,
+          invalid: true,
+          relationships: [],
+        }
+      }
+      throw error
+    }
     customer ??= toRecord(result.external_contact)
     if (!customer) {
       throw new WecomApiError(
@@ -235,7 +264,7 @@ async function getCustomerDetail(token: string, externalUserId: string) {
     cursor = String(result.next_cursor || "")
   } while (cursor)
 
-  return relationships
+  return { externalUserId, invalid: false, relationships }
 }
 
 function buildCustomer(
@@ -398,8 +427,10 @@ async function requestJson(
     throw new WecomApiError(`企业微信 API 返回 HTTP ${response.status}`)
   }
   if (Number(result.errcode) !== 0) {
+    const errcode = Number(result.errcode)
     throw new WecomApiError(
-      `企业微信 API 调用失败: errcode=${String(result.errcode)}, errmsg=${String(result.errmsg || "")}`
+      `企业微信 API 调用失败: errcode=${String(result.errcode)}, errmsg=${String(result.errmsg || "")}`,
+      Number.isFinite(errcode) ? errcode : undefined
     )
   }
   return result

@@ -153,24 +153,37 @@ async function runSync() {
   })
 
   try {
-    const relations = await fetchWecomCustomerRelations()
+    const listedRelations = await fetchWecomCustomerRelations()
+    const listedRelationIds = new Set(
+      listedRelations.map((relation) => relation.relationId)
+    )
+    const existingRelationIds = await readExistingRelationIds()
+    const listedMissingRelations = listedRelations.filter(
+      (relation) => !existingRelationIds.has(relation.relationId)
+    )
+    const newExternalUserIds = [
+      ...new Set(
+        listedMissingRelations.map((relation) => relation.externalUserId)
+      ),
+    ]
+    const detailResult = await fetchWecomCustomersByExternalIds(
+      newExternalUserIds,
+      listedRelationIds
+    )
+    const invalidExternalUserIds = new Set(detailResult.invalidExternalUserIds)
+    const relations = listedRelations.filter(
+      (relation) => !invalidExternalUserIds.has(relation.externalUserId)
+    )
     const desiredRelationIds = new Set(
       relations.map((relation) => relation.relationId)
     )
-    const existingRelationIds = await readExistingRelationIds()
     const deletedRelationIds = [...existingRelationIds].filter(
       (relationId) => !desiredRelationIds.has(relationId)
     )
     const missingRelations = relations.filter(
       (relation) => !existingRelationIds.has(relation.relationId)
     )
-    const newExternalUserIds = [
-      ...new Set(missingRelations.map((relation) => relation.externalUserId)),
-    ]
-    const customers = await fetchWecomCustomersByExternalIds(
-      newExternalUserIds,
-      desiredRelationIds
-    )
+    const customers = detailResult.customers
     const fetchedRelationIds = new Set(
       customers.map((customer) => customer.relationId)
     )
@@ -181,6 +194,13 @@ async function runSync() {
       throw new Error(
         `有 ${unresolvedRelations.length} 条新增客户关系未能获取详情，请稍后重试`
       )
+    }
+    if (invalidExternalUserIds.size) {
+      logServerEvent("warn", "wecom.customers.invalid_contacts_skipped", {
+        externalUserIds: [...invalidExternalUserIds],
+        skippedCustomerCount: invalidExternalUserIds.size,
+        startedAt,
+      })
     }
     const database = await openDatabase()
     const completedAt = new Date().toISOString()
