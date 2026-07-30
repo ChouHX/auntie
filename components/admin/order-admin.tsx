@@ -683,7 +683,7 @@ export function OrderAdmin({
                   <TableHead>金额</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>专属链接</TableHead>
-                  <TableHead className="sticky right-0 z-20 w-24 min-w-24 border-l border-border bg-card text-right">
+                  <TableHead className="relative sticky right-0 z-20 w-24 min-w-24 border-l-0 bg-card text-right before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
                     操作
                   </TableHead>
                 </TableRow>
@@ -741,7 +741,7 @@ export function OrderAdmin({
                     <TableCell>
                       <PaymentLinkCell order={order} />
                     </TableCell>
-                    <TableCell className="sticky right-0 z-10 border-l border-border bg-card group-hover:bg-muted/45">
+                    <TableCell className="relative sticky right-0 z-10 border-l-0 bg-card group-hover:bg-muted/45 before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
                       <div className="flex justify-end gap-1">
                         {isPaymentOrderCompleted(order) ? (
                           <Button

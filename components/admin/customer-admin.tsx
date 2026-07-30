@@ -6,7 +6,6 @@ import {
   CheckCircle,
   Clock,
   GearSix,
-  WarningCircle,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 
@@ -228,9 +227,6 @@ export function CustomerAdmin({ token }: { token: string }) {
       <RecordsPanel
         action={
           <div className="flex flex-wrap items-center gap-2">
-            {settings?.configured ? (
-              <SyncStatusBadge settings={settings} />
-            ) : null}
             <Button
               className="h-8 rounded-md px-2.5 text-xs"
               disabled={!settings}
@@ -521,35 +517,6 @@ function CustomerPagination({
       </div>
     </div>
   )
-}
-
-function SyncStatusBadge({ settings }: { settings?: WecomSyncSettings }) {
-  if (!settings?.configured) {
-    return <Badge className="bg-destructive/10 text-destructive">未配置</Badge>
-  }
-  if (settings.lastStatus === "running") {
-    return <Badge className="bg-blue-50 text-blue-700">同步中</Badge>
-  }
-  if (settings.lastStatus === "failed") {
-    return (
-      <Badge
-        className="gap-1 bg-red-50 text-red-700"
-        title={settings.lastError || "企业微信同步失败"}
-      >
-        <WarningCircle size={12} />
-        同步失败
-      </Badge>
-    )
-  }
-  if (settings.lastStatus === "success") {
-    return (
-      <Badge className="gap-1 bg-emerald-50 text-emerald-700">
-        <CheckCircle size={12} weight="fill" />
-        同步成功
-      </Badge>
-    )
-  }
-  return <Badge variant="secondary">尚未同步</Badge>
 }
 
 function getSyncSummary(settings?: WecomSyncSettings) {
