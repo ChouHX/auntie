@@ -55,6 +55,14 @@ type SettingsRow = {
   last_status: WecomSyncSettings["lastStatus"]
   minute: number
 }
+type TagCategory = "auntie" | "region" | "student"
+type TagColorRow = {
+  category: TagCategory
+  color_index: number
+  tag_name: string
+}
+
+const tagColorCount = 8
 
 const sqliteFile =
   process.env.CMS_SQLITE_FILE ??
@@ -103,6 +111,7 @@ export async function listWecomCustomers(options: {
       customers: rows.map(mapCustomerRow),
       pagination: { page, pageSize, totalCount, totalPages },
       settings: mapSettingsRow(readSettingsRow(database)),
+      tagColors: readTagColors(database),
     }
   } finally {
     database.close()
@@ -287,6 +296,7 @@ async function runSync() {
           completedAt
         )
       }
+      rebuildTagColors(database, completedAt)
       const countRow = database
         .prepare("SELECT COUNT(*) AS count FROM wecom_customers")
         .get() as { count: number }
@@ -355,6 +365,80 @@ async function readExternalUserIdsNeedingProfile() {
   } finally {
     database.close()
   }
+}
+
+function readTagColors(database: Database) {
+  const rows = database
+    .prepare("SELECT category, tag_name, color_index FROM wecom_tag_colors")
+    .all() as TagColorRow[]
+  return Object.fromEntries(
+    rows.map((row) => [`${row.category}:${row.tag_name}`, row.color_index])
+  )
+}
+
+function rebuildTagColors(database: Database, syncedAt: string) {
+  const rows = database
+    .prepare("SELECT student_type, region, auntie FROM wecom_customers")
+    .all() as Array<Pick<CustomerRow, "auntie" | "region" | "student_type">>
+  const categories: Array<{
+    category: TagCategory
+    field: "auntie" | "region" | "student_type"
+    offset: number
+  }> = [
+    { category: "student", field: "student_type", offset: 0 },
+    { category: "region", field: "region", offset: 2 },
+    { category: "auntie", field: "auntie", offset: 4 },
+  ]
+  const assignments: Array<{
+    category: TagCategory
+    colorIndex: number
+    count: number
+    tag: string
+  }> = []
+
+  for (const { category, field, offset } of categories) {
+    const counts = new Map<string, number>()
+    for (const row of rows) {
+      for (const tag of splitTagValues(row[field])) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1)
+      }
+    }
+    const rankedTags = [...counts.entries()].sort(
+      ([leftTag, leftCount], [rightTag, rightCount]) =>
+        rightCount - leftCount || leftTag.localeCompare(rightTag, "zh-CN")
+    )
+    rankedTags.forEach(([tag, count], index) => {
+      assignments.push({
+        category,
+        colorIndex: (index + offset) % tagColorCount,
+        count,
+        tag,
+      })
+    })
+  }
+
+  database.prepare("DELETE FROM wecom_tag_colors").run()
+  const insert = database.prepare(
+    `INSERT INTO wecom_tag_colors
+      (category, tag_name, usage_count, color_index, synced_at)
+     VALUES (?, ?, ?, ?, ?)`
+  )
+  for (const assignment of assignments) {
+    insert.run(
+      assignment.category,
+      assignment.tag,
+      assignment.count,
+      assignment.colorIndex,
+      syncedAt
+    )
+  }
+}
+
+function splitTagValues(value: string) {
+  return value
+    .split(/[,，]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
 }
 
 async function updateSyncState(fields: {
@@ -479,6 +563,14 @@ async function openDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_wecom_customers_add_time
       ON wecom_customers(add_time DESC);
+    CREATE TABLE IF NOT EXISTS wecom_tag_colors (
+      category TEXT NOT NULL,
+      tag_name TEXT NOT NULL,
+      usage_count INTEGER NOT NULL,
+      color_index INTEGER NOT NULL,
+      synced_at TEXT NOT NULL,
+      PRIMARY KEY (category, tag_name)
+    );
     CREATE TABLE IF NOT EXISTS wecom_sync_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       enabled INTEGER NOT NULL DEFAULT 0,

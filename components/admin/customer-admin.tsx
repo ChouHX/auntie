@@ -300,7 +300,11 @@ export function CustomerAdmin({ token }: { token: string }) {
               </TableRow>
             ) : data?.customers.length ? (
               data.customers.map((customer) => (
-                <CustomerRow customer={customer} key={customer.relationId} />
+                <CustomerRow
+                  customer={customer}
+                  key={customer.relationId}
+                  tagColorMap={data.tagColors}
+                />
               ))
             ) : (
               <TableRow>
@@ -336,7 +340,13 @@ export function CustomerAdmin({ token }: { token: string }) {
   )
 }
 
-function CustomerRow({ customer }: { customer: WecomCustomer }) {
+function CustomerRow({
+  customer,
+  tagColorMap,
+}: {
+  customer: WecomCustomer
+  tagColorMap: Record<string, number>
+}) {
   return (
     <TableRow className="[&>td]:h-9 [&>td]:py-1">
       <TableCell>
@@ -382,9 +392,13 @@ function CustomerRow({ customer }: { customer: WecomCustomer }) {
             : customer.corpName || customer.position
         }
       />
-      <TagCell tone="student" value={customer.studentType} />
-      <TagCell tone="region" value={customer.region} />
-      <TagCell tone="auntie" value={customer.auntie} />
+      <TagCell
+        colorMap={tagColorMap}
+        tone="student"
+        value={customer.studentType}
+      />
+      <TagCell colorMap={tagColorMap} tone="region" value={customer.region} />
+      <TagCell colorMap={tagColorMap} tone="auntie" value={customer.auntie} />
       <TableCell>
         <div className="flex max-w-64 items-center gap-1 overflow-hidden">
           <span className="shrink-0 font-medium text-foreground">
@@ -412,9 +426,11 @@ function CompactCell({ value }: { value: string }) {
 }
 
 function TagCell({
+  colorMap,
   tone,
   value,
 }: {
+  colorMap: Record<string, number>
   tone: "auntie" | "region" | "student"
   value: string
 }) {
@@ -431,11 +447,9 @@ function TagCell({
             <Badge
               className={cn(
                 "h-6 shrink-0 rounded px-2 py-0 text-xs font-medium",
-                tone === "student"
-                  ? getStudentTagColor(tag)
-                  : tone === "region"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300"
-                    : "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-300"
+                tagColorClasses[
+                  (colorMap[`${tone}:${tag}`] ?? index) % tagColorClasses.length
+                ]
               )}
               key={`${tag}-${index}`}
               variant="secondary"
@@ -451,20 +465,16 @@ function TagCell({
   )
 }
 
-const studentTagColors = [
+const tagColorClasses = [
   "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-300",
   "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-300",
   "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300",
   "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-300",
+  "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300",
+  "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-300",
+  "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/30 dark:bg-cyan-400/10 dark:text-cyan-300",
+  "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-400/30 dark:bg-fuchsia-400/10 dark:text-fuchsia-300",
 ]
-
-function getStudentTagColor(tag: string) {
-  const hash = [...tag].reduce(
-    (total, character) => total + character.charCodeAt(0),
-    0
-  )
-  return studentTagColors[hash % studentTagColors.length]
-}
 
 function CustomerPagination({
   onPageChange,

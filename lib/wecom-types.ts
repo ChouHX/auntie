@@ -42,4 +42,5 @@ export type WecomCustomerPage = {
     totalPages: number
   }
   settings: WecomSyncSettings
+  tagColors: Record<string, number>
 }
