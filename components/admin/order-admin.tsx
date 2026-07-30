@@ -821,7 +821,7 @@ export function OrderAdmin({
           </DialogHeader>
           {editingOrder ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField className="sm:col-span-2" label="选择用户">
+              <FormField label="选择用户">
                 <OrderCustomerSelect
                   disabled={isEditingCompletedOrder}
                   onSelect={(customer) =>
@@ -1029,6 +1029,8 @@ function OrderCustomerSelect({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [customers, setCustomers] = useState<WecomCustomer[]>([])
+  const [selectedCustomer, setSelectedCustomer] =
+    useState<WecomCustomer | null>(null)
   const [selectedCustomerName, setSelectedCustomerName] = useState("")
   const [pagination, setPagination] =
     useState<WecomCustomerPage["pagination"]>()
@@ -1104,8 +1106,16 @@ function OrderCustomerSelect({
           variant="outline"
         >
           <span className="truncate text-muted-foreground">
-            {selectedCustomerName ||
-              (open ? "选择企业微信客户" : "选择已有客户（可选）")}
+            {selectedCustomer ? (
+              <span className="flex min-w-0 items-center gap-2 text-foreground">
+                <CustomerAvatar customer={selectedCustomer} />
+                <span className="truncate">{selectedCustomerName}</span>
+              </span>
+            ) : open ? (
+              "选择企业微信客户"
+            ) : (
+              "选择已有客户（可选）"
+            )}
           </span>
           <CaretDown className="size-4 shrink-0" />
         </Button>
@@ -1125,7 +1135,7 @@ function OrderCustomerSelect({
           />
         </div>
         <div
-          className="max-h-64 overflow-y-auto p-1"
+          className="max-h-64 [touch-action:pan-y] overflow-y-scroll overscroll-contain p-1"
           onScroll={(event) => {
             const element = event.currentTarget
             if (
@@ -1134,6 +1144,13 @@ function OrderCustomerSelect({
             ) {
               void loadMore()
             }
+          }}
+          onWheel={(event) => {
+            const element = event.currentTarget
+            if (element.scrollHeight <= element.clientHeight) return
+            event.preventDefault()
+            event.stopPropagation()
+            element.scrollTop += event.deltaY
           }}
         >
           {isLoading ? (
@@ -1151,13 +1168,17 @@ function OrderCustomerSelect({
                 key={customer.relationId}
                 onClick={() => {
                   onSelect(customer)
+                  setSelectedCustomer(customer)
                   setSelectedCustomerName(customer.nameAndType)
                   setOpen(false)
                 }}
                 type="button"
               >
-                <span className="min-w-0 truncate font-medium">
-                  {customer.nameAndType}
+                <span className="flex min-w-0 items-center gap-2">
+                  <CustomerAvatar customer={customer} />
+                  <span className="truncate font-medium">
+                    {customer.nameAndType}
+                  </span>
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {customer.followUserId}
@@ -1177,6 +1198,20 @@ function OrderCustomerSelect({
         </div>
       </PopoverContent>
     </Popover>
+  )
+}
+
+function CustomerAvatar({ customer }: { customer: WecomCustomer }) {
+  return customer.avatar ? (
+    // eslint-disable-next-line @next/next/no-img-element -- WeCom supplies remote avatar URLs.
+    <img
+      alt=""
+      className="size-6 shrink-0 rounded-full bg-muted object-cover"
+      loading="lazy"
+      src={customer.avatar}
+    />
+  ) : (
+    <span className="size-6 shrink-0 rounded-full bg-muted" />
   )
 }
 
