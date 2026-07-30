@@ -427,18 +427,17 @@ function TagCell({
     <TableCell title={value}>
       {tags.length ? (
         <div className="flex max-w-52 flex-nowrap gap-1 overflow-hidden">
-          {tags.map((tag) => (
+          {tags.map((tag, index) => (
             <Badge
               className={cn(
                 "h-6 shrink-0 rounded px-2 py-0 text-xs font-medium",
-                tone === "student" &&
-                  "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-300",
-                tone === "region" &&
-                  "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300",
-                tone === "auntie" &&
-                  "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-300"
+                tone === "student"
+                  ? getStudentTagColor(tag)
+                  : tone === "region"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300"
+                    : "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-400/30 dark:bg-orange-400/10 dark:text-orange-300"
               )}
-              key={tag}
+              key={`${tag}-${index}`}
               variant="secondary"
             >
               {tag}
@@ -450,6 +449,21 @@ function TagCell({
       )}
     </TableCell>
   )
+}
+
+const studentTagColors = [
+  "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-300",
+  "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-300",
+  "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300",
+  "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-300",
+]
+
+function getStudentTagColor(tag: string) {
+  const hash = [...tag].reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0
+  )
+  return studentTagColors[hash % studentTagColors.length]
 }
 
 function CustomerPagination({
