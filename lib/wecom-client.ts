@@ -34,9 +34,10 @@ type CustomerRelationship = {
   customer: ApiRecord
   followInfo: ApiRecord
 }
-type MemberProfile = {
+export type WecomMemberProfile = {
   avatar: string
   name: string
+  userId: string
 }
 export type WecomCustomerRelation = {
   externalUserId: string
@@ -118,18 +119,22 @@ export async function fetchWecomCustomerRelations(): Promise<{
 
 export async function fetchWecomCustomersByExternalIds(
   externalUserIds: string[],
-  allowedRelationIds: Set<string>
+  allowedRelationIds: Set<string>,
+  memberProfiles: Map<string, WecomMemberProfile>
 ): Promise<{
   customers: WecomCustomer[]
   invalidExternalUserIds: string[]
 }> {
-  if (!externalUserIds.length) {
+  const uniqueExternalUserIds = [
+    ...new Set(externalUserIds.map((value) => value.trim()).filter(Boolean)),
+  ]
+  if (!uniqueExternalUserIds.length) {
     return { customers: [], invalidExternalUserIds: [] }
   }
 
   const token = await getAccessToken()
   const detailGroups = await mapWithConcurrency(
-    externalUserIds,
+    uniqueExternalUserIds,
     5,
     async (externalUserId) => getCustomerDetail(token, externalUserId)
   )
@@ -149,15 +154,7 @@ export async function fetchWecomCustomersByExternalIds(
   if (!relationships.length) {
     return { customers: [], invalidExternalUserIds }
   }
-  const followUserIds = [
-    ...new Set(
-      relationships.map(({ followInfo }) => String(followInfo.userid))
-    ),
-  ]
-  const [memberProfiles, tagMap] = await Promise.all([
-    getMemberProfiles(token, followUserIds),
-    getCorpTags(token),
-  ])
+  const tagMap = await getCorpTags(token)
   const syncedAt = new Date().toISOString()
 
   return {
@@ -166,6 +163,11 @@ export async function fetchWecomCustomersByExternalIds(
     ),
     invalidExternalUserIds,
   }
+}
+
+export async function fetchWecomMemberProfiles(userIds: string[]) {
+  const token = await getAccessToken()
+  return getMemberProfiles(token, userIds)
 }
 
 async function getAccessToken() {
@@ -210,25 +212,26 @@ async function getFollowUsers(token: string) {
 }
 
 async function getMemberProfiles(token: string, userIds: string[]) {
+  const uniqueUserIds = [
+    ...new Set(userIds.map((value) => value.trim()).filter(Boolean)),
+  ]
   const entries = await Promise.all(
-    userIds.map(async (userId) => {
+    uniqueUserIds.map(async (userId) => {
       try {
         const member = await requestJson("/user/get", {
           query: { access_token: token, userid: userId },
         })
-        return [
+        return {
+          avatar: String(member.avatar || ""),
+          name: String(member.name || userId),
           userId,
-          {
-            avatar: String(member.avatar || ""),
-            name: String(member.name || userId),
-          },
-        ] as const
+        }
       } catch {
-        return [userId, { avatar: "", name: userId }] as const
+        return { avatar: "", name: userId, userId }
       }
     })
   )
-  return new Map<string, MemberProfile>(entries)
+  return entries
 }
 
 async function getCorpTags(token: string) {
@@ -304,7 +307,7 @@ async function getCustomerDetail(token: string, externalUserId: string) {
 function buildCustomer(
   customer: ApiRecord,
   followInfo: ApiRecord,
-  memberProfiles: Map<string, MemberProfile>,
+  memberProfiles: Map<string, WecomMemberProfile>,
   tagMap: Map<string, { group: string; name: string }>,
   syncedAt: string
 ): WecomCustomer {

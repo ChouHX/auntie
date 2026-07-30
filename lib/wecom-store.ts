@@ -4,6 +4,7 @@ import path from "node:path"
 import {
   fetchWecomCustomerRelations,
   fetchWecomCustomersByExternalIds,
+  fetchWecomMemberProfiles,
   isWecomConfigured,
 } from "@/lib/wecom-client"
 import { logServerEvent } from "@/lib/server-log"
@@ -170,6 +171,13 @@ async function runSync() {
       listedRelations.map((relation) => relation.relationId)
     )
     const existingRelationIds = await readExistingRelationIds()
+    const followUserIds = [
+      ...new Set(listedRelations.map((relation) => relation.followUserId)),
+    ]
+    const memberProfileList = await fetchWecomMemberProfiles(followUserIds)
+    const memberProfiles = new Map(
+      memberProfileList.map((profile) => [profile.userId, profile])
+    )
     const listedMissingRelations = listedRelations.filter(
       (relation) => !existingRelationIds.has(relation.relationId)
     )
@@ -185,7 +193,8 @@ async function runSync() {
     ]
     const detailResult = await fetchWecomCustomersByExternalIds(
       externalUserIdsToFetch,
-      listedRelationIds
+      listedRelationIds,
+      memberProfiles
     )
     const invalidExternalUserIds = new Set(detailResult.invalidExternalUserIds)
     const relations = listedRelations.filter(
