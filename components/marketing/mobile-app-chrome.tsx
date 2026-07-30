@@ -24,11 +24,12 @@ import {
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { useCmsContent } from "@/hooks/use-cms-content"
-import { fetchPaymentOrder } from "@/lib/cms-api"
+import { fetchPaymentOrder, isApiRequestError } from "@/lib/cms-api"
 import { useI18n } from "@/lib/i18n"
 import {
   localOrdersUpdatedEvent,
   readLocalPaymentOrders,
+  removeLocalPaymentOrder,
   saveLocalPaymentOrder,
   type LocalPaymentOrder,
 } from "@/lib/local-orders"
@@ -105,6 +106,8 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
     : "/orders"
 
   useEffect(() => {
+    let cancelled = false
+
     const syncOrders = () => {
       const nextOrders = readLocalPaymentOrders()
       setOrders(nextOrders)
@@ -114,11 +117,45 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
         )
       )
     }
-    const timeoutId = window.setTimeout(syncOrders, 0)
+
+    async function validateOrders() {
+      const cachedOrders = readLocalPaymentOrders()
+      const activeOrders = cachedOrders.filter(
+        (order) => order.status === "unpaid" || order.status === "pending"
+      )
+
+      setOrders(
+        cachedOrders.filter(
+          (order) => order.status !== "unpaid" && order.status !== "pending"
+        )
+      )
+      setIsPromptVisible(false)
+
+      await Promise.all(
+        activeOrders.map(async (cachedOrder) => {
+          try {
+            saveLocalPaymentOrder(
+              await fetchPaymentOrder(cachedOrder.orderId)
+            )
+          } catch (error) {
+            if (isApiRequestError(error, 404)) {
+              removeLocalPaymentOrder(cachedOrder.orderId)
+            }
+          }
+        })
+      )
+
+      if (!cancelled) {
+        syncOrders()
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => void validateOrders(), 0)
     window.addEventListener("storage", syncOrders)
     window.addEventListener(localOrdersUpdatedEvent, syncOrders)
 
     return () => {
+      cancelled = true
       window.clearTimeout(timeoutId)
       window.removeEventListener("storage", syncOrders)
       window.removeEventListener(localOrdersUpdatedEvent, syncOrders)
@@ -149,7 +186,12 @@ function MobileAppChrome({ children }: { children?: ReactNode }) {
         setIsPromptVisible(
           order.status === "unpaid" || order.status === "pending"
         )
-      } catch {
+      } catch (error) {
+        if (isApiRequestError(error, 404)) {
+          removeLocalPaymentOrder(orderId)
+          setOrders(readLocalPaymentOrders())
+          setIsPromptVisible(false)
+        }
         // A stale or malformed shared link should still leave the visitor on home.
       } finally {
         if (!isMounted) {

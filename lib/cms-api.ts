@@ -8,6 +8,18 @@ import type {
 const ADMIN_TOKEN_KEY = "auntie-chen-admin-token"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
 
+class ApiRequestError extends Error {
+  readonly code?: string
+  readonly status: number
+
+  constructor(message: string, status: number, code?: string) {
+    super(message)
+    this.name = "ApiRequestError"
+    this.status = status
+    this.code = code
+  }
+}
+
 type AdminLoginResult = {
   token: string
   user: {
@@ -489,7 +501,7 @@ async function request<TResponse>(
   const data = await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw new Error(data?.message || "Request failed")
+    throw createApiRequestError(data, response.status, "Request failed")
   }
 
   return data as TResponse
@@ -503,10 +515,33 @@ async function uploadRequest<TResponse>(
   const data = await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw new Error(data?.message || "Upload failed")
+    throw createApiRequestError(data, response.status, "Upload failed")
   }
 
   return data as TResponse
+}
+
+function createApiRequestError(
+  data: unknown,
+  status: number,
+  fallbackMessage: string
+) {
+  const payload =
+    data && typeof data === "object"
+      ? (data as { error?: unknown; message?: unknown })
+      : null
+  const message =
+    typeof payload?.message === "string" ? payload.message : fallbackMessage
+  const code = typeof payload?.error === "string" ? payload.error : undefined
+
+  return new ApiRequestError(message, status, code)
+}
+
+function isApiRequestError(error: unknown, status?: number) {
+  return (
+    error instanceof ApiRequestError &&
+    (status === undefined || error.status === status)
+  )
 }
 
 function createAuthHeaders(token: string) {
@@ -551,6 +586,7 @@ function createAdminContentQuery(params: AdminContentSectionParams) {
 }
 
 export {
+  ApiRequestError,
   clearStoredAdminToken,
   confirmPaymentOrder,
   createBookingPaymentOrder,
@@ -568,6 +604,7 @@ export {
   fetchPublicAuntieReviews,
   fetchPublicContent,
   getStoredAdminToken,
+  isApiRequestError,
   loginAdmin,
   saveAdminContent,
   saveAdminContentSection,

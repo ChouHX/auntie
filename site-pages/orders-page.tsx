@@ -7,7 +7,9 @@ import {
   type CachedPaymentOrder,
   isActiveCachedPaymentOrder,
   readCachedPaymentOrders,
+  reconcileCachedPaymentOrders,
 } from "@/lib/client-payment-orders"
+import { fetchPaymentOrder, isApiRequestError } from "@/lib/cms-api"
 import { useI18n } from "@/lib/i18n"
 import { Link } from "@/lib/router-compat"
 import { cn } from "@/lib/utils"
@@ -20,11 +22,27 @@ function OrdersPage() {
   const [orders, setOrders] = useState<CachedPaymentOrder[]>([])
 
   useEffect(() => {
+    let cancelled = false
     const timeoutId = window.setTimeout(() => {
-      setOrders(readCachedPaymentOrders())
+      const cachedOrders = readCachedPaymentOrders()
+
+      setOrders(
+        cachedOrders.filter((order) => !isActiveCachedPaymentOrder(order))
+      )
+      void reconcileCachedPaymentOrders(
+        fetchPaymentOrder,
+        (error) => isApiRequestError(error, 404)
+      ).then((nextOrders) => {
+        if (!cancelled) {
+          setOrders(nextOrders)
+        }
+      })
     }, 0)
 
-    return () => window.clearTimeout(timeoutId)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
   }, [])
 
   return (

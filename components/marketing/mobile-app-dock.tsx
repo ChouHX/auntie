@@ -16,9 +16,11 @@ import {
   type CachedPaymentOrder,
   isActiveCachedPaymentOrder,
   readCachedPaymentOrders,
+  reconcileCachedPaymentOrders,
+  removeCachedPaymentOrder,
   upsertCachedPaymentOrder,
 } from "@/lib/client-payment-orders"
-import { fetchPaymentOrder } from "@/lib/cms-api"
+import { fetchPaymentOrder, isApiRequestError } from "@/lib/cms-api"
 import { useI18n } from "@/lib/i18n"
 import { Link } from "@/lib/router-compat"
 import { cn } from "@/lib/utils"
@@ -81,14 +83,22 @@ function MobileAppDock() {
         ) {
           setIsPromptVisible(true)
         }
-      } catch {
-        setOrders(readCachedPaymentOrders())
+      } catch (error) {
+        const nextOrders = isApiRequestError(error, 404)
+          ? removeCachedPaymentOrder(orderId)
+          : readCachedPaymentOrders()
+
+        setOrders(nextOrders)
+        setIsPromptVisible(
+          openPrompt && nextOrders.some(isActiveCachedPaymentOrder)
+        )
       }
     },
     []
   )
 
   useEffect(() => {
+    let cancelled = false
     const timeoutId = window.setTimeout(() => {
       const cachedOrders = readCachedPaymentOrders()
       const cachedActiveOrder = cachedOrders.find(isActiveCachedPaymentOrder)
@@ -96,9 +106,10 @@ function MobileAppDock() {
       const incomingOrderId =
         query.get("order")?.trim() || query.get("paymentOrder")?.trim() || ""
 
-      setOrders(cachedOrders)
-
       if (incomingOrderId) {
+        setOrders(
+          cachedOrders.filter((order) => !isActiveCachedPaymentOrder(order))
+        )
         void cacheRemoteOrder(incomingOrderId, true)
         query.delete("order")
         query.delete("paymentOrder")
@@ -110,12 +121,28 @@ function MobileAppDock() {
       }
 
       if (cachedActiveOrder) {
-        setIsPromptVisible(true)
-        void cacheRemoteOrder(cachedActiveOrder.orderId, false)
+        setOrders(
+          cachedOrders.filter((order) => !isActiveCachedPaymentOrder(order))
+        )
+        void reconcileCachedPaymentOrders(
+          fetchPaymentOrder,
+          (error) => isApiRequestError(error, 404)
+        ).then((nextOrders) => {
+          if (!cancelled) {
+            setOrders(nextOrders)
+            setIsPromptVisible(nextOrders.some(isActiveCachedPaymentOrder))
+          }
+        })
+        return
       }
+
+      setOrders(cachedOrders)
     }, 0)
 
-    return () => window.clearTimeout(timeoutId)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
   }, [cacheRemoteOrder])
 
   return (

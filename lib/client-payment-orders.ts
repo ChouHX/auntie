@@ -48,10 +48,14 @@ function writeCachedPaymentOrders(orders: CachedPaymentOrder[]) {
     return
   }
 
-  window.localStorage.setItem(
-    PAYMENT_ORDER_CACHE_KEY,
-    JSON.stringify(orders.slice(0, MAX_CACHED_PAYMENT_ORDERS))
-  )
+  try {
+    window.localStorage.setItem(
+      PAYMENT_ORDER_CACHE_KEY,
+      JSON.stringify(orders.slice(0, MAX_CACHED_PAYMENT_ORDERS))
+    )
+  } catch {
+    // The order list is a convenience cache; storage failures must not block UI.
+  }
 }
 
 function upsertCachedPaymentOrder(order: CmsPaymentOrder | CachedPaymentOrder) {
@@ -65,6 +69,40 @@ function upsertCachedPaymentOrder(order: CmsPaymentOrder | CachedPaymentOrder) {
 
   writeCachedPaymentOrders(nextOrders)
 
+  return nextOrders
+}
+
+function removeCachedPaymentOrder(orderId: string) {
+  const nextOrders = readCachedPaymentOrders().filter(
+    (order) => order.orderId !== orderId
+  )
+
+  writeCachedPaymentOrders(nextOrders)
+  return nextOrders
+}
+
+async function reconcileCachedPaymentOrders(
+  fetchOrder: (orderId: string) => Promise<CmsPaymentOrder>,
+  isMissingOrderError: (error: unknown) => boolean
+) {
+  const reconciledOrders = await Promise.all(
+    readCachedPaymentOrders().map(async (cachedOrder) => {
+      if (!isActiveCachedPaymentOrder(cachedOrder)) {
+        return cachedOrder
+      }
+
+      try {
+        return toCachedPaymentOrder(await fetchOrder(cachedOrder.orderId))
+      } catch (error) {
+        return isMissingOrderError(error) ? null : cachedOrder
+      }
+    })
+  )
+  const nextOrders = reconciledOrders.filter(
+    (order): order is CachedPaymentOrder => Boolean(order)
+  )
+
+  writeCachedPaymentOrders(nextOrders)
   return nextOrders
 }
 
@@ -128,6 +166,8 @@ export {
   getCachedPaymentOrderTimestamp,
   isActiveCachedPaymentOrder,
   readCachedPaymentOrders,
+  reconcileCachedPaymentOrders,
+  removeCachedPaymentOrder,
   upsertCachedPaymentOrder,
   writeCachedPaymentOrders,
   type CachedPaymentOrder,
