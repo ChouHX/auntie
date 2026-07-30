@@ -34,6 +34,7 @@ import {
   TextItalic,
   Trash,
   UploadSimple,
+  UserCircle,
   Users,
   Wallet,
 } from "@phosphor-icons/react"
@@ -82,6 +83,7 @@ export type AdminSection =
   | "reviews"
   | "faq"
   | "orders"
+  | "customers"
   | "aunties"
   | "serviceAreas"
   | "siteSettings"
@@ -101,6 +103,7 @@ export const adminSections: AdminNavItem<AdminSection>[] = [
   { id: "reviews", label: "好评图片", icon: CheckCircle, group: "content" },
   { id: "faq", label: "QA管理", icon: ListChecks, group: "content" },
   { id: "orders", label: "订单管理", icon: Wallet, group: "main" },
+  { id: "customers", label: "客户管理", icon: UserCircle, group: "main" },
   { id: "aunties", label: "阿姨管理", icon: Users, group: "main" },
   {
     id: "serviceAreas",
@@ -145,6 +148,10 @@ export const adminSectionMeta: Record<
   dashboard: {
     description: "查看订单金额、订单状态和当前待处理订单。",
     title: "Dashboard",
+  },
+  customers: {
+    description: "查看企业微信客户资料并配置每日自动同步。",
+    title: "客户管理",
   },
   faq: {
     description: "维护中英文 QA 条目和页面基础配置。",

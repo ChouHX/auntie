@@ -38,6 +38,7 @@ import {
   adminSections,
 } from "@/components/admin/admin-shared"
 import { DashboardAdmin } from "@/components/admin/dashboard-admin"
+import { CustomerAdmin } from "@/components/admin/customer-admin"
 import { BlogAdmin, BlogCategoryAdmin } from "@/components/admin/blog-admin"
 import { ImageLibraryAdmin } from "@/components/admin/image-library-admin"
 import { FaqAdmin } from "@/components/admin/faq-admin"
@@ -1009,6 +1010,10 @@ function AdminContentEditor({
         token={token}
       />
     )
+  }
+
+  if (activeSection === "customers") {
+    return <CustomerAdmin token={token} />
   }
 
   if (activeSection === "blogs") {

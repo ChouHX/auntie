@@ -17,6 +17,8 @@ services:
       AIRWALLEX_WEBHOOK_SECRET: ${AIRWALLEX_WEBHOOK_SECRET:-}
       AIRWALLEX_ACCOUNT_ID: ${AIRWALLEX_ACCOUNT_ID:-}
       AIRWALLEX_API_BASE_URL: ${AIRWALLEX_API_BASE_URL:-}
+      WECOM_CORP_ID: ${WECOM_CORP_ID:-}
+      WECOM_CORP_SECRET: ${WECOM_CORP_SECRET:-}
     volumes:
       - ./data:/app/data
       - ./public/uploads:/app/public/uploads

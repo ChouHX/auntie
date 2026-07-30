@@ -18,6 +18,7 @@ type AdminContentSection =
   | "aunties"
   | "blogs"
   | "categories"
+  | "customers"
   | "dashboard"
   | "faq"
   | "gallery"
@@ -50,6 +51,7 @@ const adminContentSections = new Set<AdminContentSection>([
   "aunties",
   "blogs",
   "categories",
+  "customers",
   "dashboard",
   "faq",
   "gallery",
@@ -265,7 +267,7 @@ function createSectionResponse(
     updatedAt: content.updatedAt,
     version: content.version,
   }
-  if (section === "shell" || section === "account") {
+  if (section === "shell" || section === "account" || section === "customers") {
     return {
       content: responseContent,
     }

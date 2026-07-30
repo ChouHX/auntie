@@ -42,6 +42,7 @@ docker compose ps
 docker compose logs -f
 curl http://127.0.0.1:${APP_PORT:-4174}/api/health
 ```
+
 # Auntie Chen Home
 
 ## Docker deployment
@@ -60,3 +61,19 @@ docker compose -f docker-compose.server.yml up -d
 ```
 
 The server compose file defaults to `ghcr.io/chouhx/auntie:latest`. Set `AUNTIE_IMAGE` to a commit-tagged image when a pinned deployment is required.
+
+## WeCom customer synchronization
+
+Customer management reads the WeCom Customer Contact APIs and stores a
+read-only customer snapshot in the existing `CMS_SQLITE_FILE` database. Add
+the following values to the server `.env` file:
+
+```bash
+WECOM_CORP_ID=your-corp-id
+WECOM_CORP_SECRET=your-customer-contact-app-secret
+```
+
+The WeCom application must be configured as an application allowed to call
+Customer Contact APIs, and its visible scope must include the service members
+whose customers should be synchronized. The secret is only read by the server;
+it is never returned to the admin browser or stored in SQLite.

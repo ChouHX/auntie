@@ -3,6 +3,7 @@ import type {
   AdminAuntieStatsMap,
   AdminDashboardSummary,
 } from "@/lib/admin-analytics"
+import type { WecomCustomerPage, WecomSyncSettings } from "@/lib/wecom-types"
 
 const ADMIN_TOKEN_KEY = "auntie-chen-admin-token"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
@@ -32,6 +33,7 @@ type AdminContentSection =
   | "aunties"
   | "blogs"
   | "categories"
+  | "customers"
   | "dashboard"
   | "faq"
   | "gallery"
@@ -168,6 +170,44 @@ async function fetchAdminPaymentRuntimeConfig(token: string) {
   return request<AdminPaymentRuntimeConfig>("/api/admin/payment-runtime", {
     headers: createAuthHeaders(token),
   })
+}
+
+async function fetchAdminWecomCustomers(
+  token: string,
+  params: { page: number; pageSize: number; query: string }
+) {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  })
+  if (params.query.trim()) query.set("query", params.query.trim())
+  return request<WecomCustomerPage>(`/api/admin/wecom-customers?${query}`, {
+    headers: createAuthHeaders(token),
+  })
+}
+
+async function syncAdminWecomCustomers(token: string) {
+  return request<{ settings: WecomSyncSettings }>(
+    "/api/admin/wecom-customers/sync",
+    {
+      headers: createAuthHeaders(token),
+      method: "POST",
+    }
+  )
+}
+
+async function updateAdminWecomSyncSettings(
+  token: string,
+  settings: Pick<WecomSyncSettings, "enabled" | "hour" | "minute">
+) {
+  return request<{ settings: WecomSyncSettings }>(
+    "/api/admin/wecom-customers/settings",
+    {
+      body: JSON.stringify(settings),
+      headers: createAuthHeaders(token),
+      method: "PATCH",
+    }
+  )
 }
 
 async function saveAdminContent(token: string, content: CmsContent) {
@@ -588,6 +628,7 @@ export {
   fetchAdminContent,
   fetchAdminPaymentRuntimeConfig,
   fetchAdminSectionContent,
+  fetchAdminWecomCustomers,
   fetchAuntieDetail,
   fetchAuntiesByArea,
   fetchFeaturedAunties,
@@ -604,6 +645,8 @@ export {
   startPaymentOrderCheckout,
   syncPaymentOrder,
   submitOrderReview,
+  syncAdminWecomCustomers,
+  updateAdminWecomSyncSettings,
   submitPublicForm,
   upsertAdminPaymentOrder,
   uploadAdminImage,
