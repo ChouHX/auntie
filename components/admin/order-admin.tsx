@@ -1,11 +1,13 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
+  CaretDown,
   ClipboardText,
   Eye,
   FloppyDisk,
   LinkSimple,
+  MagnifyingGlass,
   PencilSimple,
   Plus,
   Star,
@@ -23,7 +25,10 @@ import {
   orderServiceTypeOptions,
 } from "@/components/admin/admin-shared"
 import { AuntieAssignmentSelect } from "@/components/common/auntie-assignment-select"
-import type { AdminAuntieStatsMap } from "@/lib/cms-api"
+import {
+  fetchAdminWecomCustomers,
+  type AdminAuntieStatsMap,
+} from "@/lib/cms-api"
 import { defaultCmsContent } from "@/data/cms-defaults"
 import { useCmsContent } from "@/hooks/use-cms-content"
 import { regionsWithDerivedCities } from "@/lib/service-regions"
@@ -73,6 +78,7 @@ import type {
   CmsPaymentOrder,
   CmsPaymentOrderAmountItem,
 } from "@/types/cms"
+import type { WecomCustomer, WecomCustomerPage } from "@/lib/wecom-types"
 
 type OrderAdminRemotePagination = {
   onPageChange: (page: number) => void
@@ -367,6 +373,7 @@ export function OrderAdmin({
   onSaveOrder,
   onCommit,
   remotePagination,
+  token,
 }: {
   auntieStats?: AdminAuntieStatsMap
   content: CmsContent
@@ -375,6 +382,7 @@ export function OrderAdmin({
   onSaveOrder?: (order: CmsPaymentOrder) => Promise<CmsContent | null>
   onCommit: PersistContent
   remotePagination?: OrderAdminRemotePagination
+  token: string
 }) {
   const [editingOrder, setEditingOrder] = useState<CmsPaymentOrder | null>(null)
   const [editingAssignmentMode, setEditingAssignmentMode] =
@@ -813,6 +821,17 @@ export function OrderAdmin({
           </DialogHeader>
           {editingOrder ? (
             <div className="grid gap-4 sm:grid-cols-2">
+              <FormField className="sm:col-span-2" label="选择用户">
+                <OrderCustomerSelect
+                  disabled={isEditingCompletedOrder}
+                  onSelect={(customer) =>
+                    updateEditingOrder({
+                      customerName: customer.nameAndType.split("@")[0].trim(),
+                    })
+                  }
+                  token={token}
+                />
+              </FormField>
               <FormField label="客户姓名 / 称呼" required>
                 <Input
                   className="h-9 rounded-md"
@@ -995,6 +1014,169 @@ export function OrderAdmin({
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+function OrderCustomerSelect({
+  disabled,
+  onSelect,
+  token,
+}: {
+  disabled?: boolean
+  onSelect: (customer: WecomCustomer) => void
+  token: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [customers, setCustomers] = useState<WecomCustomer[]>([])
+  const [selectedCustomerName, setSelectedCustomerName] = useState("")
+  const [pagination, setPagination] =
+    useState<WecomCustomerPage["pagination"]>()
+  const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!open) return
+    let isMounted = true
+    const timer = window.setTimeout(async () => {
+      setIsLoading(true)
+      setError("")
+      try {
+        const result = await fetchAdminWecomCustomers(token, {
+          page: 1,
+          pageSize: 20,
+          query,
+        })
+        if (!isMounted) return
+        setCustomers(result.customers)
+        setPagination(result.pagination)
+      } catch (loadError) {
+        if (isMounted) {
+          setError(
+            loadError instanceof Error ? loadError.message : "用户加载失败"
+          )
+        }
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
+    }, 250)
+    return () => {
+      isMounted = false
+      window.clearTimeout(timer)
+    }
+  }, [open, query, token])
+
+  async function loadMore() {
+    if (
+      isLoading ||
+      isLoadingMore ||
+      !pagination ||
+      pagination.page >= pagination.totalPages
+    ) {
+      return
+    }
+    setIsLoadingMore(true)
+    try {
+      const result = await fetchAdminWecomCustomers(token, {
+        page: pagination.page + 1,
+        pageSize: pagination.pageSize,
+        query,
+      })
+      setCustomers((current) => [...current, ...result.customers])
+      setPagination(result.pagination)
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error ? loadError.message : "更多用户加载失败"
+      )
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
+
+  return (
+    <Popover onOpenChange={setOpen} open={open}>
+      <PopoverTrigger asChild>
+        <Button
+          className="h-9 w-full justify-between rounded-md px-3 font-normal"
+          disabled={disabled}
+          type="button"
+          variant="outline"
+        >
+          <span className="truncate text-muted-foreground">
+            {selectedCustomerName ||
+              (open ? "选择企业微信客户" : "选择已有客户（可选）")}
+          </span>
+          <CaretDown className="size-4 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[min(32rem,calc(100vw-2rem))] p-0"
+      >
+        <div className="flex items-center gap-2 border-b border-border px-3">
+          <MagnifyingGlass className="size-4 shrink-0 text-muted-foreground" />
+          <Input
+            autoFocus
+            className="h-10 rounded-none border-0 px-0 shadow-none focus-visible:ring-0"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索姓名、企业、地区或添加人"
+            value={query}
+          />
+        </div>
+        <div
+          className="max-h-64 overflow-y-auto p-1"
+          onScroll={(event) => {
+            const element = event.currentTarget
+            if (
+              element.scrollHeight - element.scrollTop - element.clientHeight <
+              48
+            ) {
+              void loadMore()
+            }
+          }}
+        >
+          {isLoading ? (
+            <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+              正在加载用户...
+            </div>
+          ) : error ? (
+            <div className="px-3 py-8 text-center text-sm text-destructive">
+              {error}
+            </div>
+          ) : customers.length ? (
+            customers.map((customer) => (
+              <button
+                className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
+                key={customer.relationId}
+                onClick={() => {
+                  onSelect(customer)
+                  setSelectedCustomerName(customer.nameAndType)
+                  setOpen(false)
+                }}
+                type="button"
+              >
+                <span className="min-w-0 truncate font-medium">
+                  {customer.nameAndType}
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {customer.followUserId}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+              暂无匹配用户
+            </div>
+          )}
+          {isLoadingMore ? (
+            <div className="px-3 py-2 text-center text-xs text-muted-foreground">
+              正在加载更多...
+            </div>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 

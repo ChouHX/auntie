@@ -59,10 +59,7 @@ function AlertDialogOverlay({
       <motion.div
         data-slot="alert-dialog-overlay"
         animate={{ opacity: 1 }}
-        className={cn(
-          "fixed inset-0 z-[60] bg-black/45 backdrop-blur-[2px]",
-          className
-        )}
+        className={cn("fixed inset-0 z-[60] bg-black/45", className)}
         exit={{ opacity: 0 }}
         initial={{ opacity: 0 }}
         transition={transition}

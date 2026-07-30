@@ -1092,6 +1092,7 @@ function AdminContentEditor({
         onCommit={onCommit}
         onDeleteOrder={onDeleteOrder}
         onSaveOrder={onSaveOrder}
+        token={token}
         remotePagination={{
           onPageChange: onOrderPageChange,
           onPageSizeChange: onOrderPageSizeChange,
