@@ -463,7 +463,7 @@ export function AuntieAdmin({
                   <TableHead>状态</TableHead>
                   <TableHead>评分</TableHead>
                   <TableHead>完成单数</TableHead>
-                  <TableHead className="sticky right-0 z-20 w-28 min-w-28 border-l border-border bg-card text-right">
+                  <TableHead className="relative sticky right-0 z-20 w-28 min-w-28 border-l-0 bg-card text-right before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
                     操作
                   </TableHead>
                 </TableRow>
@@ -557,7 +557,7 @@ export function AuntieAdmin({
                       <TableCell className="text-sm font-medium">
                         {stats.completedCount}
                       </TableCell>
-                      <TableCell className="sticky right-0 z-10 border-l border-border bg-card group-hover:bg-muted/45">
+                      <TableCell className="relative sticky right-0 z-10 border-l-0 bg-card group-hover:bg-muted before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
                         <div className="flex justify-end gap-1">
                           <Button
                             aria-label="编辑阿姨"

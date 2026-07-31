@@ -749,7 +749,7 @@ export function OrderAdmin({
                     <TableCell>
                       <PaymentLinkCell order={order} />
                     </TableCell>
-                    <TableCell className="relative sticky right-0 z-10 border-l-0 bg-card group-hover:bg-muted/45 before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
+                    <TableCell className="relative sticky right-0 z-10 border-l-0 bg-card group-hover:bg-muted before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
                       <div className="flex justify-end gap-1">
                         {isPaymentOrderCompleted(order) ? (
                           <Button
