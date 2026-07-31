@@ -46,6 +46,7 @@ import type {
   WecomSyncSettings,
 } from "@/lib/wecom-types"
 import { cn } from "@/lib/utils"
+import { clearCachedWecomCustomers } from "@/lib/wecom-customer-cache"
 
 const pageSizeOptions = [10, 20, 50, 100]
 const syncIntervalOptions = [
@@ -117,6 +118,7 @@ export function CustomerAdmin({ token }: { token: string }) {
     setIsSyncing(true)
     try {
       const result = await syncAdminWecomCustomers(token)
+      clearCachedWecomCustomers(token)
       setData((current) =>
         current ? { ...current, settings: result.settings } : current
       )

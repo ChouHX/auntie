@@ -79,6 +79,10 @@ import type {
   CmsPaymentOrderAmountItem,
 } from "@/types/cms"
 import type { WecomCustomer, WecomCustomerPage } from "@/lib/wecom-types"
+import {
+  cacheWecomCustomers,
+  readCachedWecomCustomers,
+} from "@/lib/wecom-customer-cache"
 
 type OrderAdminRemotePagination = {
   onPageChange: (page: number) => void
@@ -1040,29 +1044,42 @@ function OrderCustomerSelect({
 
   useEffect(() => {
     if (!open) return
+    const cached = readCachedWecomCustomers(token, query)
     let isMounted = true
-    const timer = window.setTimeout(async () => {
-      setIsLoading(true)
-      setError("")
-      try {
-        const result = await fetchAdminWecomCustomers(token, {
-          page: 1,
-          pageSize: 20,
-          query,
-        })
-        if (!isMounted) return
-        setCustomers(result.customers)
-        setPagination(result.pagination)
-      } catch (loadError) {
-        if (isMounted) {
-          setError(
-            loadError instanceof Error ? loadError.message : "用户加载失败"
-          )
+    const timer = window.setTimeout(
+      async () => {
+        if (cached) {
+          setCustomers(cached.customers)
+          setPagination(cached.pagination)
+          setError("")
+          setIsLoading(false)
+          return
         }
-      } finally {
-        if (isMounted) setIsLoading(false)
-      }
-    }, 250)
+
+        setIsLoading(true)
+        setError("")
+        try {
+          const result = await fetchAdminWecomCustomers(token, {
+            page: 1,
+            pageSize: 20,
+            query,
+          })
+          if (!isMounted) return
+          setCustomers(result.customers)
+          setPagination(result.pagination)
+          cacheWecomCustomers(token, query, result.customers, result.pagination)
+        } catch (loadError) {
+          if (isMounted) {
+            setError(
+              loadError instanceof Error ? loadError.message : "用户加载失败"
+            )
+          }
+        } finally {
+          if (isMounted) setIsLoading(false)
+        }
+      },
+      cached ? 0 : 250
+    )
     return () => {
       isMounted = false
       window.clearTimeout(timer)
@@ -1085,8 +1102,10 @@ function OrderCustomerSelect({
         pageSize: pagination.pageSize,
         query,
       })
-      setCustomers((current) => [...current, ...result.customers])
+      const mergedCustomers = mergeCustomers(customers, result.customers)
+      setCustomers(mergedCustomers)
       setPagination(result.pagination)
+      cacheWecomCustomers(token, query, mergedCustomers, result.pagination)
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : "更多用户加载失败"
@@ -1199,6 +1218,14 @@ function OrderCustomerSelect({
       </PopoverContent>
     </Popover>
   )
+}
+
+function mergeCustomers(current: WecomCustomer[], incoming: WecomCustomer[]) {
+  const customers = new Map(
+    current.map((customer) => [customer.relationId, customer])
+  )
+  incoming.forEach((customer) => customers.set(customer.relationId, customer))
+  return Array.from(customers.values())
 }
 
 function CustomerAvatar({ customer }: { customer: WecomCustomer }) {
