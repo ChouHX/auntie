@@ -48,12 +48,15 @@ type CustomerRow = Record<
 type SettingsRow = {
   enabled: number
   hour: number
+  interval_minutes: number
   last_completed_at: string
   last_count: number
   last_error: string
   last_started_at: string
   last_status: WecomSyncSettings["lastStatus"]
   minute: number
+  next_run_at: string
+  schedule_mode: string
 }
 type TagCategory = "auntie" | "region" | "student"
 type TagColorRow = {
@@ -128,22 +131,48 @@ export async function getWecomSyncSettings() {
 }
 
 export async function updateWecomSyncSettings(input: {
-  enabled: boolean
   hour: number
+  intervalMinutes: number
   minute: number
+  mode: WecomSyncSettings["mode"]
 }) {
   const hour = clamp(input.hour, 0, 23, 2)
+  const intervalMinutes = clamp(input.intervalMinutes, 5, 1440, 60)
   const minute = clamp(input.minute, 0, 59, 0)
+  const mode = normalizeSyncMode(input.mode)
   const database = await openDatabase()
   try {
     database
       .prepare(
         `UPDATE wecom_sync_settings
-         SET enabled = ?, hour = ?, minute = ?, updated_at = ?
+         SET enabled = ?, schedule_mode = ?, interval_minutes = ?,
+             hour = ?, minute = ?, next_run_at = '', updated_at = ?
          WHERE id = 1`
       )
-      .run(input.enabled ? 1 : 0, hour, minute, new Date().toISOString())
+      .run(
+        mode === "disabled" ? 0 : 1,
+        mode,
+        intervalMinutes,
+        hour,
+        minute,
+        new Date().toISOString()
+      )
     return mapSettingsRow(readSettingsRow(database))
+  } finally {
+    database.close()
+  }
+}
+
+export async function updateWecomNextRunAt(nextRunAt: string) {
+  const database = await openDatabase()
+  try {
+    database
+      .prepare(
+        `UPDATE wecom_sync_settings
+         SET next_run_at = ?, updated_at = ?
+         WHERE id = 1`
+      )
+      .run(nextRunAt, new Date().toISOString())
   } finally {
     database.close()
   }
@@ -473,19 +502,31 @@ function readSettingsRow(database: Database) {
 }
 
 function mapSettingsRow(row: SettingsRow): WecomSyncSettings {
+  const mode = row.enabled ? normalizeSyncMode(row.schedule_mode) : "disabled"
   return {
     configured: isWecomConfigured(),
     enabled: Boolean(row.enabled),
     hour: row.hour,
+    intervalMinutes: row.interval_minutes,
     lastCompletedAt: row.last_completed_at,
     lastCount: row.last_count,
     lastError: row.last_error,
     lastStartedAt: row.last_started_at,
     lastStatus: row.last_status,
     minute: row.minute,
-    nextRunAt: row.enabled ? getNextRunAt(row.hour, row.minute) : "",
+    mode,
+    nextRunAt:
+      mode === "daily"
+        ? getNextRunAt(row.hour, row.minute)
+        : mode === "interval"
+          ? row.next_run_at || getNextIntervalRunAt(row.interval_minutes)
+          : "",
     timezone: "Asia/Shanghai",
   }
+}
+
+function normalizeSyncMode(value: unknown): WecomSyncSettings["mode"] {
+  return value === "interval" || value === "disabled" ? value : "daily"
 }
 
 function mapCustomerRow(row: CustomerRow): WecomCustomer {
@@ -531,6 +572,14 @@ export function getNextRunAt(hour: number, minute: number, now = new Date()) {
   return target.toISOString()
 }
 
+export function getNextIntervalRunAt(
+  intervalMinutes: number,
+  now = new Date()
+) {
+  const normalizedInterval = clamp(intervalMinutes, 5, 1440, 60)
+  return new Date(now.getTime() + normalizedInterval * 60 * 1000).toISOString()
+}
+
 async function openDatabase() {
   fs.mkdirSync(/* turbopackIgnore: true */ path.dirname(sqliteFile), {
     recursive: true,
@@ -574,8 +623,11 @@ async function openDatabase() {
     CREATE TABLE IF NOT EXISTS wecom_sync_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       enabled INTEGER NOT NULL DEFAULT 0,
+      schedule_mode TEXT NOT NULL DEFAULT 'daily',
+      interval_minutes INTEGER NOT NULL DEFAULT 60,
       hour INTEGER NOT NULL DEFAULT 2,
       minute INTEGER NOT NULL DEFAULT 0,
+      next_run_at TEXT NOT NULL DEFAULT '',
       last_started_at TEXT NOT NULL DEFAULT '',
       last_completed_at TEXT NOT NULL DEFAULT '',
       last_status TEXT NOT NULL DEFAULT 'idle',
@@ -588,7 +640,40 @@ async function openDatabase() {
   `)
   ensureCustomerColumn(database, "follow_user_avatar")
   ensureCustomerColumn(database, "remark_corp_name")
+  ensureSyncSettingsColumn(
+    database,
+    "schedule_mode",
+    "TEXT NOT NULL DEFAULT 'daily'"
+  )
+  ensureSyncSettingsColumn(
+    database,
+    "interval_minutes",
+    "INTEGER NOT NULL DEFAULT 60"
+  )
+  ensureSyncSettingsColumn(database, "next_run_at", "TEXT NOT NULL DEFAULT ''")
   return database
+}
+
+function ensureSyncSettingsColumn(
+  database: Database,
+  column: "interval_minutes" | "next_run_at" | "schedule_mode",
+  definition: string
+) {
+  const columns = database
+    .prepare("PRAGMA table_info(wecom_sync_settings)")
+    .all() as Array<{ name: string }>
+  if (!columns.some((item) => item.name === column)) {
+    try {
+      database.exec(
+        `ALTER TABLE wecom_sync_settings ADD COLUMN ${column} ${definition}`
+      )
+    } catch (error) {
+      const refreshedColumns = database
+        .prepare("PRAGMA table_info(wecom_sync_settings)")
+        .all() as Array<{ name: string }>
+      if (!refreshedColumns.some((item) => item.name === column)) throw error
+    }
+  }
 }
 
 function ensureCustomerColumn(

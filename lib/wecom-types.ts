@@ -23,12 +23,14 @@ export type WecomSyncSettings = {
   configured: boolean
   enabled: boolean
   hour: number
+  intervalMinutes: number
   lastCompletedAt: string
   lastCount: number
   lastError: string
   lastStartedAt: string
   lastStatus: "failed" | "idle" | "running" | "success"
   minute: number
+  mode: "daily" | "disabled" | "interval"
   nextRunAt: string
   timezone: "Asia/Shanghai"
 }

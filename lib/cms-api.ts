@@ -198,7 +198,10 @@ async function syncAdminWecomCustomers(token: string) {
 
 async function updateAdminWecomSyncSettings(
   token: string,
-  settings: Pick<WecomSyncSettings, "enabled" | "hour" | "minute">
+  settings: Pick<
+    WecomSyncSettings,
+    "hour" | "intervalMinutes" | "minute" | "mode"
+  >
 ) {
   return request<{ settings: WecomSyncSettings }>(
     "/api/admin/wecom-customers/settings",

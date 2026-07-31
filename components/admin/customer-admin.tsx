@@ -48,6 +48,15 @@ import type {
 import { cn } from "@/lib/utils"
 
 const pageSizeOptions = [10, 20, 50, 100]
+const syncIntervalOptions = [
+  { label: "每 15 分钟", value: 15 },
+  { label: "每 30 分钟", value: 30 },
+  { label: "每 1 小时", value: 60 },
+  { label: "每 2 小时", value: 120 },
+  { label: "每 4 小时", value: 240 },
+  { label: "每 6 小时", value: 360 },
+  { label: "每 12 小时", value: 720 },
+]
 
 export function CustomerAdmin({ token }: { token: string }) {
   const [data, setData] = useState<WecomCustomerPage | null>(null)
@@ -59,7 +68,9 @@ export function CustomerAdmin({ token }: { token: string }) {
   const [isSyncing, setIsSyncing] = useState(false)
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
   const [isScheduleOpen, setIsScheduleOpen] = useState(false)
-  const [scheduleEnabled, setScheduleEnabled] = useState(false)
+  const [scheduleMode, setScheduleMode] =
+    useState<WecomSyncSettings["mode"]>("disabled")
+  const [scheduleIntervalMinutes, setScheduleIntervalMinutes] = useState(60)
   const [scheduleTime, setScheduleTime] = useState("02:00")
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -81,7 +92,8 @@ export function CustomerAdmin({ token }: { token: string }) {
         if (!isMounted) return
         setData(result)
         setPage(result.pagination.page)
-        setScheduleEnabled(result.settings.enabled)
+        setScheduleMode(result.settings.mode)
+        setScheduleIntervalMinutes(result.settings.intervalMinutes)
         setScheduleTime(
           formatTime(result.settings.hour, result.settings.minute)
         )
@@ -125,14 +137,17 @@ export function CustomerAdmin({ token }: { token: string }) {
     setIsSavingSchedule(true)
     try {
       const result = await updateAdminWecomSyncSettings(token, {
-        enabled: scheduleEnabled,
         hour,
+        intervalMinutes: scheduleIntervalMinutes,
         minute,
+        mode: scheduleMode,
       })
       setData((current) =>
         current ? { ...current, settings: result.settings } : current
       )
-      toast.success(scheduleEnabled ? "每日同步时间已保存" : "定时同步已关闭")
+      toast.success(
+        scheduleMode === "disabled" ? "自动同步已关闭" : "同步计划已保存"
+      )
       setIsScheduleOpen(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "同步配置保存失败")
@@ -147,7 +162,8 @@ export function CustomerAdmin({ token }: { token: string }) {
   function handleScheduleOpenChange(open: boolean) {
     setIsScheduleOpen(open)
     if (open && settings) {
-      setScheduleEnabled(settings.enabled)
+      setScheduleMode(settings.mode)
+      setScheduleIntervalMinutes(settings.intervalMinutes)
       setScheduleTime(formatTime(settings.hour, settings.minute))
     }
   }
@@ -159,43 +175,82 @@ export function CustomerAdmin({ token }: { token: string }) {
           <DialogHeader>
             <DialogTitle>同步设置</DialogTitle>
             <DialogDescription>
-              设置企业微信客户数据的每日自动同步时间，统一按北京时间执行。
+              选择按固定间隔同步，或在每天指定时间同步企业微信客户数据。
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-1">
-            <label className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/35 px-4 py-3">
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">每日自动同步</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  容器重启后会自动恢复同步计划
-                </span>
-              </span>
-              <input
-                checked={scheduleEnabled}
-                className="size-4 shrink-0 accent-blue-700"
+            <label className="grid gap-2 text-sm font-medium">
+              <span>同步模式</span>
+              <Select
                 disabled={!settings?.configured}
-                onChange={(event) => setScheduleEnabled(event.target.checked)}
-                type="checkbox"
-              />
+                onValueChange={(value) =>
+                  setScheduleMode(value as WecomSyncSettings["mode"])
+                }
+                value={scheduleMode}
+              >
+                <SelectTrigger className="h-10 rounded-md">
+                  <SelectValue placeholder="选择同步模式" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="disabled">关闭自动同步</SelectItem>
+                  <SelectItem value="interval">定时同步</SelectItem>
+                  <SelectItem value="daily">每日同步</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-xs font-normal text-muted-foreground">
+                容器重启后会自动恢复同步计划
+              </span>
             </label>
 
-            <label className="grid gap-2 text-sm font-medium">
-              <span className="flex items-center gap-2">
-                <Clock className="text-muted-foreground" size={16} />
-                每日同步时间
-              </span>
-              <input
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                disabled={!scheduleEnabled || !settings?.configured}
-                onChange={(event) => setScheduleTime(event.target.value)}
-                type="time"
-                value={scheduleTime}
-              />
-              <span className="text-xs font-normal text-muted-foreground">
-                时区：Asia/Shanghai（北京时间）
-              </span>
-            </label>
+            {scheduleMode === "interval" ? (
+              <label className="grid gap-2 text-sm font-medium">
+                <span className="flex items-center gap-2">
+                  <Clock className="text-muted-foreground" size={16} />
+                  同步间隔
+                </span>
+                <Select
+                  disabled={!settings?.configured}
+                  onValueChange={(value) =>
+                    setScheduleIntervalMinutes(Number(value))
+                  }
+                  value={String(scheduleIntervalMinutes)}
+                >
+                  <SelectTrigger className="h-10 rounded-md">
+                    <SelectValue placeholder="选择同步间隔" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {syncIntervalOptions.map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={String(option.value)}
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            ) : null}
+
+            {scheduleMode === "daily" ? (
+              <label className="grid gap-2 text-sm font-medium">
+                <span className="flex items-center gap-2">
+                  <Clock className="text-muted-foreground" size={16} />
+                  每日同步时间
+                </span>
+                <input
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  disabled={!settings?.configured}
+                  onChange={(event) => setScheduleTime(event.target.value)}
+                  type="time"
+                  value={scheduleTime}
+                />
+                <span className="text-xs font-normal text-muted-foreground">
+                  时区：Asia/Shanghai（北京时间）
+                </span>
+              </label>
+            ) : null}
 
             {!settings?.configured ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
@@ -558,7 +613,19 @@ function getSyncSummary(settings?: WecomSyncSettings) {
         timeZone: "Asia/Shanghai",
       })
     : "未开启定时同步"
-  return `上次完成：${lastSync} · 客户关系 ${settings.lastCount} 条 · 下次执行：${nextSync}`
+  const schedule =
+    settings.mode === "interval"
+      ? `每隔 ${formatInterval(settings.intervalMinutes)}同步`
+      : settings.mode === "daily"
+        ? `每日 ${formatTime(settings.hour, settings.minute)} 同步`
+        : "自动同步已关闭"
+  const nextRun = settings.mode === "disabled" ? "" : ` · 下次执行：${nextSync}`
+  return `上次完成：${lastSync} · 客户关系 ${settings.lastCount} 条 · ${schedule}${nextRun}`
+}
+
+function formatInterval(minutes: number) {
+  if (minutes < 60) return `${minutes} 分钟`
+  return `${minutes / 60} 小时`
 }
 
 function formatTime(hour: number, minute: number) {

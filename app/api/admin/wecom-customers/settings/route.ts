@@ -15,20 +15,25 @@ export async function PATCH(request: NextRequest) {
   }
 
   const payload = (await request.json().catch(() => null)) as {
-    enabled?: unknown
     hour?: unknown
+    intervalMinutes?: unknown
     minute?: unknown
+    mode?: unknown
   } | null
   const hour = Number(payload?.hour)
+  const intervalMinutes = Number(payload?.intervalMinutes)
   const minute = Number(payload?.minute)
   if (
-    typeof payload?.enabled !== "boolean" ||
+    !["daily", "disabled", "interval"].includes(String(payload?.mode)) ||
     !Number.isInteger(hour) ||
     hour < 0 ||
     hour > 23 ||
     !Number.isInteger(minute) ||
     minute < 0 ||
-    minute > 59
+    minute > 59 ||
+    !Number.isInteger(intervalMinutes) ||
+    intervalMinutes < 5 ||
+    intervalMinutes > 1440
   ) {
     return Response.json(
       { error: "invalid_schedule", message: "同步时间配置无效" },
@@ -36,7 +41,12 @@ export async function PATCH(request: NextRequest) {
     )
   }
 
-  await updateWecomSyncSettings({ enabled: payload.enabled, hour, minute })
+  await updateWecomSyncSettings({
+    hour,
+    intervalMinutes,
+    minute,
+    mode: payload?.mode as "daily" | "disabled" | "interval",
+  })
   const settings = await rescheduleWecomCustomerSync()
   return Response.json({ settings })
 }
