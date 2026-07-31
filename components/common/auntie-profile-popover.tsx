@@ -66,6 +66,10 @@ function AuntieProfilePopover({
 
   // Merge fetched detail with summary member data
   const fullMember: CmsTeamMember = detail ? { ...member, ...detail } : member
+  const serviceAreaText =
+    fullMember.area?.trim() ||
+    fullMember.serviceAreas?.filter((area) => area.trim()).join("、") ||
+    "未填写"
 
   const completedCount =
     stats?.completedCount ?? detail?.completedCount ?? member.completedCount
@@ -177,7 +181,7 @@ function AuntieProfilePopover({
           <div className="flex min-w-0 items-center justify-between gap-3">
             <span className="shrink-0 text-muted-foreground">服务区域</span>
             <strong className="min-w-0 text-right font-medium text-foreground">
-              {fullMember.area || "未填写"}
+              {serviceAreaText}
             </strong>
           </div>
           <div className="flex min-w-0 items-center justify-between gap-3">

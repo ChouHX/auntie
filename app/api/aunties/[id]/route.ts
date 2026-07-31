@@ -19,6 +19,7 @@ export async function GET(
   }
 
   const summary = {
+    area: auntie.area,
     avatar: auntie.avatar,
     avatarThumb: auntie.avatarThumb,
     completedCount: auntie.completedCount,
@@ -26,6 +27,7 @@ export async function GET(
     name: auntie.name,
     rating: auntie.rating,
     role: auntie.role,
+    serviceAreas: auntie.serviceAreas,
     status: auntie.status,
   } as CmsTeamMember
 
