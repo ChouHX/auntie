@@ -18,6 +18,7 @@ type BookingOrderBody = {
   serviceArea?: string
   serviceDate?: string
   serviceType?: string
+  timezoneOffsetMinutes?: number
 }
 
 export async function POST(request: NextRequest) {
@@ -45,6 +46,8 @@ export async function POST(request: NextRequest) {
     )
   }
   const now = new Date().toISOString()
+  const serviceDate = normalizeText(body.serviceDate)
+  const minimumServiceDate = getLocalDateKey(body.timezoneOffsetMinutes)
   const orderDraft: Omit<CmsPaymentOrder, "orderId"> = {
     amount: "",
     contact: normalizeText(body.contact),
@@ -53,7 +56,7 @@ export async function POST(request: NextRequest) {
     note: createOrderNote(body),
     serviceAddress: normalizeText(body.serviceAddress),
     serviceArea: normalizeText(body.serviceArea),
-    serviceDate: normalizeText(body.serviceDate) || "待确认",
+    serviceDate,
     serviceType: normalizeText(body.serviceType),
     status: "awaiting_confirmation",
     updatedAt: now,
@@ -63,13 +66,15 @@ export async function POST(request: NextRequest) {
     !orderDraft.contact ||
     !orderDraft.serviceAddress ||
     !orderDraft.serviceArea ||
-    !orderDraft.serviceType
+    !orderDraft.serviceType ||
+    !isValidDateKey(serviceDate) ||
+    serviceDate < minimumServiceDate
   ) {
     return bookingJsonResponse(
       {
         error: "booking_order_invalid",
         message:
-          "Please provide contact, service area, address, and service type.",
+          "Please provide all required booking details and select today or a future service date.",
         requestId,
       },
       400,
@@ -145,6 +150,21 @@ function bookingJsonResponse(
 
 function normalizeText(value: unknown) {
   return String(value ?? "").trim()
+}
+
+function getLocalDateKey(timezoneOffsetMinutes: unknown) {
+  const offset = Number(timezoneOffsetMinutes)
+  const safeOffset =
+    Number.isFinite(offset) && Math.abs(offset) <= 14 * 60 ? offset : 0
+  return new Date(Date.now() - safeOffset * 60_000).toISOString().slice(0, 10)
+}
+
+function isValidDateKey(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00Z`)
+  return (
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  )
 }
 
 function createOrderNote(body: BookingOrderBody) {

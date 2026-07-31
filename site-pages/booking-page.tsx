@@ -408,6 +408,7 @@ function BookingRequestSection() {
   const [submittedOrder, setSubmittedOrder] = useState<CmsPaymentOrder | null>(
     null
   )
+  const minimumServiceDate = getLocalDateKey()
   const serviceRegions = useMemo(
     () =>
       regionsWithDerivedCities(
@@ -439,6 +440,14 @@ function BookingRequestSection() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!isAvailableServiceDate(form.preferredDate, minimumServiceDate)) {
+      setSubmitError(
+        language === "zh"
+          ? "预约日期不能早于今天，请重新选择。"
+          : "The service date cannot be earlier than today."
+      )
+      return
+    }
     setIsSubmitting(true)
     setSubmitError("")
 
@@ -453,6 +462,7 @@ function BookingRequestSection() {
         serviceArea: form.serviceArea,
         serviceDate: form.preferredDate,
         serviceType: form.serviceType,
+        timezoneOffsetMinutes: new Date().getTimezoneOffset(),
       })
       setSubmittedOrder(result.order)
       setForm(initialFormState)
@@ -488,6 +498,7 @@ function BookingRequestSection() {
           estimate={estimate}
           form={form}
           isSubmitting={isSubmitting}
+          minimumServiceDate={minimumServiceDate}
           onSubmit={handleSubmit}
           regions={serviceRegions}
           submitError={submitError}
@@ -620,6 +631,7 @@ function BookingRequestSection() {
                   className="h-9 rounded-md"
                   id="preferredDate"
                   name="preferredDate"
+                  min={minimumServiceDate}
                   onChange={(event) =>
                     updateForm("preferredDate", event.target.value)
                   }
@@ -780,6 +792,7 @@ type MobileBookingFlowProps = {
   estimate: PriceEstimate | null
   form: BookingFormState
   isSubmitting: boolean
+  minimumServiceDate: string
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   regions: ReturnType<typeof regionsWithDerivedCities>
   submitError: string
@@ -794,6 +807,7 @@ function MobileBookingFlow({
   estimate,
   form,
   isSubmitting,
+  minimumServiceDate,
   onSubmit,
   regions,
   submitError,
@@ -825,11 +839,15 @@ function MobileBookingFlow({
       return
     }
 
-    if (step === 2 && !hasHomeDetails) {
+    if (
+      step === 2 &&
+      (!hasHomeDetails ||
+        !isAvailableServiceDate(form.preferredDate, minimumServiceDate))
+    ) {
       setStepError(
         language === "zh"
-          ? "请补充户型、日期和详细地址。"
-          : "Add your home details, preferred date, and address."
+          ? "请补充户型和详细地址，并选择今天或之后的日期。"
+          : "Add your home details and select today or a future date."
       )
       return
     }
@@ -859,7 +877,7 @@ function MobileBookingFlow({
 
   return (
     <form
-      className="mx-auto max-w-lg pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+      className="mx-auto max-w-lg min-w-0 pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
       onSubmit={submitBooking}
     >
       <div className="border-b border-border bg-card/92 px-4 py-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/92">
@@ -903,7 +921,7 @@ function MobileBookingFlow({
         })}
       </div>
 
-      <div className="space-y-4 px-4 py-5">
+      <div className="min-w-0 space-y-4 px-4 py-5">
         {step === 1 ? (
           <>
             <MobileBookingSection
@@ -1011,15 +1029,16 @@ function MobileBookingFlow({
                 />
               </div>
               <FormField
-                className="mt-4"
+                className="mt-4 max-w-full min-w-0 overflow-hidden"
                 htmlFor="mobile-preferred-date"
                 label={copy.preferredDate}
                 required
               >
                 <Input
-                  className="h-11 rounded-lg text-sm"
+                  className="h-11 max-w-full min-w-0 appearance-none rounded-lg text-sm [inline-size:100%]"
                   id="mobile-preferred-date"
-                  min={new Date().toISOString().slice(0, 10)}
+                  min={minimumServiceDate}
+                  name="preferredDate"
                   onChange={(event) =>
                     updateForm("preferredDate", event.target.value)
                   }
@@ -1185,12 +1204,12 @@ function MobileBookingSection({
   title: string
 }) {
   return (
-    <Card className="rounded-xl border-border/80 bg-card/90 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/88 [&_[data-slot=label]]:text-xs">
+    <Card className="max-w-full min-w-0 rounded-xl border-border/80 bg-card/90 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/88 [&_[data-slot=label]]:text-xs">
       <h2 className="text-sm font-semibold text-foreground">{title}</h2>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
         {description}
       </p>
-      <div className="mt-4">{children}</div>
+      <div className="mt-4 min-w-0">{children}</div>
     </Card>
   )
 }
@@ -1372,6 +1391,18 @@ function getPricingKey(serviceType: string) {
   }
 
   return null
+}
+
+function getLocalDateKey(date = new Date()) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-")
+}
+
+function isAvailableServiceDate(value: string, minimumDate: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= minimumDate
 }
 
 function BookingSuccessPage({

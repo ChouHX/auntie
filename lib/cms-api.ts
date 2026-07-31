@@ -117,6 +117,7 @@ type BookingOrderPayload = {
   serviceArea: string
   serviceDate: string
   serviceType: string
+  timezoneOffsetMinutes: number
 }
 
 async function fetchPublicContent(
