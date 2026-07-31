@@ -1,5 +1,11 @@
 import fs from "node:fs"
 import path from "node:path"
+import {
+  createHmac,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from "node:crypto"
 
 import { defaultCmsContent } from "@/data/cms-defaults"
 import { normalizeNotificationSettings } from "@/lib/form-notifications"
@@ -31,6 +37,8 @@ const cmsSqliteFile =
   process.env.CMS_SQLITE_FILE ??
   path.join(/* turbopackIgnore: true */ process.cwd(), "data", "cms.sqlite")
 const adminToken = process.env.ADMIN_SESSION_TOKEN ?? "local-admin-token"
+const defaultAdminPassword = "admin123"
+const defaultAdminPasswordSalt = "auntie-chen-default-admin-v1"
 const legacyDefaultRecipientEmail = "autiechen@gmail.com"
 
 let writeQueue: Promise<unknown> = Promise.resolve()
@@ -393,12 +401,105 @@ function findPaymentOrder(content: CmsContent, orderId: string) {
   )
 }
 
-function isAdminToken(value: string | null) {
-  return value === adminToken
+async function isAdminToken(value: string | null) {
+  if (!value) return false
+  const content = await readCmsContent()
+  const auth = getAdminAuthState(content)
+
+  // Keep the deployment token as a bootstrap credential only. Once a
+  // password is persisted, password-derived session tokens are required.
+  if (!auth.hasStoredPassword && value === adminToken) return true
+
+  return verifySessionToken(value, auth.authVersion)
 }
 
-function createAdminToken() {
-  return adminToken
+async function createAdminToken() {
+  const auth = getAdminAuthState(await readCmsContent())
+  return createSessionToken(auth.authVersion)
+}
+
+async function verifyAdminCredentials(username: string, password: string) {
+  if (username !== "admin") return false
+  const auth = getAdminAuthState(await readCmsContent())
+  return verifyPassword(password, auth.passwordHash)
+}
+
+async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string
+) {
+  const content = await readCmsContent()
+  const auth = getAdminAuthState(content)
+  if (!verifyPassword(currentPassword, auth.passwordHash)) return null
+
+  const passwordHash = hashPassword(newPassword)
+  const nextContent = await updateCmsContent((current) => ({
+    ...current,
+    adminSettings: {
+      authVersion: auth.authVersion + 1,
+      passwordHash,
+      username: current.adminSettings?.username || "admin",
+    },
+  }))
+
+  return createSessionToken(getAdminAuthState(nextContent).authVersion)
+}
+
+function getAdminAuthState(content: CmsContent) {
+  const storedPasswordHash = content.adminSettings?.passwordHash?.trim() ?? ""
+  const authVersion = Number(content.adminSettings?.authVersion)
+
+  return {
+    authVersion:
+      Number.isInteger(authVersion) && authVersion > 0 ? authVersion : 1,
+    hasStoredPassword: Boolean(storedPasswordHash),
+    passwordHash:
+      storedPasswordHash ||
+      hashPassword(defaultAdminPassword, defaultAdminPasswordSalt),
+  }
+}
+
+function hashPassword(
+  password: string,
+  salt = randomBytes(16).toString("hex")
+) {
+  const digest = scryptSync(password, salt, 64).toString("hex")
+  return `scrypt$${salt}$${digest}`
+}
+
+function verifyPassword(password: string, encodedHash: string) {
+  const [algorithm, salt, expectedHex] = encodedHash.split("$")
+  if (algorithm !== "scrypt" || !salt || !expectedHex) return false
+
+  const expected = Buffer.from(expectedHex, "hex")
+  const actual = scryptSync(password, salt, expected.length || 64)
+  return expected.length === actual.length && timingSafeEqual(expected, actual)
+}
+
+function createSessionToken(authVersion: number) {
+  const nonce = randomBytes(24).toString("hex")
+  const payload = `${authVersion}.${nonce}`
+  const signature = createHmac("sha256", adminToken)
+    .update(payload)
+    .digest("hex")
+  return `${payload}.${signature}`
+}
+
+function verifySessionToken(value: string, authVersion: number) {
+  const [version, nonce, signature] = value.split(".")
+  if (!version || !nonce || !signature || Number(version) !== authVersion) {
+    return false
+  }
+
+  const expected = createHmac("sha256", adminToken)
+    .update(`${version}.${nonce}`)
+    .digest("hex")
+  const actual = Buffer.from(signature, "utf8")
+  const expectedBuffer = Buffer.from(expected, "utf8")
+  return (
+    actual.length === expectedBuffer.length &&
+    timingSafeEqual(actual, expectedBuffer)
+  )
 }
 
 function isPublished(item: { status: string }) {
@@ -413,12 +514,14 @@ function sortByOrder(
 }
 
 export {
+  changeAdminPassword,
   createAdminToken,
   findPaymentOrder,
   isAdminToken,
   normalizePaymentOrderId,
   readCmsContent,
   toPublicContent,
+  verifyAdminCredentials,
   updateCmsContent,
   writeCmsContent,
 }

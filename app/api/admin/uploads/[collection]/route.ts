@@ -21,7 +21,7 @@ export async function POST(
 ) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
 
-  if (!isAdminToken(token ?? null)) {
+  if (!(await isAdminToken(token ?? null))) {
     return Response.json(
       {
         error: "unauthorized",

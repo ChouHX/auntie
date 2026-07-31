@@ -6,7 +6,7 @@ import { listWecomCustomers } from "@/lib/wecom-store"
 export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
-  if (!requireAdmin(request)) {
+  if (!(await requireAdmin(request))) {
     return Response.json(
       { error: "unauthorized", message: "Admin authentication is required." },
       { status: 401 }
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   return Response.json(result)
 }
 
-function requireAdmin(request: NextRequest) {
+async function requireAdmin(request: NextRequest) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
   return isAdminToken(token ?? null)
 }

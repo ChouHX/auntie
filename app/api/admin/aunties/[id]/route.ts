@@ -48,11 +48,9 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const token = request.headers
-    .get("authorization")
-    ?.replace(/^Bearer\s+/i, "")
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
 
-  if (!isAdminToken(token ?? null)) {
+  if (!(await isAdminToken(token ?? null))) {
     return Response.json(
       { error: "unauthorized", message: "Admin authentication is required." },
       { status: 401 }

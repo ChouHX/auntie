@@ -574,7 +574,9 @@ function AdminPage() {
       title={activeMeta.title}
     >
       {isLoading || !content ? (
-        <Card className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground shadow-none">正在加载后台内容...</Card>
+        <Card className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground shadow-none">
+          正在加载后台内容...
+        </Card>
       ) : (
         <AdminContentEditor
           activeSection={activeSection}
@@ -602,6 +604,7 @@ function AdminPage() {
           onOrderQueryChange={handleOrderQueryChange}
           onOrderStatusFilterChange={handleOrderStatusFilterChange}
           onSaveOrder={saveOrder}
+          onTokenChange={setToken}
           onTrendRangeChange={handleTrendRangeChange}
           onCommit={persistContent}
           orderPage={orderPage}
@@ -757,7 +760,9 @@ function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
           </label>
 
           {error ? (
-            <div className="mb-4 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive mt-5 mb-0 w-full">{error}</div>
+            <div className="mt-5 mb-0 mb-4 w-full rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
           ) : null}
 
           <button
@@ -957,6 +962,7 @@ function AdminContentEditor({
   onOrderQueryChange,
   onOrderStatusFilterChange,
   onSaveOrder,
+  onTokenChange,
   onTrendRangeChange,
   onCommit,
   orderPage,
@@ -991,6 +997,7 @@ function AdminContentEditor({
   onOrderQueryChange: (query: string) => void
   onOrderStatusFilterChange: (status: string) => void
   onSaveOrder: (order: CmsPaymentOrder) => Promise<CmsContent | null>
+  onTokenChange: (token: string) => void
   onTrendRangeChange: (range: number) => void
   onCommit: PersistContent
   orderPage: number
@@ -1152,7 +1159,7 @@ function AdminContentEditor({
     )
   }
   if (activeSection === "account") {
-    return <AccountAdmin token={token} />
+    return <AccountAdmin onTokenChange={onTokenChange} token={token} />
   }
 
   return (

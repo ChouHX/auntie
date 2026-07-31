@@ -409,7 +409,7 @@ async function updateAdminPassword(
     newPassword: string
   }
 ) {
-  return request<{ ok: boolean }>("/api/admin/password", {
+  return request<{ ok: boolean; token: string }>("/api/admin/password", {
     body: JSON.stringify(payload),
     headers: createAuthHeaders(token),
     method: "POST",

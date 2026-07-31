@@ -1,13 +1,13 @@
 import type { NextRequest } from "next/server"
 
-import { createAdminToken } from "@/lib/cms-store"
+import { createAdminToken, verifyAdminCredentials } from "@/lib/cms-store"
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const username = String(body.username ?? "")
   const password = String(body.password ?? "")
 
-  if (username !== "admin" || password !== "admin123") {
+  if (!(await verifyAdminCredentials(username, password))) {
     return Response.json(
       {
         error: "invalid_credentials",
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   }
 
   return Response.json({
-    token: createAdminToken(),
+    token: await createAdminToken(),
     user: { username },
   })
 }

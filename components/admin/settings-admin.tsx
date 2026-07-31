@@ -36,6 +36,7 @@ import {
 import { defaultAfterSalesPage, defaultContactPage } from "@/data/cms-defaults"
 import {
   fetchAdminPaymentRuntimeConfig,
+  setStoredAdminToken,
   updateAdminPassword,
   uploadAdminImage,
   type AdminPaymentRuntimeConfig,
@@ -1163,7 +1164,13 @@ function applySiteSettingsToAfterSalesPage(
   }
 }
 
-export function AccountAdmin({ token }: { token: string }) {
+export function AccountAdmin({
+  onTokenChange,
+  token,
+}: {
+  onTokenChange: (token: string) => void
+  token: string
+}) {
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -1182,10 +1189,12 @@ export function AccountAdmin({ token }: { token: string }) {
 
     setIsSaving(true)
     try {
-      await updateAdminPassword(token, {
+      const result = await updateAdminPassword(token, {
         currentPassword,
         newPassword,
       })
+      setStoredAdminToken(result.token)
+      onTokenChange(result.token)
       setCurrentPassword("")
       setNewPassword("")
       setConfirmPassword("")

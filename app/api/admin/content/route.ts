@@ -63,14 +63,14 @@ const adminContentSections = new Set<AdminContentSection>([
   "siteSettings",
 ])
 
-function requireAdmin(request: NextRequest) {
+async function requireAdmin(request: NextRequest) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
 
   return isAdminToken(token ?? null)
 }
 
 export async function GET(request: NextRequest) {
-  if (!requireAdmin(request)) {
+  if (!(await requireAdmin(request))) {
     return Response.json(
       {
         error: "unauthorized",
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!requireAdmin(request)) {
+  if (!(await requireAdmin(request))) {
     return Response.json(
       {
         error: "unauthorized",
@@ -110,7 +110,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!requireAdmin(request)) {
+  if (!(await requireAdmin(request))) {
     return Response.json(
       {
         error: "unauthorized",

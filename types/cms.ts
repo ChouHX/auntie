@@ -160,6 +160,7 @@ type CmsSiteSettings = {
 }
 
 type CmsAdminSettings = {
+  authVersion?: number
   passwordHash: string
   username: string
 }
