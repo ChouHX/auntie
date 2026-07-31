@@ -17,6 +17,7 @@ import {
   normalizeNotificationSettings,
   sendPaymentOrderNotification,
 } from "@/lib/form-notifications"
+import { expirePaymentOrder } from "@/lib/payment-order-lifecycle"
 import type {
   CmsNotificationSettings,
   CmsPaymentOrder,
@@ -50,6 +51,30 @@ export async function POST(
       )
     }
 
+    const lifecycleOrder = expirePaymentOrder(existingOrder)
+    if (lifecycleOrder !== existingOrder) {
+      await updateCmsContent((current) => {
+        const currentOrder = findPaymentOrder(current, orderId)
+        if (!currentOrder) return current
+        const nextOrder = expirePaymentOrder(currentOrder)
+        savedOrder = nextOrder
+        return {
+          ...current,
+          paymentOrders: current.paymentOrders.map((item) =>
+            normalizePaymentOrderId(item.orderId) ===
+            normalizePaymentOrderId(currentOrder.orderId)
+              ? nextOrder
+              : item
+          ),
+        }
+      })
+      return Response.json({
+        ok: true,
+        order: toPublicPaymentOrder(savedOrder ?? lifecycleOrder),
+        synced: false,
+      })
+    }
+
     savedOrder = existingOrder
 
     if (
@@ -70,7 +95,9 @@ export async function POST(
       : null
     const paymentLink =
       !paymentIntent && existingOrder.airwallexPaymentLinkId
-        ? await retrieveAirwallexPaymentLink(existingOrder.airwallexPaymentLinkId)
+        ? await retrieveAirwallexPaymentLink(
+            existingOrder.airwallexPaymentLinkId
+          )
         : null
 
     await updateCmsContent((current) => {
@@ -96,8 +123,7 @@ export async function POST(
           paymentIntent?.id ||
           paymentLink?.latest_successful_payment_intent_id ||
           order.airwallexPaymentIntentId,
-        airwallexPaymentLinkId:
-          paymentLink?.id ?? order.airwallexPaymentLinkId,
+        airwallexPaymentLinkId: paymentLink?.id ?? order.airwallexPaymentLinkId,
         airwallexPaymentUrl: paymentLink?.url ?? order.airwallexPaymentUrl,
         amountValue: parsePaymentAmountValue(
           paymentIntent?.amount ?? paymentLink?.amount ?? order.amountValue,
@@ -107,7 +133,9 @@ export async function POST(
           paymentIntent?.currency || paymentLink?.currency || order.currency
         ),
         gatewayStatus:
-          paymentIntentGatewayStatus || paymentLink?.status || order.gatewayStatus,
+          paymentIntentGatewayStatus ||
+          paymentLink?.status ||
+          order.gatewayStatus,
         paidAt: nextStatus === "paid" ? order.paidAt || now : order.paidAt,
         provider: "airwallex",
         status: nextStatus,

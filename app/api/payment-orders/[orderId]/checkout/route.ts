@@ -17,6 +17,8 @@ import {
   createPaymentOrderExpiry,
   expirePaymentOrder,
   isPaymentOrderExpired,
+  isPaymentSessionExpired,
+  resetExpiredPaymentSession,
 } from "@/lib/payment-order-lifecycle"
 import type { CmsPaymentOrder } from "@/types/cms"
 
@@ -32,7 +34,7 @@ export async function POST(
   }
   const requestedTipAmount = parseRequestedTipAmount(checkoutRequest.tipAmount)
   const content = await readCmsContent()
-  const existingOrder = findPaymentOrder(content, orderId)
+  let existingOrder = findPaymentOrder(content, orderId)
   const airwallexEnvironment = getAirwallexConfig().environment
 
   if (!existingOrder) {
@@ -82,6 +84,13 @@ export async function POST(
       },
       { status: 409 }
     )
+  }
+
+  if (isPaymentSessionExpired(existingOrder)) {
+    const refreshedOrder = await resetExpiredPaymentSessionInStore(
+      existingOrder.orderId
+    )
+    existingOrder = refreshedOrder ?? resetExpiredPaymentSession(existingOrder)
   }
 
   if (existingOrder.status === "cancelled") {
@@ -180,6 +189,7 @@ export async function POST(
               current.paymentSettings.currency
           ),
           gatewayStatus: paymentIntent.status ?? order.gatewayStatus,
+          paymentExpiresAt: checkoutOrder.paymentExpiresAt,
           provider: "airwallex",
           status: order.status === "paid" ? "paid" : "pending",
           tipAmount: checkoutOrder.tipAmount,
@@ -255,6 +265,31 @@ async function cancelExpiredPaymentOrder(orderId: string) {
   })
 
   return expiredOrder
+}
+
+async function resetExpiredPaymentSessionInStore(orderId: string) {
+  let refreshedOrder: CmsPaymentOrder | null = null
+
+  await updateCmsContent((content) => {
+    const currentOrder = findPaymentOrder(content, orderId)
+    if (!currentOrder) return content
+
+    const nextOrder = resetExpiredPaymentSession(currentOrder)
+    refreshedOrder = nextOrder
+    if (nextOrder === currentOrder) return content
+
+    const normalizedOrderId = normalizePaymentOrderId(currentOrder.orderId)
+    return {
+      ...content,
+      paymentOrders: content.paymentOrders.map((item) =>
+        normalizePaymentOrderId(item.orderId) === normalizedOrderId
+          ? nextOrder
+          : item
+      ),
+    }
+  })
+
+  return refreshedOrder
 }
 
 function getBaseAmountValue(order: CmsPaymentOrder) {

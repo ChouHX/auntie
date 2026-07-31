@@ -50,6 +50,7 @@ type PaymentOrder = {
   customerName: string
   note: string
   orderId: string
+  paymentExpiresAt?: string
   paymentType: string
   serviceAddress: string
   serviceArea: string
@@ -76,6 +77,7 @@ type PaymentCopy = {
       | "amountValue"
       | "baseAmountValue"
       | "gatewayStatus"
+      | "paymentExpiresAt"
       | "status"
       | "tipAmount"
       | "review"
@@ -519,6 +521,7 @@ function PaymentPage() {
             <ExclusiveOrderCard
               brandName={dict.common.brandName}
               copy={copy}
+              key={getPaymentSessionKey(exclusiveOrder)}
               language={language}
               logoImage={logoImage}
               onOrderUpdate={handleOrderUpdate}
@@ -1217,7 +1220,31 @@ function getPaymentCheckout(orderId: string, tipAmount: number) {
   )
 
   paymentCheckoutPromises.set(cacheKey, checkoutPromise)
+  void checkoutPromise.then(
+    () => schedulePaymentCheckoutCacheRemoval(cacheKey, checkoutPromise),
+    () => undefined
+  )
   return checkoutPromise
+}
+
+function schedulePaymentCheckoutCacheRemoval(
+  cacheKey: string,
+  checkoutPromise: Promise<PaymentCheckoutResult>
+) {
+  window.setTimeout(() => {
+    if (paymentCheckoutPromises.get(cacheKey) === checkoutPromise) {
+      paymentCheckoutPromises.delete(cacheKey)
+    }
+  }, 5_000)
+}
+
+function getPaymentSessionKey(order: PaymentOrder) {
+  return [
+    order.orderId,
+    order.status,
+    order.airwallexPaymentIntentId || "no-intent",
+    order.paymentExpiresAt || "no-expiry",
+  ].join(":")
 }
 
 async function initializeAirwallexSdk(
@@ -1939,6 +1966,7 @@ function toPaymentOrder(
     customerName: order.customerName,
     note: order.note,
     orderId: order.orderId,
+    paymentExpiresAt: order.paymentExpiresAt,
     paymentType,
     serviceAddress: order.serviceAddress ?? "",
     serviceArea: order.serviceArea,
