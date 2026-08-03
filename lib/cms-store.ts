@@ -10,6 +10,7 @@ import {
 import { defaultCmsContent } from "@/data/cms-defaults"
 import { normalizeNotificationSettings } from "@/lib/form-notifications"
 import { logServerEvent } from "@/lib/server-log"
+import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
 import type {
   CmsContent,
   CmsPaymentOrder,
@@ -57,17 +58,60 @@ function withRuntimeDefaults(content: CmsContent): CmsContent {
     notificationRecipient !== legacyDefaultRecipientEmail
       ? notificationRecipient
       : contactRecipient || notificationRecipient
+  const storedFormulaTemplates = (
+    content.formulaTemplates ?? defaultCmsContent.formulaTemplates
+  ).filter((template) => template.target === "orderProfit")
+  const formulaTemplates = [
+    storedFormulaTemplates.find((template) => template.enabled) ??
+      storedFormulaTemplates[0] ??
+      defaultCmsContent.formulaTemplates[0],
+  ]
+  const salesMembers = (
+    content.salesMembers ?? defaultCmsContent.salesMembers
+  ).map((member) => ({
+    ...member,
+    commissionAdjustment: normalizeSignedFinanceAmount(
+      member.commissionAdjustment
+    ),
+    commissionPercentage: normalizePercentage(member.commissionPercentage),
+    status:
+      member.status === "inactive"
+        ? ("inactive" as const)
+        : ("active" as const),
+  }))
+  const teamMembers = (
+    content.teamMembers ?? defaultCmsContent.teamMembers
+  ).map((member) => {
+    const { salaryDeduction, ...currentMember } = member
+
+    return {
+      ...currentMember,
+      salaryAdjustment:
+        member.salaryAdjustment === undefined
+          ? -normalizeFinanceAmount(salaryDeduction)
+          : normalizeSignedFinanceAmount(member.salaryAdjustment),
+      salaryPercentage: normalizePercentage(member.salaryPercentage),
+    }
+  })
+  const financialContent = { formulaTemplates, salesMembers, teamMembers }
+  const paymentOrders = (content.paymentOrders ?? []).map((order) => {
+    const normalized = normalizePaymentOrder(order, paymentSettings)
+    return normalized.status === "paid" && !normalized.calculationSnapshot
+      ? calculateOrderFinancialsSafely(normalized, financialContent)
+      : normalized
+  })
 
   return {
     ...content,
     updatedAt: content.updatedAt || new Date().toISOString(),
     afterSalesPage: content.afterSalesPage ?? defaultCmsContent.afterSalesPage,
+    bookingConfigs: content.bookingConfigs ?? defaultCmsContent.bookingConfigs,
     contactPage,
     dashboardTasks: content.dashboardTasks ?? defaultCmsContent.dashboardTasks,
-    paymentOrders: (content.paymentOrders ?? []).map((order) =>
-      normalizePaymentOrder(order, paymentSettings)
-    ),
+    formulaTemplates,
+    paymentOrders,
     paymentSettings,
+    salesMembers,
     notificationSettings: normalizeNotificationSettings({
       ...content.notificationSettings,
       recipientEmail,
@@ -79,7 +123,7 @@ function withRuntimeDefaults(content: CmsContent): CmsContent {
     serviceRegions: content.serviceRegions ?? defaultCmsContent.serviceRegions,
     serviceLocations:
       content.serviceLocations ?? defaultCmsContent.serviceLocations,
-    teamMembers: content.teamMembers ?? defaultCmsContent.teamMembers,
+    teamMembers,
   }
 }
 
@@ -92,30 +136,100 @@ function normalizePaymentOrder(
     (sum, item) => sum + item.amount,
     0
   )
-  const baseAmountValue = breakdownTotal
+  const storedBaseAmountValue = breakdownTotal
     ? Number(breakdownTotal.toFixed(2))
     : normalizePaymentAmountValue(order.baseAmountValue, order.amount)
   const tipAmount = normalizeTipAmount(order.tipAmount)
+  const storedAmountValue =
+    storedBaseAmountValue + tipAmount ||
+    normalizePaymentAmountValue(order.amountValue, order.amount)
+  const status = normalizePaymentOrderStatus(order.status)
+  const receivedAmount = normalizeFinanceAmount(
+    order.receivedAmount ?? (status === "paid" ? storedAmountValue : 0)
+  )
+  const amountValue =
+    storedAmountValue || (status === "paid" ? receivedAmount : 0)
+  const baseAmountValue =
+    storedBaseAmountValue || Math.max(0, amountValue - tipAmount)
+  const currency = normalizePaymentCurrency(
+    order.currency || paymentSettings.currency
+  )
+  const amount =
+    normalizePaymentAmountValue(undefined, order.amount) > 0 || amountValue <= 0
+      ? order.amount
+      : formatStoredPaymentAmount(amountValue, order.amount, currency)
 
   return {
     ...order,
+    addOnItems: Array.isArray(order.addOnItems) ? order.addOnItems : [],
+    addOnOther: order.addOnOther ?? "",
+    amount,
     amountBreakdown,
-    amountValue:
-      baseAmountValue + tipAmount ||
-      normalizePaymentAmountValue(order.amountValue, order.amount),
+    amountValue,
+    auntieSalary: normalizeFinanceAmount(order.auntieSalary),
     baseAmountValue,
-    currency: normalizePaymentCurrency(
-      order.currency || paymentSettings.currency
-    ),
+    bathrooms: normalizeBookingRoomCount(order.bathrooms, 1),
+    bedrooms: order.studio ? 0 : normalizeBookingRoomCount(order.bedrooms, 1),
+    currency,
+    customerRelationId: order.customerRelationId ?? "",
+    customerType: order.customerType ?? "",
+    dealStatus:
+      order.dealStatus === "converted" || status === "paid"
+        ? "converted"
+        : "unconverted",
+    financeNote: order.financeNote ?? "",
+    formulaTemplateIds: order.formulaTemplateIds?.orderProfit
+      ? { orderProfit: order.formulaTemplateIds.orderProfit }
+      : {},
     gatewayStatus: order.gatewayStatus ?? "",
-    provider: "airwallex",
+    hasPets: order.hasPets === true,
+    orderProfit: normalizeFinanceAmount(order.orderProfit),
+    orderProfitCny:
+      order.orderProfitCny === undefined
+        ? undefined
+        : normalizeSignedFinanceAmount(order.orderProfitCny),
+    otherCost: normalizeFinanceAmount(order.otherCost),
+    provider: order.provider === "offline" ? "offline" : "airwallex",
+    profitExchangeRateAt: order.profitExchangeRateAt ?? "",
+    profitExchangeRateToCny:
+      order.profitExchangeRateToCny === undefined
+        ? undefined
+        : normalizeExchangeRate(order.profitExchangeRateToCny),
+    receivedAmount,
+    salesCommission: normalizeFinanceAmount(order.salesCommission),
+    salesMemberId: order.salesMemberId ?? "",
+    salesOwner: order.salesOwner ?? "",
     serviceAddress: order.serviceAddress ?? "",
-    status: normalizePaymentOrderStatus(order.status),
+    status,
     tipAmount: normalizeTipAmount(order.tipAmount),
     webhookEventIds: Array.isArray(order.webhookEventIds)
       ? order.webhookEventIds.filter(Boolean)
       : [],
   }
+}
+
+function normalizeFinanceAmount(value: unknown) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0
+}
+
+function normalizeSignedFinanceAmount(value: unknown) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : 0
+}
+
+function normalizeExchangeRate(value: unknown) {
+  const rate = Number(value)
+  return Number.isFinite(rate) && rate > 0 ? Number(rate.toFixed(8)) : undefined
+}
+
+function normalizePercentage(value: unknown) {
+  return Math.min(100, Math.max(0, normalizeFinanceAmount(value)))
+}
+
+function normalizeBookingRoomCount(value: unknown, fallback: number) {
+  const count = Number(value)
+  return Number.isFinite(count) && count >= 0 ? count : fallback
 }
 
 function normalizeTipAmount(value: unknown) {
@@ -177,6 +291,17 @@ function normalizePaymentAmountValue(value: unknown, fallback: string) {
   )
 
   return Number.isFinite(amount) && amount >= 0 ? amount : 0
+}
+
+function formatStoredPaymentAmount(
+  value: number,
+  previousAmount: string,
+  currency: string
+) {
+  const prefix = previousAmount.trim().match(/[^\d.,\s-]+/)?.[0]
+  return prefix
+    ? `${prefix}${value.toFixed(2)}`
+    : `${currency} ${value.toFixed(2)}`
 }
 
 function normalizePaymentCurrency(value: string | undefined) {
@@ -323,7 +448,13 @@ function toPublicContent(content: CmsContent): CmsContent {
   const teamMembersWithRatings = computeTeamMemberRatings(
     content.teamMembers ?? [],
     content.paymentOrders ?? []
-  )
+  ).map((member) => {
+    const publicMember = { ...member }
+    delete publicMember.salaryDeduction
+    delete publicMember.salaryAdjustment
+    delete publicMember.salaryPercentage
+    return publicMember
+  })
   return {
     ...content,
     adminSettings: undefined,
@@ -332,6 +463,7 @@ function toPublicContent(content: CmsContent): CmsContent {
     blogPosts: content.blogPosts.filter(isPublished).sort(sortByOrder),
     galleryItems: content.galleryItems.filter(isPublished).sort(sortByOrder),
     reviewItems: content.reviewItems.filter(isPublished).sort(sortByOrder),
+    salesMembers: [],
     faq: {
       zh: {
         ...content.faq.zh,
@@ -342,6 +474,7 @@ function toPublicContent(content: CmsContent): CmsContent {
         items: content.faq.en.items.filter(isPublished).sort(sortByOrder),
       },
     },
+    formulaTemplates: [],
     paymentOrders: [],
     paymentSettings: content.paymentSettings,
     notificationSettings: {
@@ -355,6 +488,7 @@ function toPublicContent(content: CmsContent): CmsContent {
     },
     serviceRegions: content.serviceRegions,
     serviceLocations: content.serviceLocations,
+    bookingConfigs: content.bookingConfigs,
   }
 }
 

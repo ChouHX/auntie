@@ -38,6 +38,7 @@ import {
 } from "@/lib/cms-api"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { NumberInput } from "@/components/ui/number-input"
 import {
   Dialog,
   DialogContent,
@@ -119,6 +120,8 @@ function createAuntieDraft(): CmsTeamMember {
     phone: "",
     joinedAt: new Date().toISOString().split("T")[0],
     serviceAreas: [],
+    salaryAdjustment: 0,
+    salaryPercentage: 0,
   }
 }
 
@@ -133,6 +136,15 @@ function normalizeAuntieDraft(auntie: CmsTeamMember): CmsTeamMember {
     avatar: auntie.avatar.trim(),
     joinedAt: auntie.joinedAt || new Date().toISOString().split("T")[0],
     serviceAreas: auntie.serviceAreas ?? [],
+    salaryAdjustment:
+      auntie.salaryAdjustment === undefined
+        ? -(Number(auntie.salaryDeduction) || 0)
+        : Number(auntie.salaryAdjustment) || 0,
+    salaryDeduction: undefined,
+    salaryPercentage: Math.min(
+      100,
+      Math.max(0, Number(auntie.salaryPercentage) || 0)
+    ),
   }
 }
 
@@ -830,6 +842,43 @@ export function AuntieAdmin({
                         triggerClassName="h-8 rounded-md px-2 text-xs"
                         onChange={(area) => updateEditingAuntie({ area })}
                         value={editingAuntie.area}
+                      />
+                    </FormField>
+                    <FormField
+                      className="space-y-1.5"
+                      description="按订单金额计算的薪资比例。"
+                      label="阿姨薪资比例（%）"
+                    >
+                      <NumberInput
+                        className="h-8 rounded-md"
+                        max="100"
+                        min="0"
+                        onValueChange={(salaryPercentage) =>
+                          updateEditingAuntie({
+                            salaryPercentage,
+                          })
+                        }
+                        step="0.01"
+                        value={editingAuntie.salaryPercentage ?? 0}
+                      />
+                    </FormField>
+                    <FormField
+                      className="space-y-1.5"
+                      description="薪资 = 订单金额 × 比例 + 固定调整；正数增加，负数扣减。"
+                      label="固定调整（订单币种）"
+                    >
+                      <NumberInput
+                        className="h-8 rounded-md"
+                        onValueChange={(salaryAdjustment) =>
+                          updateEditingAuntie({
+                            salaryAdjustment,
+                          })
+                        }
+                        step="0.01"
+                        value={
+                          editingAuntie.salaryAdjustment ??
+                          -(editingAuntie.salaryDeduction ?? 0)
+                        }
                       />
                     </FormField>
                     <FormField

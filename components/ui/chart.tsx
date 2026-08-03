@@ -104,6 +104,7 @@ function ChartTooltipContent({
   labelFormatter,
   nameKey,
   payload,
+  valueFormatter,
 }: {
   active?: boolean
   className?: string
@@ -117,6 +118,10 @@ function ChartTooltipContent({
   ) => React.ReactNode
   nameKey?: string
   payload?: TooltipPayloadItem[]
+  valueFormatter?: (
+    value: number | string,
+    item: TooltipPayloadItem
+  ) => React.ReactNode
 }) {
   const { config } = useChart()
 
@@ -181,7 +186,9 @@ function ChartTooltipContent({
               </span>
               {item.value !== undefined ? (
                 <span className="font-mono font-medium text-foreground tabular-nums">
-                  {item.value}
+                  {valueFormatter && item.value !== undefined
+                    ? valueFormatter(item.value, item)
+                    : item.value}
                 </span>
               ) : null}
             </div>

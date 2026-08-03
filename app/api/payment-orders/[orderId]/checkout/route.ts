@@ -20,6 +20,7 @@ import {
   isPaymentSessionExpired,
   resetExpiredPaymentSession,
 } from "@/lib/payment-order-lifecycle"
+import { mergeAddOnsIntoAmountBreakdown } from "@/lib/booking-config"
 import type { CmsPaymentOrder } from "@/types/cms"
 
 export const runtime = "nodejs"
@@ -121,10 +122,24 @@ export async function POST(
     })
   }
 
+  const amountBreakdown = mergeAddOnsIntoAmountBreakdown(
+    existingOrder.amountBreakdown,
+    existingOrder.addOnItems,
+    getBaseAmountValue(existingOrder)
+  )
+  const baseAmountValue = Number(
+    amountBreakdown
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0)
+      .toFixed(2)
+  )
+  const paymentAmountIsCurrent =
+    Math.abs(getBaseAmountValue(existingOrder) - baseAmountValue) < 0.005
+
   if (
     existingOrder.status === "pending" &&
     existingOrder.airwallexPaymentIntentId &&
-    existingOrder.airwallexPaymentIntentClientSecret
+    existingOrder.airwallexPaymentIntentClientSecret &&
+    paymentAmountIsCurrent
   ) {
     return Response.json({
       order: toCheckoutPaymentOrder(existingOrder),
@@ -144,7 +159,6 @@ export async function POST(
   }
 
   try {
-    const baseAmountValue = getBaseAmountValue(existingOrder)
     const tipAmount =
       normalizeTipAmount(existingOrder.tipAmount) || requestedTipAmount || 0
     const checkoutOrder: CmsPaymentOrder = {
@@ -154,6 +168,7 @@ export async function POST(
         existingOrder.amount
       ),
       amountValue: Number((baseAmountValue + tipAmount).toFixed(2)),
+      amountBreakdown,
       baseAmountValue,
       paymentExpiresAt: createPaymentOrderExpiry(),
       tipAmount,
@@ -182,6 +197,7 @@ export async function POST(
             paymentIntent.client_secret ||
             order.airwallexPaymentIntentClientSecret,
           amountValue: checkoutOrder.amountValue,
+          amountBreakdown: checkoutOrder.amountBreakdown,
           baseAmountValue: checkoutOrder.baseAmountValue,
           currency: normalizePaymentCurrency(
             paymentIntent.currency ||

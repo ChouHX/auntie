@@ -526,10 +526,10 @@ function ReviewOrderReceiptDialog({
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="text-xs text-emerald-700 dark:text-emerald-300">
-                已支付金额
+                订单金额
               </div>
               <div className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">
-                {order.amount || formatReceiptAmount(0, currency)}
+                {formatReceiptAmount(getReceiptPaidAmount(order), currency)}
               </div>
             </div>
             <span className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white dark:bg-emerald-500">
@@ -618,7 +618,7 @@ function ReceiptDetail({
   return (
     <div className={cn("min-w-0", className)}>
       <div className="text-xs text-slate-400 dark:text-slate-500">{label}</div>
-      <div className="mt-1 whitespace-pre-wrap break-words text-sm font-medium text-slate-900 dark:text-white">
+      <div className="mt-1 text-sm font-medium break-words whitespace-pre-wrap text-slate-900 dark:text-white">
         {value || "未填写"}
       </div>
     </div>
@@ -626,12 +626,22 @@ function ReceiptDetail({
 }
 
 function getReceiptBaseAmount(order: CmsPaymentOrder) {
-  if (Number.isFinite(order.baseAmountValue)) {
+  if (
+    Number.isFinite(order.baseAmountValue) &&
+    (order.baseAmountValue ?? 0) > 0
+  ) {
     return Math.max(0, order.baseAmountValue ?? 0)
   }
 
-  if (Number.isFinite(order.amountValue)) {
+  if (Number.isFinite(order.amountValue) && (order.amountValue ?? 0) > 0) {
     return Math.max(0, (order.amountValue ?? 0) - (order.tipAmount ?? 0))
+  }
+
+  if (
+    Number.isFinite(order.receivedAmount) &&
+    (order.receivedAmount ?? 0) > 0
+  ) {
+    return Math.max(0, (order.receivedAmount ?? 0) - (order.tipAmount ?? 0))
   }
 
   const parsedAmount = Number(
@@ -640,6 +650,21 @@ function getReceiptBaseAmount(order: CmsPaymentOrder) {
   return Number.isFinite(parsedAmount)
     ? Math.max(0, parsedAmount - (order.tipAmount ?? 0))
     : 0
+}
+
+function getReceiptPaidAmount(order: CmsPaymentOrder) {
+  if (
+    Number.isFinite(order.receivedAmount) &&
+    (order.receivedAmount ?? 0) > 0
+  ) {
+    return order.receivedAmount ?? 0
+  }
+  if (Number.isFinite(order.amountValue)) return order.amountValue ?? 0
+
+  const parsedAmount = Number(
+    order.amount.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/)?.[0] ?? 0
+  )
+  return Number.isFinite(parsedAmount) ? Math.max(0, parsedAmount) : 0
 }
 
 function normalizeReceiptCurrency(currency?: string) {

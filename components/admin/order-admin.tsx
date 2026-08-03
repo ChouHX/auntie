@@ -4,29 +4,23 @@ import { useEffect, useMemo, useState } from "react"
 import {
   CaretDown,
   ClipboardText,
-  Eye,
   FloppyDisk,
-  LinkSimple,
   MagnifyingGlass,
-  PencilSimple,
   Plus,
   Star,
-  Trash,
   X,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 
 import {
   type PersistContent,
-  RecordsPanel,
-  TableFooterInfo,
   useAdminNoticeDialog,
-  useTablePagination,
-  orderServiceTypeOptions,
 } from "@/components/admin/admin-shared"
+import { SalesOrderDataPanel } from "@/components/admin/sales-dashboard-admin"
 import { AuntieAssignmentSelect } from "@/components/common/auntie-assignment-select"
 import {
   fetchAdminWecomCustomers,
+  fetchPaymentOrder,
   type AdminAuntieStatsMap,
 } from "@/lib/cms-api"
 import { defaultCmsContent } from "@/data/cms-defaults"
@@ -38,8 +32,16 @@ import {
   type AuntieAssignmentMode,
 } from "@/lib/auntie-assignment"
 import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
+import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
+import {
+  createOrderAddOnSnapshot,
+  formatBookingRequest,
+  getBookingConfigForArea,
+  isValidBookingPhone,
+  mergeAddOnsIntoAmountBreakdown,
+} from "@/lib/booking-config"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -64,16 +66,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import type {
+  CmsBookingCatalogItem,
   CmsContent,
   CmsPaymentOrder,
   CmsPaymentOrderAmountItem,
@@ -97,15 +92,6 @@ type OrderAdminRemotePagination = {
   totalPages: number
 }
 
-const paymentStatusLabels: Record<CmsPaymentOrder["status"], string> = {
-  awaiting_confirmation: "待客服确认",
-  cancelled: "已取消",
-  failed: "支付失败",
-  paid: "已付款",
-  pending: "支付中",
-  unpaid: "待付款",
-}
-
 const paymentCurrencyOptions = [
   { label: "USD 美元", value: "USD" },
   { label: "CAD 加元", value: "CAD" },
@@ -116,121 +102,32 @@ const paymentCurrencyOptions = [
   { label: "EUR 欧元", value: "EUR" },
 ]
 
-function OrderStatusBadges({ order }: { order: CmsPaymentOrder }) {
-  const isCompleted = isPaymentOrderCompleted(order)
-  const hasReview = Boolean(order.review)
-  const status = isCompleted ? "completed" : order.status
-  const label = isCompleted ? "已完成" : paymentStatusLabels[order.status]
-
-  return (
-    <Badge className={getOrderStatusBadgeClass(status)}>
-      {isCompleted && hasReview ? (
-        <span className="inline-flex items-center" aria-label="已评价">
-          <Star size={10} weight="fill" />
-        </span>
-      ) : null}
-      {label}
-    </Badge>
-  )
-}
-
-function getOrderStatusBadgeClass(
-  status: CmsPaymentOrder["status"] | "completed"
-) {
-  return cn(
-    "gap-1 px-2 py-1 text-xs",
-    status === "awaiting_confirmation" && "bg-violet-50 text-violet-700",
-    status === "paid" && "bg-emerald-50 text-emerald-600",
-    status === "unpaid" && "bg-amber-50 text-amber-700",
-    status === "failed" && "bg-destructive/10 text-destructive",
-    status === "cancelled" && "bg-muted text-muted-foreground",
-    status === "pending" && "bg-blue-50 text-blue-700",
-    status === "completed" && "bg-sky-50 text-sky-700"
-  )
-}
-
-function PaymentLinkCell({ order }: { order: CmsPaymentOrder }) {
-  if (order.status === "awaiting_confirmation") {
-    return <span className="text-xs text-muted-foreground">确认报价后生成</span>
-  }
-
-  const link = getPaymentOrderLink(order.orderId)
-
-  async function copyLink() {
-    if (!link) {
-      return
-    }
-
-    try {
-      await navigator.clipboard.writeText(link)
-      toast.success("付款链接已复制")
-    } catch {
-      toast.error("复制失败，请手动复制链接")
-    }
-  }
-
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <Badge
-        className="max-w-64 truncate border-blue-100 bg-blue-50 px-2.5 py-1 text-blue-700 shadow-none dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-200"
-        title={link}
-        variant="secondary"
-      >
-        <LinkSimple size={13} weight="bold" />
-        <span className="truncate">{link}</span>
-      </Badge>
-      <Button
-        aria-label="复制付款链接"
-        className="size-8 rounded-md"
-        disabled={!link}
-        onClick={copyLink}
-        size="icon-sm"
-        type="button"
-        variant="navIcon"
-      >
-        <ClipboardText size={14} weight="bold" />
-      </Button>
-    </div>
-  )
-}
-
-function getOrderCreatedTimestamp(order: CmsPaymentOrder) {
-  const rawDate = order.createdAt || order.updatedAt || order.serviceDate
-  const timestamp = rawDate ? new Date(rawDate).getTime() : 0
-
-  return Number.isFinite(timestamp) ? timestamp : 0
-}
-
-function formatOrderCreatedTime(order: CmsPaymentOrder) {
-  const rawDate = order.createdAt || order.updatedAt || order.serviceDate
-  const date = rawDate ? new Date(rawDate) : null
-
-  if (!date || Number.isNaN(date.getTime())) {
-    return "生成时间待确认"
-  }
-
-  return date.toLocaleString("zh-CN", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
+function getLocalDateKey(date = new Date()) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-")
 }
 
 function createPaymentOrderDraft(defaultCurrency = "USD"): CmsPaymentOrder {
   const now = new Date().toISOString()
 
   return {
+    addOnItems: [],
+    addOnOther: "",
     amount: "",
     amountBreakdown: [],
     amountValue: 0,
     contact: "",
     baseAmountValue: 0,
+    bathrooms: 1,
+    bedrooms: 1,
     createdAt: now,
     currency: normalizeAdminPaymentCurrency(defaultCurrency),
     customerName: "",
     gatewayStatus: "",
+    hasPets: false,
     note: "",
     orderId: "",
     provider: "airwallex",
@@ -238,7 +135,8 @@ function createPaymentOrderDraft(defaultCurrency = "USD"): CmsPaymentOrder {
     serviceArea: "",
     serviceDate: "",
     serviceType: "",
-    status: "unpaid",
+    status: "awaiting_confirmation",
+    studio: false,
     updatedAt: now,
     webhookEventIds: [],
   }
@@ -253,7 +151,10 @@ function normalizePaymentOrderDraft(order: CmsPaymentOrder): CmsPaymentOrder {
 
   return {
     ...order,
-    amount: normalizeAdminPaymentAmount(String(baseAmountValue)),
+    amount:
+      order.status === "awaiting_confirmation" && baseAmountValue <= 0
+        ? ""
+        : normalizeAdminPaymentAmount(String(baseAmountValue)),
     amountBreakdown,
     amountValue: baseAmountValue,
     baseAmountValue,
@@ -272,7 +173,7 @@ function normalizePaymentOrderDraft(order: CmsPaymentOrder): CmsPaymentOrder {
     serviceDate: order.serviceDate.trim(),
     serviceType: order.serviceType.trim(),
     provider: "airwallex",
-    status: order.status === "awaiting_confirmation" ? "unpaid" : order.status,
+    status: order.status,
     updatedAt: now,
     webhookEventIds: Array.isArray(order.webhookEventIds)
       ? order.webhookEventIds
@@ -361,14 +262,6 @@ function createPaymentOrderId() {
   return `ORD${datePart}${randomPart}`
 }
 
-function getPaymentOrderLink(orderId: string) {
-  if (!orderId) {
-    return ""
-  }
-
-  return `${window.location.origin}/?order=${encodeURIComponent(orderId)}`
-}
-
 export function OrderAdmin({
   auntieStats,
   content,
@@ -392,91 +285,20 @@ export function OrderAdmin({
   const [editingAssignmentMode, setEditingAssignmentMode] =
     useState<AuntieAssignmentMode>("manual")
   const [orderError, setOrderError] = useState("")
-  const [query, setQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  void remotePagination
   const { confirmAction, noticeDialog } = useAdminNoticeDialog()
-  const effectiveQuery = remotePagination?.query ?? query
-  const effectiveStatusFilter = remotePagination?.statusFilter ?? statusFilter
-  const orders = useMemo(() => {
-    const currentOrders = content.paymentOrders ?? []
-
-    if (remotePagination) {
-      return currentOrders
-    }
-
-    return currentOrders.toSorted(
-      (left, right) =>
-        getOrderCreatedTimestamp(right) - getOrderCreatedTimestamp(left)
-    )
-  }, [content.paymentOrders, remotePagination])
-  const filterKey = `${effectiveQuery}|${effectiveStatusFilter}`
-  const filteredOrders = useMemo(() => {
-    if (remotePagination) {
-      return orders
-    }
-
-    return orders.filter((order) => {
-      const searchable = [
-        order.orderId,
-        order.customerName,
-        order.contact,
-        order.serviceType,
-        order.serviceArea,
-        order.serviceAddress,
-        order.amount,
-        order.currency ?? "",
-      ]
-        .join(" ")
-        .toLowerCase()
-      const matchesQuery = searchable.includes(query.toLowerCase())
-      const matchesStatus =
-        statusFilter === "all" || order.status === statusFilter
-
-      return matchesQuery && matchesStatus
-    })
-  }, [orders, query, remotePagination, statusFilter])
-  const localPagination = useTablePagination(filteredOrders.length, filterKey)
-  const visibleOrders = useMemo(
-    () =>
-      remotePagination
-        ? filteredOrders
-        : filteredOrders.slice(
-            localPagination.startIndex,
-            localPagination.endIndex
-          ),
-    [
-      filteredOrders,
-      localPagination.endIndex,
-      localPagination.startIndex,
-      remotePagination,
-    ]
-  )
-  const remoteStartIndex =
-    remotePagination && remotePagination.totalCount
-      ? (remotePagination.page - 1) * remotePagination.pageSize
-      : 0
-  const pagination = remotePagination
-    ? {
-        endIndex: Math.min(
-          remoteStartIndex + visibleOrders.length,
-          remotePagination.totalCount
-        ),
-        page: remotePagination.page,
-        pageSize: remotePagination.pageSize,
-        setPage: remotePagination.onPageChange,
-        setPageSize: remotePagination.onPageSizeChange,
-        startIndex: remoteStartIndex,
-        totalCount: remotePagination.totalCount,
-        totalPages: remotePagination.totalPages,
-      }
-    : localPagination
   const existingEditingOrder = editingOrder
     ? (content.paymentOrders ?? []).find(
         (order) => order.orderId === editingOrder.orderId
-      )
+      ) ?? (editingOrder.orderId ? editingOrder : null)
     : null
   const isEditingCompletedOrder = Boolean(
     existingEditingOrder && isPaymentOrderCompleted(existingEditingOrder)
+  )
+  const isCreatingBooking = Boolean(
+    editingOrder &&
+      !existingEditingOrder &&
+      editingOrder.status === "awaiting_confirmation"
   )
   const activeLoadByAuntieId = useMemo(
     () =>
@@ -488,10 +310,50 @@ export function OrderAdmin({
       ),
     [auntieStats]
   )
+  const editingBookingConfig = editingOrder
+    ? getBookingConfigForArea(
+        content.bookingConfigs,
+        content.serviceLocations,
+        editingOrder.serviceArea
+      )
+    : undefined
+  const configuredServiceItems = (editingBookingConfig?.items ?? []).filter(
+    (item) => item.type === "service" && item.enabled
+  )
+  const editingServiceItems =
+    editingOrder?.serviceType &&
+    !configuredServiceItems.some(
+      (item) =>
+        item.id === editingOrder.serviceTypeId ||
+        item.label === editingOrder.serviceType
+    )
+      ? [
+          ...configuredServiceItems,
+          {
+            basePrice: 0,
+            description: "历史订单服务类型",
+            enabled: true,
+            id: editingOrder.serviceTypeId || editingOrder.serviceType,
+            label: editingOrder.serviceType,
+            quoteRequired: true,
+            type: "service" as const,
+          },
+        ]
+      : configuredServiceItems
+  const editingAddOnItems = (editingBookingConfig?.items ?? []).filter(
+    (item) => item.type === "addon" && item.enabled
+  )
+  const editingLocation = content.serviceLocations.find(
+    (item) =>
+      `${item.city} · ${item.country}` === editingOrder?.serviceArea
+  )
+  const editingCountryCode = content.serviceRegions.find(
+    (item) => item.name === editingLocation?.country
+  )?.code2
 
   function startCreateOrder() {
     setOrderError("")
-    setEditingAssignmentMode("auto")
+    setEditingAssignmentMode("manual")
     setEditingOrder(createPaymentOrderDraft(content.paymentSettings.currency))
   }
 
@@ -517,6 +379,33 @@ export function OrderAdmin({
     setOrderError("")
   }
 
+  async function copyBookingInfo(order: CmsPaymentOrder) {
+    try {
+      await navigator.clipboard.writeText(formatBookingRequest(order))
+      toast.success("预约信息已复制")
+    } catch {
+      toast.error("复制失败，请手动复制")
+    }
+  }
+
+  async function loadOrder(orderId: string) {
+    try {
+      const order = await fetchPaymentOrder(orderId)
+      startViewOrEditOrder(order)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "订单加载失败")
+    }
+  }
+
+  async function copyBookingInfoById(orderId: string) {
+    try {
+      const order = await fetchPaymentOrder(orderId)
+      await copyBookingInfo(order)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "订单加载失败")
+    }
+  }
+
   async function saveOrder() {
     if (!editingOrder) {
       return
@@ -527,9 +416,34 @@ export function OrderAdmin({
       return
     }
 
-    let orderToSave = editingOrder
+    const selectedService = editingServiceItems.find(
+      (item) => item.id === editingOrder.serviceTypeId
+    )
+    const addOnItems = createOrderAddOnSnapshot(
+      editingBookingConfig,
+      (editingOrder.addOnItems ?? []).map((item) => item.id)
+    )
+    let orderToSave: CmsPaymentOrder = {
+      ...editingOrder,
+      addOnItems,
+      amountBreakdown: mergeAddOnsIntoAmountBreakdown(
+        editingOrder.amountBreakdown,
+        addOnItems,
+        getOrderBaseAmount(editingOrder)
+      ),
+      serviceType: selectedService?.label ?? editingOrder.serviceType,
+    }
+    if (
+      existingEditingOrder?.status === "awaiting_confirmation" &&
+      getOrderBaseAmount(orderToSave) > 0
+    ) {
+      orderToSave = { ...orderToSave, status: "unpaid" }
+    }
 
-    if (editingAssignmentMode === "auto") {
+    if (
+      editingAssignmentMode === "auto" &&
+      editingOrder.status !== "awaiting_confirmation"
+    ) {
       const autoAuntie = pickAutoAssignedAuntie(
         editingOrder.serviceArea,
         content.teamMembers ?? [],
@@ -543,7 +457,7 @@ export function OrderAdmin({
       }
 
       orderToSave = {
-        ...editingOrder,
+        ...orderToSave,
         assignedAuntieId: autoAuntie.id,
       }
     }
@@ -557,16 +471,24 @@ export function OrderAdmin({
       !normalized.serviceAddress ||
       !normalized.serviceType ||
       !normalized.serviceDate ||
-      !normalized.amount ||
-      Number(normalized.amountValue) <= 0
+      (isCreatingBooking && normalized.serviceDate < getLocalDateKey()) ||
+      !isValidBookingPhone(normalized.contact, editingCountryCode) ||
+      (!normalized.studio && Number(normalized.bedrooms) < 1) ||
+      Number(normalized.bathrooms) < 1 ||
+      (normalized.status !== "awaiting_confirmation" &&
+        (!normalized.amount || Number(normalized.amountValue) <= 0))
     ) {
       setOrderError(
-        "请填写客户姓名、服务城市、详细地址、服务类型、服务日期和金额。"
+        "请填写客户姓名、当地联系电话、服务城市、房型、详细地址、清洁需求和服务日期。待客服确认的预约单无需填写金额。"
       )
       return
     }
 
-    if (!existingEditingOrder && !normalized.amountBreakdown?.length) {
+    if (
+      normalized.status !== "awaiting_confirmation" &&
+      !existingEditingOrder &&
+      !normalized.amountBreakdown?.length
+    ) {
       setOrderError("请至少添加一项订单金额明细。")
       return
     }
@@ -654,158 +576,17 @@ export function OrderAdmin({
   return (
     <>
       {noticeDialog}
-      <RecordsPanel
-        action={
-          <Button
-            className="h-8 rounded-md"
-            disabled={isSaving}
-            onClick={startCreateOrder}
-            size="sm"
-            type="button"
-          >
-            <Plus size={15} weight="bold" />
-            新建付款订单
-          </Button>
-        }
-        count={pagination.totalCount}
-        description="客服在这里创建订单，生成专属付款链接后直接发给客户。"
-        filters={
-          <OrderFilters
-            onStatusFilterChange={
-              remotePagination?.onStatusFilterChange ?? setStatusFilter
-            }
-            statusFilter={effectiveStatusFilter}
-          />
-        }
-        query={effectiveQuery}
-        searchPlaceholder="搜索订单、客户、服务..."
-        setQuery={remotePagination?.onQueryChange ?? setQuery}
-        showCount={false}
-        title="订单管理"
-      >
-        {visibleOrders.length ? (
-          <>
-            <Table className="min-w-[980px] text-xs">
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[170px]">订单号</TableHead>
-                  <TableHead>客户</TableHead>
-                  <TableHead>服务</TableHead>
-                  <TableHead>服务日期</TableHead>
-                  <TableHead>金额</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>专属链接</TableHead>
-                  <TableHead className="relative sticky right-0 z-20 w-24 min-w-24 border-l-0 bg-card text-right before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
-                    操作
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleOrders.map((order) => (
-                  <TableRow className="group" key={order.orderId}>
-                    <TableCell>
-                      <div className="font-semibold">{order.orderId}</div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {formatOrderCreatedTime(order)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="min-w-0">
-                        <button
-                          className="block max-w-44 truncate text-left font-medium text-foreground underline-offset-4 hover:underline"
-                          onClick={() => startViewOrEditOrder(order)}
-                          type="button"
-                        >
-                          {order.customerName || "未填写客户"}
-                        </button>
-                        <div className="mt-0.5 max-w-40 truncate text-[11px] text-muted-foreground">
-                          {order.contact || "未填写联系方式"}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">
-                        {order.serviceType || "服务类型待确认"}
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {order.serviceArea || "区域待确认"}
-                      </div>
-                      {order.serviceAddress ? (
-                        <div className="mt-0.5 max-w-56 truncate text-[11px] text-muted-foreground">
-                          {order.serviceAddress}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>{order.serviceDate || "待确认"}</TableCell>
-                    <TableCell>
-                      <div className="font-semibold">
-                        {order.amount || "待客服报价"}
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {normalizeAdminPaymentCurrency(
-                          order.currency || content.paymentSettings.currency
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <OrderStatusBadges order={order} />
-                    </TableCell>
-                    <TableCell>
-                      <PaymentLinkCell order={order} />
-                    </TableCell>
-                    <TableCell className="relative sticky right-0 z-10 border-l-0 bg-card group-hover:bg-muted before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
-                      <div className="flex justify-end gap-1">
-                        {isPaymentOrderCompleted(order) ? (
-                          <Button
-                            aria-label="查看订单"
-                            className="size-8 rounded-md"
-                            onClick={() => startViewOrEditOrder(order)}
-                            size="icon-sm"
-                            type="button"
-                            variant="navIcon"
-                          >
-                            <Eye size={14} weight="bold" />
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              aria-label="编辑订单"
-                              className="size-8 rounded-md"
-                              onClick={() => startViewOrEditOrder(order)}
-                              size="icon-sm"
-                              type="button"
-                              variant="navIcon"
-                            >
-                              <PencilSimple size={14} weight="bold" />
-                            </Button>
-                            <Button
-                              aria-label="删除订单"
-                              className="size-8 rounded-md"
-                              disabled={isSaving}
-                              onClick={() => deleteOrder(order.orderId)}
-                              size="icon-sm"
-                              type="button"
-                              variant="destructive"
-                            >
-                              <Trash size={14} weight="bold" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <TableFooterInfo pagination={pagination} />
-          </>
-        ) : (
-          <div className="px-5 py-12 text-center text-sm text-muted-foreground">
-            暂无付款订单。点击右上角新建订单后，将生成客户专属付款链接。
-          </div>
-        )}
-      </RecordsPanel>
-
+      <SalesOrderDataPanel
+        isSaving={isSaving}
+        onCopyOrder={copyBookingInfoById}
+        onCreateOrder={startCreateOrder}
+        onDeleteOrder={async (orderId) => {
+          await deleteOrder(orderId)
+        }}
+        onOpenOrder={loadOrder}
+        refreshKey={content.updatedAt}
+        token={token}
+      />
       <Dialog
         onOpenChange={(open) => !open && setEditingOrder(null)}
         open={Boolean(editingOrder)}
@@ -819,7 +600,9 @@ export function OrderAdmin({
               {isEditingCompletedOrder
                 ? "该订单已完成，只能查看详情，不能再修改订单内容。"
                 : editingOrder?.status === "awaiting_confirmation"
-                  ? "分配阿姨并填写金额明细后保存，订单会转为待付款并生成专属付款链接。"
+                  ? editingOrder.orderId
+                    ? "可直接修改预约信息；填写金额明细后保存，订单会转为待付款并生成专属付款链接。"
+                    : "填写与客户前台一致的预约信息。保存后生成预约编号，无需填写金额或分配阿姨。"
                   : "保存后把专属链接发给客户，客户打开后只看到自己的订单信息和支付按钮。"}
             </DialogDescription>
           </DialogHeader>
@@ -828,11 +611,24 @@ export function OrderAdmin({
               <FormField label="选择用户">
                 <OrderCustomerSelect
                   disabled={isEditingCompletedOrder}
-                  onSelect={(customer) =>
+                  onSelect={(customer) => {
+                    const salesMember = findSalesMemberForStudentTags(
+                      customer.studentType,
+                      content.salesMembers
+                    )
                     updateEditingOrder({
+                      contact:
+                        editingOrder.contact ||
+                        customer.remarkMobiles.split(/[,，]/)[0]?.trim() ||
+                        "",
+                      customerRelationId: customer.relationId,
+                      customerType: customer.nameAndType.split("@").at(-1)?.trim() ?? "",
                       customerName: customer.nameAndType.split("@")[0].trim(),
+                      salesMemberId: salesMember?.id,
+                      salesOwner: salesMember?.name ?? "",
+                      salesOwnerSource: salesMember ? "wecom_tag" : undefined,
                     })
-                  }
+                  }}
                   token={token}
                 />
               </FormField>
@@ -840,19 +636,21 @@ export function OrderAdmin({
                 <Input
                   className="h-9 rounded-md"
                   disabled={isEditingCompletedOrder}
+                  min={isCreatingBooking ? getLocalDateKey() : undefined}
                   onChange={(event) =>
                     updateEditingOrder({ customerName: event.target.value })
                   }
                   value={editingOrder.customerName}
                 />
               </FormField>
-              <FormField label="联系方式">
+              <FormField label="联系电话" required>
                 <Input
                   className="h-9 rounded-md"
                   disabled={isEditingCompletedOrder}
                   onChange={(event) =>
                     updateEditingOrder({ contact: event.target.value })
                   }
+                  type="tel"
                   value={editingOrder.contact}
                 />
               </FormField>
@@ -860,20 +658,23 @@ export function OrderAdmin({
                 <OrderServiceAreaSelect
                   disabled={isEditingCompletedOrder}
                   onChange={(serviceArea) =>
-                    updateEditingOrder({ serviceArea })
+                    (() => {
+                      const config = getBookingConfigForArea(
+                        content.bookingConfigs,
+                        content.serviceLocations,
+                        serviceArea
+                      )
+                      updateEditingOrder({
+                        addOnItems: [],
+                        addOnOther: "",
+                        currency: config?.currency ?? editingOrder.currency,
+                        serviceArea,
+                        serviceType: "",
+                        serviceTypeId: "",
+                      })
+                    })()
                   }
                   value={editingOrder.serviceArea}
-                />
-              </FormField>
-              <FormField label="详细地址" required>
-                <Input
-                  className="h-9 rounded-md"
-                  disabled={isEditingCompletedOrder}
-                  onChange={(event) =>
-                    updateEditingOrder({ serviceAddress: event.target.value })
-                  }
-                  placeholder="街道、门牌号、公寓号等"
-                  value={editingOrder.serviceAddress}
                 />
               </FormField>
               <FormField label="服务日期" required>
@@ -890,13 +691,95 @@ export function OrderAdmin({
               <FormField label="服务类型" required>
                 <OrderServiceTypeSelect
                   disabled={isEditingCompletedOrder}
-                  onChange={(serviceType) =>
-                    updateEditingOrder({ serviceType })
-                  }
-                  value={editingOrder.serviceType}
+                  items={editingServiceItems}
+                  onChange={(serviceTypeId) => {
+                    const service = editingServiceItems.find(
+                      (item) => item.id === serviceTypeId
+                    )
+                    updateEditingOrder({
+                      serviceType: service?.label ?? "",
+                      serviceTypeId,
+                    })
+                  }}
+                  value={editingOrder.serviceTypeId || editingOrder.serviceType}
                 />
               </FormField>
-              <FormField label="分配阿姨">
+              <FormField className="sm:col-span-2" label="详细地址" required>
+                <Input
+                  className="h-9 rounded-md"
+                  disabled={isEditingCompletedOrder}
+                  onChange={(event) =>
+                    updateEditingOrder({ serviceAddress: event.target.value })
+                  }
+                  placeholder="街道、门牌号、公寓号等"
+                  value={editingOrder.serviceAddress}
+                />
+              </FormField>
+              <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+                <label className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm">
+                  <Checkbox
+                    checked={Boolean(editingOrder.studio)}
+                    disabled={isEditingCompletedOrder}
+                    onCheckedChange={(checked) =>
+                      updateEditingOrder({
+                        bedrooms: checked === true ? 0 : 1,
+                        studio: checked === true,
+                      })
+                    }
+                  />
+                  Studio（开间，无独立卧室）
+                </label>
+                <AdminAddOnSelector
+                  currency={editingBookingConfig?.currency ?? editingOrder.currency ?? "USD"}
+                  disabled={isEditingCompletedOrder}
+                  items={editingAddOnItems}
+                  onChange={(addOnItems) => updateEditingOrder({ addOnItems })}
+                  onOtherChange={(addOnOther) => updateEditingOrder({ addOnOther })}
+                  other={editingOrder.addOnOther ?? ""}
+                  selected={editingOrder.addOnItems ?? []}
+                />
+              </div>
+              {!editingOrder.studio ? (
+                <FormField label="卧室数量" required>
+                  <Input
+                    className="h-9 rounded-md"
+                    disabled={isEditingCompletedOrder}
+                    min="1"
+                    onChange={(event) =>
+                      updateEditingOrder({ bedrooms: Number(event.target.value) })
+                    }
+                    step="1"
+                    type="number"
+                    value={editingOrder.bedrooms ?? 1}
+                  />
+                </FormField>
+              ) : null}
+              <FormField label="卫生间数量" required>
+                <Input
+                  className="h-9 rounded-md"
+                  disabled={isEditingCompletedOrder}
+                  min="1"
+                  onChange={(event) =>
+                    updateEditingOrder({ bathrooms: Number(event.target.value) })
+                  }
+                  step="1"
+                  type="number"
+                  value={editingOrder.bathrooms ?? 1}
+                />
+              </FormField>
+              <FormField label="宠物情况">
+                <label className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm">
+                  <Checkbox
+                    checked={Boolean(editingOrder.hasPets)}
+                    disabled={isEditingCompletedOrder}
+                    onCheckedChange={(checked) =>
+                      updateEditingOrder({ hasPets: checked === true })
+                    }
+                  />
+                  是否有宠物
+                </label>
+              </FormField>
+              {!isCreatingBooking ? <FormField label="分配阿姨">
                 <AuntieAssignmentSelect
                   assignedAuntieId={editingOrder.assignedAuntieId}
                   activeLoadByAuntieId={activeLoadByAuntieId}
@@ -912,8 +795,8 @@ export function OrderAdmin({
                   orders={content.paymentOrders ?? []}
                   serviceArea={editingOrder.serviceArea}
                 />
-              </FormField>
-              <FormField label="订单金额明细" required>
+              </FormField> : null}
+              {!isCreatingBooking ? <FormField label="订单金额明细" required>
                 <OrderAmountBreakdownEditor
                   currency={
                     editingOrder.currency || content.paymentSettings.currency
@@ -923,7 +806,11 @@ export function OrderAdmin({
                     Boolean(editingOrder.airwallexPaymentIntentId)
                   }
                   fallbackAmount={getOrderBaseAmount(editingOrder)}
-                  items={editingOrder.amountBreakdown ?? []}
+                  items={mergeAddOnsIntoAmountBreakdown(
+                    editingOrder.amountBreakdown,
+                    editingOrder.addOnItems,
+                    getOrderBaseAmount(editingOrder)
+                  )}
                   onChange={(amountBreakdown, baseAmountValue) =>
                     updateEditingOrder({
                       amount: normalizeAdminPaymentAmount(
@@ -935,8 +822,8 @@ export function OrderAdmin({
                     })
                   }
                 />
-              </FormField>
-              <FormField label="币种">
+              </FormField> : null}
+              {!isCreatingBooking ? <FormField label="币种">
                 <PaymentCurrencySelect
                   disabled={isEditingCompletedOrder}
                   onChange={(currency) => updateEditingOrder({ currency })}
@@ -944,7 +831,7 @@ export function OrderAdmin({
                     editingOrder.currency || content.paymentSettings.currency
                   }
                 />
-              </FormField>
+              </FormField> : null}
               <FormField className="sm:col-span-2" label="备注">
                 <Textarea
                   className="min-h-24 rounded-md"
@@ -993,6 +880,18 @@ export function OrderAdmin({
             </div>
           ) : null}
           <DialogFooter>
+            {editingOrder?.orderId ? (
+              <Button
+                className="h-8 rounded-md"
+                onClick={() => copyBookingInfo(editingOrder)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <ClipboardText size={15} weight="bold" />
+                复制预约信息
+              </Button>
+            ) : null}
             <Button
               className="h-8 rounded-md"
               onClick={() => setEditingOrder(null)}
@@ -1021,7 +920,7 @@ export function OrderAdmin({
   )
 }
 
-function OrderCustomerSelect({
+export function OrderCustomerSelect({
   disabled,
   onSelect,
   token,
@@ -1239,33 +1138,6 @@ function CustomerAvatar({ customer }: { customer: WecomCustomer }) {
     />
   ) : (
     <span className="size-6 shrink-0 rounded-full bg-muted" />
-  )
-}
-
-function OrderFilters({
-  onStatusFilterChange,
-  statusFilter,
-}: {
-  onStatusFilterChange: (value: string) => void
-  statusFilter: string
-}) {
-  return (
-    <Select onValueChange={onStatusFilterChange} value={statusFilter}>
-      <SelectTrigger className="h-8 w-full rounded-md px-2.5 text-xs sm:w-32">
-        <SelectValue placeholder="全部状态" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectItem value="all">全部状态</SelectItem>
-          <SelectItem value="awaiting_confirmation">待客服确认</SelectItem>
-          <SelectItem value="unpaid">待付款</SelectItem>
-          <SelectItem value="pending">支付中</SelectItem>
-          <SelectItem value="paid">已付款</SelectItem>
-          <SelectItem value="cancelled">已取消</SelectItem>
-          <SelectItem value="failed">支付失败</SelectItem>
-        </SelectGroup>
-      </SelectContent>
-    </Select>
   )
 }
 
@@ -1502,15 +1374,15 @@ export function OrderServiceAreaSelect({
 
 function OrderServiceTypeSelect({
   disabled,
+  items,
   onChange,
   value,
 }: {
   disabled?: boolean
+  items: CmsBookingCatalogItem[]
   onChange: (value: string) => void
   value: string
 }) {
-  const hasCustomValue = value && !orderServiceTypeOptions.includes(value)
-
   return (
     <Select disabled={disabled} onValueChange={onChange} value={value}>
       <SelectTrigger className="h-9 rounded-md">
@@ -1518,16 +1390,99 @@ function OrderServiceTypeSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          {orderServiceTypeOptions.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
+          {items.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.label}
             </SelectItem>
           ))}
-          {hasCustomValue ? (
-            <SelectItem value={value}>{value}</SelectItem>
-          ) : null}
         </SelectGroup>
       </SelectContent>
     </Select>
+  )
+}
+
+function AdminAddOnSelector({
+  currency,
+  disabled,
+  items,
+  onChange,
+  onOtherChange,
+  other,
+  selected,
+}: {
+  currency: string
+  disabled?: boolean
+  items: CmsBookingCatalogItem[]
+  onChange: (items: NonNullable<CmsPaymentOrder["addOnItems"]>) => void
+  onOtherChange: (value: string) => void
+  other: string
+  selected: NonNullable<CmsPaymentOrder["addOnItems"]>
+}) {
+  const selectedIds = new Set(selected.map((item) => item.id))
+  const hasOther = items.some(
+    (item) =>
+      selectedIds.has(item.id) &&
+      (item.id.includes("other") || item.label.includes("其他"))
+  )
+
+  function toggle(item: CmsBookingCatalogItem, checked: boolean) {
+    onChange(
+      checked
+          ? [
+            ...selected.filter((entry) => entry.id !== item.id),
+            {
+              id: item.id,
+              label: item.label,
+              price: item.basePrice,
+              quoteRequired: item.quoteRequired === true,
+            },
+          ]
+        : selected.filter((entry) => entry.id !== item.id)
+    )
+  }
+
+  return (
+    <div className="min-w-0 space-y-2">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            className="h-9 w-full justify-between rounded-md"
+            disabled={disabled}
+            type="button"
+            variant="outline"
+          >
+            <span className="truncate">
+              {selected.length
+                ? selected.map((item) => item.label).join("、")
+                : "选择附加项目"}
+            </span>
+            <CaretDown size={14} />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[min(28rem,calc(100vw-2rem))] p-2" align="start">
+          <div className="max-h-64 space-y-1 overflow-y-auto overscroll-contain">
+            {items.map((item) => (
+              <label className="flex cursor-pointer items-start gap-2 rounded-md p-2 hover:bg-muted" key={item.id}>
+                <Checkbox checked={selectedIds.has(item.id)} onCheckedChange={(checked) => toggle(item, checked === true)} />
+                <span className="min-w-0 flex-1 text-xs">
+                  <span className="flex justify-between gap-2 font-medium"><span>{item.label}</span><span className="shrink-0 text-primary">{item.quoteRequired ? "客服确认" : `${currency} ${item.basePrice.toFixed(2)}`}</span></span>
+                  {item.description ? <span className="mt-0.5 block text-muted-foreground">{item.description}</span> : null}
+                </span>
+              </label>
+            ))}
+            {!items.length ? <div className="p-4 text-center text-xs text-muted-foreground">当前地区暂无附加项目</div> : null}
+          </div>
+        </PopoverContent>
+      </Popover>
+      {hasOther ? (
+        <Input
+          className="h-9 rounded-md"
+          disabled={disabled}
+          onChange={(event) => onOtherChange(event.target.value)}
+          placeholder="其他附加项目说明"
+          value={other}
+        />
+      ) : null}
+    </div>
   )
 }

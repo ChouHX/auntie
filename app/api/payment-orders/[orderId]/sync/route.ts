@@ -23,6 +23,8 @@ import type {
   CmsPaymentOrder,
   CmsPaymentOrderStatus,
 } from "@/types/cms"
+import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
+import { persistOrderProfitCnyIfNeeded } from "@/lib/order-profit-exchange-store"
 
 export const runtime = "nodejs"
 
@@ -81,6 +83,7 @@ export async function POST(
       !existingOrder.airwallexPaymentIntentId &&
       !existingOrder.airwallexPaymentLinkId
     ) {
+      savedOrder = await persistOrderProfitCnyIfNeeded(savedOrder)
       return Response.json({
         ok: true,
         order: toPublicPaymentOrder(savedOrder),
@@ -117,30 +120,44 @@ export async function POST(
         ? getOrderStatusFromPaymentIntent(order.status, paymentIntent)
         : getOrderStatusFromPaymentLink(order.status, paymentLink)
       const now = new Date().toISOString()
-      const nextOrder: CmsPaymentOrder = {
-        ...order,
-        airwallexPaymentIntentId:
-          paymentIntent?.id ||
-          paymentLink?.latest_successful_payment_intent_id ||
-          order.airwallexPaymentIntentId,
-        airwallexPaymentLinkId: paymentLink?.id ?? order.airwallexPaymentLinkId,
-        airwallexPaymentUrl: paymentLink?.url ?? order.airwallexPaymentUrl,
-        amountValue: parsePaymentAmountValue(
-          paymentIntent?.amount ?? paymentLink?.amount ?? order.amountValue,
-          order.amount
-        ),
-        currency: normalizePaymentCurrency(
-          paymentIntent?.currency || paymentLink?.currency || order.currency
-        ),
-        gatewayStatus:
-          paymentIntentGatewayStatus ||
-          paymentLink?.status ||
-          order.gatewayStatus,
-        paidAt: nextStatus === "paid" ? order.paidAt || now : order.paidAt,
-        provider: "airwallex",
-        status: nextStatus,
-        updatedAt: now,
-      }
+      const nextOrder: CmsPaymentOrder = calculateOrderFinancialsSafely(
+        {
+          ...order,
+          airwallexPaymentIntentId:
+            paymentIntent?.id ||
+            paymentLink?.latest_successful_payment_intent_id ||
+            order.airwallexPaymentIntentId,
+          airwallexPaymentLinkId:
+            paymentLink?.id ?? order.airwallexPaymentLinkId,
+          airwallexPaymentUrl: paymentLink?.url ?? order.airwallexPaymentUrl,
+          amountValue: parsePaymentAmountValue(
+            paymentIntent?.amount ?? paymentLink?.amount ?? order.amountValue,
+            order.amount
+          ),
+          dealStatus: nextStatus === "paid" ? "converted" : order.dealStatus,
+          currency: normalizePaymentCurrency(
+            paymentIntent?.currency || paymentLink?.currency || order.currency
+          ),
+          gatewayStatus:
+            paymentIntentGatewayStatus ||
+            paymentLink?.status ||
+            order.gatewayStatus,
+          paidAt: nextStatus === "paid" ? order.paidAt || now : order.paidAt,
+          receivedAmount:
+            nextStatus === "paid"
+              ? parsePaymentAmountValue(
+                  paymentIntent?.amount ??
+                    paymentLink?.amount ??
+                    order.amountValue,
+                  order.amount
+                )
+              : order.receivedAmount,
+          provider: "airwallex",
+          status: nextStatus,
+          updatedAt: now,
+        },
+        current
+      )
 
       shouldNotify = order.status !== "paid" && nextOrder.status === "paid"
       savedOrder = nextOrder
@@ -155,6 +172,10 @@ export async function POST(
         ),
       }
     })
+
+    if (savedOrder) {
+      savedOrder = await persistOrderProfitCnyIfNeeded(savedOrder)
+    }
 
     if (shouldNotify && savedOrder && notificationSettings) {
       try {

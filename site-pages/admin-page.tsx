@@ -1,6 +1,6 @@
 "use client"
 
-import { type FormEvent, useEffect, useRef, useState } from "react"
+import { type FormEvent, useEffect, useState } from "react"
 import { MoonStars, Sun } from "@phosphor-icons/react"
 import { toast } from "sonner"
 
@@ -23,7 +23,6 @@ import {
   type AdminContentPagination,
   type AdminContentSection,
   type AdminContentSectionResult,
-  type AdminDashboardSummary,
 } from "@/lib/cms-api"
 import { defaultCmsContent } from "@/data/cms-defaults"
 import { resetCmsContentCache, useCmsContent } from "@/hooks/use-cms-content"
@@ -37,14 +36,16 @@ import {
   adminSectionMeta,
   adminSections,
 } from "@/components/admin/admin-shared"
-import { DashboardAdmin } from "@/components/admin/dashboard-admin"
+import { SalesDashboardAdmin } from "@/components/admin/sales-dashboard-admin"
 import { CustomerAdmin } from "@/components/admin/customer-admin"
+import { SalesAdmin } from "@/components/admin/sales-admin"
 import { BlogAdmin, BlogCategoryAdmin } from "@/components/admin/blog-admin"
 import { ImageLibraryAdmin } from "@/components/admin/image-library-admin"
 import { FaqAdmin } from "@/components/admin/faq-admin"
 import { AuntieAdmin } from "@/components/admin/auntie-admin"
 import { OrderAdmin } from "@/components/admin/order-admin"
 import { ServiceAreasAdmin } from "@/components/admin/service-areas-admin"
+import { BookingConfigAdmin } from "@/components/admin/booking-config-admin"
 import {
   AccountAdmin,
   PaymentSettingsAdmin,
@@ -71,13 +72,8 @@ function AdminPage() {
       totalPages: 1,
     })
   const [auntieStats, setAuntieStats] = useState<AdminAuntieStatsMap>({})
-  const [dashboardSummary, setDashboardSummary] =
-    useState<AdminDashboardSummary | null>(null)
-  const [chartRange, setChartRange] = useState(14)
   const [isRefreshingCurrentSection, setIsRefreshingCurrentSection] =
     useState(false)
-  const dashboardInitRef = useRef(false)
-  const lastChartRangeRef = useRef(14)
   const [genericPage, setGenericPage] = useState(1)
   const [genericPageSize, setGenericPageSize] = useState(10)
   const [genericQuery, setGenericQuery] = useState("")
@@ -109,7 +105,6 @@ function AdminPage() {
       },
       {
         category: genericCategory,
-        chartRange,
         page: genericPage,
         pageSize: genericPageSize,
         query: genericQuery,
@@ -127,14 +122,9 @@ function AdminPage() {
         applyAdminSectionMeta(result, {
           activeSection,
           setAuntieStats,
-          setDashboardSummary,
           setGenericPagination,
           setOrderPagination,
         })
-        if (activeSection === "dashboard" && result.dashboardSummary) {
-          dashboardInitRef.current = true
-          lastChartRangeRef.current = chartRange
-        }
       })
       .catch((loadError: Error) => {
         if (!isMounted) {
@@ -146,9 +136,7 @@ function AdminPage() {
         clearStoredAdminToken()
         setContent(null)
         setAuntieStats({})
-        setDashboardSummary(null)
         setToken("")
-        dashboardInitRef.current = false
       })
       .finally(() => {
         if (isMounted) {
@@ -205,51 +193,6 @@ function AdminPage() {
     }
   }, [activeSection, isSaving, token])
 
-  // Chart-only fetch: when chartRange changes, fetch only the chart data
-  // and merge it into the existing dashboardSummary (no full re-fetch).
-  useEffect(() => {
-    if (
-      !token ||
-      activeSection !== "dashboard" ||
-      !dashboardInitRef.current ||
-      lastChartRangeRef.current === chartRange
-    ) {
-      return
-    }
-
-    lastChartRangeRef.current = chartRange
-    let isMounted = true
-
-    fetchAdminSectionContent(token, {
-      chartRange,
-      dashboardParts: "chart",
-      section: "dashboard",
-    })
-      .then((result) => {
-        if (!isMounted || !result.dashboardSummary) {
-          return
-        }
-        setDashboardSummary((prev) =>
-          prev
-            ? {
-                ...prev,
-                orderDailyStats: {
-                  ...prev.orderDailyStats,
-                  ...result.dashboardSummary!.orderDailyStats,
-                },
-              }
-            : prev
-        )
-      })
-      .catch(() => {
-        // Silent fail — chart just won't update
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [chartRange, activeSection, token])
-
   async function persistContent(
     updater: (current: CmsContent) => CmsContent,
     successMessage = "已保存"
@@ -269,7 +212,6 @@ function AdminPage() {
       },
       {
         category: genericCategory,
-        chartRange,
         page: genericPage,
         pageSize: genericPageSize,
         query: genericQuery,
@@ -297,7 +239,6 @@ function AdminPage() {
       applyAdminSectionMeta(saved, {
         activeSection,
         setAuntieStats,
-        setDashboardSummary,
         setGenericPagination,
         setOrderPagination,
       })
@@ -334,7 +275,6 @@ function AdminPage() {
       applyAdminSectionMeta(saved, {
         activeSection,
         setAuntieStats,
-        setDashboardSummary,
         setGenericPagination,
         setOrderPagination,
       })
@@ -371,7 +311,6 @@ function AdminPage() {
       applyAdminSectionMeta(saved, {
         activeSection,
         setAuntieStats,
-        setDashboardSummary,
         setGenericPagination,
         setOrderPagination,
       })
@@ -409,7 +348,6 @@ function AdminPage() {
       applyAdminSectionMeta(saved, {
         activeSection,
         setAuntieStats,
-        setDashboardSummary,
         setGenericPagination,
         setOrderPagination,
       })
@@ -448,7 +386,6 @@ function AdminPage() {
       applyAdminSectionMeta(saved, {
         activeSection,
         setAuntieStats,
-        setDashboardSummary,
         setGenericPagination,
         setOrderPagination,
       })
@@ -468,7 +405,6 @@ function AdminPage() {
     setToken("")
     setContent(null)
     setAuntieStats({})
-    setDashboardSummary(null)
   }
 
   function handleLogin(nextToken: string) {
@@ -537,10 +473,6 @@ function AdminPage() {
     setGenericPage(1)
   }
 
-  function handleTrendRangeChange(range: number) {
-    setChartRange(range)
-  }
-
   function handleRefreshCurrentSection() {
     if (!token) {
       return
@@ -560,6 +492,11 @@ function AdminPage() {
   return (
     <AdminLayout
       activeSection={activeSection}
+      contentFullWidth={
+        activeSection === "dashboard" ||
+        activeSection === "orders" ||
+        activeSection === "customers"
+      }
       isDarkTheme={isDarkTheme}
       isRefreshing={isRefreshingCurrentSection}
       isSaving={isSaving}
@@ -581,9 +518,7 @@ function AdminPage() {
         <AdminContentEditor
           activeSection={activeSection}
           auntieStats={auntieStats}
-          chartRange={chartRange}
           content={content}
-          dashboardSummary={dashboardSummary}
           genericCategory={genericCategory}
           genericPage={genericPage}
           genericPageSize={genericPageSize}
@@ -605,7 +540,6 @@ function AdminPage() {
           onOrderStatusFilterChange={handleOrderStatusFilterChange}
           onSaveOrder={saveOrder}
           onTokenChange={setToken}
-          onTrendRangeChange={handleTrendRangeChange}
           onCommit={persistContent}
           orderPage={orderPage}
           orderPageSize={orderPageSize}
@@ -791,7 +725,6 @@ function createAdminSectionParams(
   },
   generic: {
     category: string
-    chartRange: number
     page: number
     pageSize: number
     query: string
@@ -831,9 +764,12 @@ function createAdminSectionParams(
 
   if (activeSection === "dashboard") {
     return {
-      chartRange: generic.chartRange,
       section: "dashboard" as AdminContentSection,
     }
+  }
+
+  if (activeSection === "sales") {
+    return { section: "shell" as AdminContentSection }
   }
 
   return {
@@ -885,6 +821,10 @@ function mergeAdminContent(
       partial.reviewItems ??
       current?.reviewItems ??
       defaultCmsContent.reviewItems,
+    salesMembers:
+      partial.salesMembers ??
+      current?.salesMembers ??
+      defaultCmsContent.salesMembers,
     serviceRegions:
       partial.serviceRegions ??
       current?.serviceRegions ??
@@ -893,6 +833,10 @@ function mergeAdminContent(
       partial.serviceLocations ??
       current?.serviceLocations ??
       defaultCmsContent.serviceLocations,
+    bookingConfigs:
+      partial.bookingConfigs ??
+      current?.bookingConfigs ??
+      defaultCmsContent.bookingConfigs,
     siteSettings: {
       ...defaultCmsContent.siteSettings,
       ...current?.siteSettings,
@@ -910,7 +854,6 @@ function applyAdminSectionMeta(
   setters: {
     activeSection: AdminSection
     setAuntieStats: (stats: AdminAuntieStatsMap) => void
-    setDashboardSummary: (summary: AdminDashboardSummary | null) => void
     setGenericPagination: (pagination: AdminContentPagination) => void
     setOrderPagination: (pagination: AdminContentPagination) => void
   }
@@ -930,18 +873,12 @@ function applyAdminSectionMeta(
   if (result.auntieStats) {
     setters.setAuntieStats(result.auntieStats)
   }
-
-  if (result.dashboardSummary) {
-    setters.setDashboardSummary(result.dashboardSummary)
-  }
 }
 
 function AdminContentEditor({
   activeSection,
   auntieStats,
-  chartRange,
   content,
-  dashboardSummary,
   genericCategory,
   genericPage,
   genericPageSize,
@@ -963,7 +900,6 @@ function AdminContentEditor({
   onOrderStatusFilterChange,
   onSaveOrder,
   onTokenChange,
-  onTrendRangeChange,
   onCommit,
   orderPage,
   orderPageSize,
@@ -974,9 +910,7 @@ function AdminContentEditor({
 }: {
   activeSection: AdminSection
   auntieStats: AdminAuntieStatsMap
-  chartRange: number
   content: CmsContent
-  dashboardSummary: AdminDashboardSummary | null
   genericCategory: string
   genericPage: number
   genericPageSize: number
@@ -998,7 +932,6 @@ function AdminContentEditor({
   onOrderStatusFilterChange: (status: string) => void
   onSaveOrder: (order: CmsPaymentOrder) => Promise<CmsContent | null>
   onTokenChange: (token: string) => void
-  onTrendRangeChange: (range: number) => void
   onCommit: PersistContent
   orderPage: number
   orderPageSize: number
@@ -1008,17 +941,12 @@ function AdminContentEditor({
   token: string
 }) {
   if (activeSection === "dashboard") {
-    return (
-      <DashboardAdmin
-        chartRange={chartRange}
-        content={content}
-        dashboardSummary={dashboardSummary ?? undefined}
-        onTrendRangeChange={onTrendRangeChange}
-        token={token}
-      />
-    )
+    return <SalesDashboardAdmin token={token} />
   }
 
+  if (activeSection === "sales") {
+    return <SalesAdmin token={token} />
+  }
   if (activeSection === "customers") {
     return <CustomerAdmin token={token} />
   }
@@ -1142,6 +1070,16 @@ function AdminContentEditor({
   if (activeSection === "serviceAreas") {
     return (
       <ServiceAreasAdmin
+        content={content}
+        isSaving={isSaving}
+        onCommit={onCommit}
+      />
+    )
+  }
+
+  if (activeSection === "services") {
+    return (
+      <BookingConfigAdmin
         content={content}
         isSaving={isSaving}
         onCommit={onCommit}

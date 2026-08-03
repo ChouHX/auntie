@@ -10,6 +10,7 @@ import {
 import {
   CaretLeft,
   CaretRight,
+  Broom,
   CheckCircle,
   Code,
   CreditCard,
@@ -33,6 +34,7 @@ import {
   TextB,
   TextItalic,
   Trash,
+  TrendUp,
   UploadSimple,
   UserCircle,
   Users,
@@ -81,9 +83,11 @@ export type AdminSection =
   | "categories"
   | "gallery"
   | "reviews"
+  | "services"
   | "faq"
   | "orders"
   | "customers"
+  | "sales"
   | "aunties"
   | "serviceAreas"
   | "siteSettings"
@@ -104,7 +108,9 @@ export const adminSections: AdminNavItem<AdminSection>[] = [
   { id: "faq", label: "QA管理", icon: ListChecks, group: "content" },
   { id: "orders", label: "订单管理", icon: Wallet, group: "main" },
   { id: "customers", label: "客户管理", icon: UserCircle, group: "main" },
+  { id: "sales", label: "销售管理", icon: TrendUp, group: "main" },
   { id: "aunties", label: "阿姨管理", icon: Users, group: "main" },
+  { id: "services", label: "服务管理", icon: Broom, group: "main" },
   {
     id: "serviceAreas",
     label: "服务区域",
@@ -146,12 +152,16 @@ export const adminSectionMeta: Record<
     title: "博客分类",
   },
   dashboard: {
-    description: "查看订单金额、订单状态和当前待处理订单。",
+    description: "按客户、订单、销售归属和经营成本查看成交与利润数据。",
     title: "Dashboard",
   },
   customers: {
     description: "查看企业微信客户资料并配置每日自动同步。",
     title: "客户管理",
+  },
+  sales: {
+    description: "绑定企业微信学员分区标签并设置销售订单分成。",
+    title: "销售管理",
   },
   faq: {
     description: "维护中英文 QA 条目和页面基础配置。",
@@ -176,6 +186,10 @@ export const adminSectionMeta: Record<
   reviews: {
     description: "管理首页客户好评区域展示的截图素材。",
     title: "好评图片",
+  },
+  services: {
+    description: "按城市维护清洁服务、附加服务及对应的参考价格规则。",
+    title: "服务管理",
   },
   serviceAreas: {
     description:

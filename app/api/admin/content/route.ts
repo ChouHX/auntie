@@ -6,11 +6,11 @@ import {
   updateCmsContent,
   writeCmsContent,
 } from "@/lib/cms-store"
-import {
-  createAuntieStatsMap,
-  createDashboardSummary,
-} from "@/lib/admin-analytics"
+import { createAuntieStatsMap } from "@/lib/admin-analytics"
 import { isPaymentOrderCompleted } from "@/lib/auntie-assignment"
+import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
+import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
+import { getWecomCustomerByRelationId } from "@/lib/wecom-store"
 import type { CmsContent, CmsPaymentOrder } from "@/types/cms"
 
 type AdminContentSection =
@@ -25,6 +25,7 @@ type AdminContentSection =
   | "orders"
   | "paymentSettings"
   | "reviews"
+  | "services"
   | "serviceAreas"
   | "shell"
   | "siteSettings"
@@ -58,6 +59,7 @@ const adminContentSections = new Set<AdminContentSection>([
   "orders",
   "paymentSettings",
   "reviews",
+  "services",
   "serviceAreas",
   "shell",
   "siteSettings",
@@ -139,13 +141,28 @@ export async function PATCH(request: NextRequest) {
   let saved: CmsContent
 
   try {
+    const orderForUpsert =
+      payload.action === "upsert-order" && payload.order
+        ? payload.order
+        : payload.order
+    const attributionCustomer = orderForUpsert?.customerRelationId
+      ? await getWecomCustomerByRelationId(orderForUpsert.customerRelationId)
+      : null
+
     saved = await updateCmsContent((current) => {
       if (payload.action === "upsert-order") {
-        if (!payload.order) {
+        if (!orderForUpsert) {
           throw new Error("Order payload is required.")
         }
 
-        return upsertPaymentOrder(current, payload.order)
+        return upsertPaymentOrder(
+          current,
+          applyWecomSalesAttribution(
+            orderForUpsert,
+            attributionCustomer?.studentType,
+            current.salesMembers
+          )
+        )
       }
 
       if (payload.action === "delete-order") {
@@ -201,6 +218,32 @@ export async function PATCH(request: NextRequest) {
       createResponseSearchParams(payload, request)
     )
   )
+}
+
+function applyWecomSalesAttribution(
+  order: CmsPaymentOrder,
+  studentTags: string | undefined,
+  salesMembers: CmsContent["salesMembers"]
+) {
+  const salesMember = findSalesMemberForStudentTags(studentTags, salesMembers)
+  if (!salesMember) {
+    return order.salesOwnerSource === "wecom_member" ||
+      order.salesOwnerSource === "wecom_tag"
+      ? {
+          ...order,
+          salesMemberId: undefined,
+          salesOwner: "",
+          salesOwnerSource: undefined,
+        }
+      : order
+  }
+
+  return {
+    ...order,
+    salesMemberId: salesMember.id,
+    salesOwner: salesMember.name,
+    salesOwnerSource: "wecom_tag" as const,
+  }
 }
 
 function getRequestedSection(searchParams: URLSearchParams) {
@@ -274,25 +317,7 @@ function createSectionResponse(
   }
 
   if (section === "dashboard") {
-    const chartRange = clampNumber(
-      Number(searchParams.get("chartRange")),
-      1,
-      365,
-      14
-    )
-    const dashboardParts = searchParams.get("dashboardParts")
-
-    if (dashboardParts === "chart") {
-      return {
-        content: responseContent,
-        dashboardSummary: createDashboardSummary(content, chartRange, "chart"),
-      }
-    }
-
-    return {
-      content: responseContent,
-      dashboardSummary: createDashboardSummary(content, chartRange),
-    }
+    return { content: responseContent }
   }
 
   if (section === "orders") {
@@ -305,10 +330,15 @@ function createSectionResponse(
     return {
       content: {
         ...responseContent,
+        bookingConfigs: content.bookingConfigs,
+        formulaTemplates: content.formulaTemplates,
         paymentOrders: filteredOrders.slice(
           pagination.startIndex,
           pagination.endIndex
         ),
+        serviceLocations: content.serviceLocations,
+        serviceRegions: content.serviceRegions,
+        salesMembers: content.salesMembers,
         teamMembers: content.teamMembers,
       },
       auntieStats: createAuntieStatsMap(
@@ -379,7 +409,18 @@ function createSectionResponse(
     return {
       content: {
         ...responseContent,
+        bookingConfigs: content.bookingConfigs,
         serviceRegions: content.serviceRegions,
+        serviceLocations: content.serviceLocations,
+      },
+    }
+  }
+
+  if (section === "services") {
+    return {
+      content: {
+        ...responseContent,
+        bookingConfigs: content.bookingConfigs,
         serviceLocations: content.serviceLocations,
       },
     }
@@ -647,23 +688,39 @@ function applySectionPatch(
   }
 
   if (section === "aunties") {
+    const teamMembers = content.teamMembers
+      ? mergeById(current.teamMembers, content.teamMembers)
+      : current.teamMembers
+    const financialContent = {
+      formulaTemplates: current.formulaTemplates,
+      salesMembers: current.salesMembers,
+      teamMembers,
+    }
+
     return {
       ...current,
-      teamMembers: content.teamMembers
-        ? mergeById(current.teamMembers, content.teamMembers)
-        : current.teamMembers,
+      paymentOrders: current.paymentOrders.map((order) =>
+        order.status === "paid"
+          ? calculateOrderFinancialsSafely(order, financialContent)
+          : order
+      ),
+      teamMembers,
     }
   }
 
   if (section === "serviceAreas") {
     return {
       ...current,
-      serviceRegions: content.serviceRegions
-        ? mergeById(current.serviceRegions, content.serviceRegions)
-        : current.serviceRegions,
-      serviceLocations: content.serviceLocations
-        ? mergeById(current.serviceLocations, content.serviceLocations)
-        : current.serviceLocations,
+      bookingConfigs: content.bookingConfigs ?? current.bookingConfigs,
+      serviceRegions: content.serviceRegions ?? current.serviceRegions,
+      serviceLocations: content.serviceLocations ?? current.serviceLocations,
+    }
+  }
+
+  if (section === "services") {
+    return {
+      ...current,
+      bookingConfigs: content.bookingConfigs ?? current.bookingConfigs,
     }
   }
 

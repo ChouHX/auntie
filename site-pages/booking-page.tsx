@@ -4,7 +4,6 @@ import {
   Check,
   ClipboardText,
   EnvelopeSimple,
-  Info,
   PhoneCall,
   PaperPlaneTiltIcon,
 } from "@phosphor-icons/react"
@@ -14,7 +13,17 @@ import { Link } from "@/lib/router-compat"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { FooterContactBlock } from "@/components/marketing/site-footer"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { FormField } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
 import {
@@ -27,24 +36,37 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Skeleton } from "@/components/ui/skeleton"
 import { defaultCmsContent, defaultContactPage } from "@/data/cms-defaults"
 import { useCmsContent } from "@/hooks/use-cms-content"
 import { regionsWithDerivedCities } from "@/lib/service-regions"
 import { createBookingOrder } from "@/lib/cms-api"
+import {
+  calculateBookingEstimate,
+  formatBookingRequest,
+  getBookingConfigForArea,
+  isValidBookingPhone,
+} from "@/lib/booking-config"
 import { useI18n, type Language } from "@/lib/i18n"
-import type { CmsPaymentOrder } from "@/types/cms"
+import type {
+  CmsBookingCatalogItem,
+  CmsBookingLocationConfig,
+  CmsPaymentOrder,
+} from "@/types/cms"
 
 type BookingFormState = {
+  addOnIds: string[]
+  addOnOther: string
   bathrooms: string
   bedrooms: string
   contact: string
   fullName: string
+  hasPets: boolean
   notes: string
   preferredDate: string
   serviceAddress: string
   serviceArea: string
   serviceType: string
+  studio: boolean
 }
 
 type BookingCopy = {
@@ -80,25 +102,11 @@ type BookingCopy = {
   phoneText: string
 }
 
-type PricingTier = {
-  label: string
-  maxBathrooms: number
-  maxBedrooms: number
-  price: string
-  time: Record<Language, string>
-}
-
-type PriceEstimate = {
-  label: string
-  price: string
-  time: string
-}
-
 const bookingCopy: Record<Language, BookingCopy> = {
   zh: {
     bathrooms: "卫生间数量",
     bedrooms: "卧室数量",
-    contact: "联系方式（电话 / 邮箱 / 微信至少一种）",
+    contact: "联系电话",
     details: "备注",
     estimateCustom: "该户型或服务类型需要客服确认参考价格",
     estimateEmpty: "选择服务类型并输入卧室、卫生间数量后显示参考价。",
@@ -132,10 +140,10 @@ const bookingCopy: Record<Language, BookingCopy> = {
     serviceAddress: "详细地址",
     submit: "提交预约需求",
     submitError: "提交失败，请稍后再试，或直接通过电话 / 微信联系我们。",
-    submitted: "预约需求已提交",
+    submitted: "预约信息已生成",
     submitting: "发送中...",
     success:
-      "预约需求已提交。请添加企业微信客服，并提供订单号以确认服务细节、费用和阿姨安排。",
+      "请点击下方按钮复制完整预约信息，并返回企业微信发送给客服。客服收到信息后，会为您确认服务安排。",
     terms: "服务条款",
     phoneTitle: "需要更快沟通？",
     phoneText: "可先电话或企业微信联系，表单信息后续可同步给客服。",
@@ -143,7 +151,7 @@ const bookingCopy: Record<Language, BookingCopy> = {
   en: {
     bathrooms: "Bathrooms",
     bedrooms: "Bedrooms",
-    contact: "Contact method (phone / email / WeChat, at least one)",
+    contact: "Local phone number",
     details: "Notes",
     estimateCustom: "Contact support for a reference price for this request",
     estimateEmpty:
@@ -182,7 +190,7 @@ const bookingCopy: Record<Language, BookingCopy> = {
     submitted: "Booking request received",
     submitting: "Sending...",
     success:
-      "Your request has been submitted. Add our WeCom support and share the order number to confirm service details, price, and auntie assignment.",
+      "Copy the complete booking information below and send it to support in WeCom. Support will confirm the service arrangement.",
     terms: "Terms of Service",
     phoneTitle: "Need faster help?",
     phoneText:
@@ -190,205 +198,30 @@ const bookingCopy: Record<Language, BookingCopy> = {
   },
 }
 
-const pricingTable: Record<"deep" | "moveOut" | "regular", PricingTier[]> = {
-  regular: [
-    {
-      label: "1B1B - 2B1.5B",
-      maxBathrooms: 1.5,
-      maxBedrooms: 2,
-      price: "$148",
-      time: { zh: "2小时", en: "2 hours" },
-    },
-    {
-      label: "2B2B - 4B2.5B",
-      maxBathrooms: 2.5,
-      maxBedrooms: 4,
-      price: "$228",
-      time: { zh: "3小时", en: "3 hours" },
-    },
-    {
-      label: "3B3B - 4B4.5B",
-      maxBathrooms: 4.5,
-      maxBedrooms: 4,
-      price: "$278",
-      time: { zh: "4小时", en: "4 hours" },
-    },
-    {
-      label: "5B3B - 5B5.5B",
-      maxBathrooms: 5.5,
-      maxBedrooms: 5,
-      price: "$348",
-      time: { zh: "5小时", en: "5 hours" },
-    },
-  ],
-  deep: [
-    {
-      label: "1B1B - 2B1.5B",
-      maxBathrooms: 1.5,
-      maxBedrooms: 2,
-      price: "$280",
-      time: { zh: "3小时", en: "3 hours" },
-    },
-    {
-      label: "2B2B - 4B2.5B",
-      maxBathrooms: 2.5,
-      maxBedrooms: 4,
-      price: "$438",
-      time: { zh: "4小时", en: "4 hours" },
-    },
-    {
-      label: "3B3B - 4B4.5B",
-      maxBathrooms: 4.5,
-      maxBedrooms: 4,
-      price: "$548",
-      time: { zh: "5小时", en: "5 hours" },
-    },
-    {
-      label: "5B3B - 5B5.5B",
-      maxBathrooms: 5.5,
-      maxBedrooms: 5,
-      price: "$718",
-      time: { zh: "6小时", en: "6 hours" },
-    },
-  ],
-  moveOut: [
-    {
-      label: "1B1B - 2B1.5B",
-      maxBathrooms: 1.5,
-      maxBedrooms: 2,
-      price: "$358",
-      time: { zh: "3小时内", en: "within 3 hours" },
-    },
-    {
-      label: "2B2B - 4B2.5B",
-      maxBathrooms: 2.5,
-      maxBedrooms: 4,
-      price: "$458",
-      time: { zh: "4小时内", en: "within 4 hours" },
-    },
-    {
-      label: "3B3B - 4B4.5B",
-      maxBathrooms: 4.5,
-      maxBedrooms: 4,
-      price: "$589",
-      time: { zh: "5小时内", en: "within 5 hours" },
-    },
-    {
-      label: "5B3B - 5B5.5B",
-      maxBathrooms: 5.5,
-      maxBedrooms: 5,
-      price: "$678",
-      time: { zh: "6小时内", en: "within 6 hours" },
-    },
-  ],
-}
-
 const initialFormState: BookingFormState = {
+  addOnIds: [],
+  addOnOther: "",
   bathrooms: "",
   bedrooms: "",
   contact: "",
   fullName: "",
+  hasPets: false,
   notes: "",
   preferredDate: "",
   serviceAddress: "",
   serviceArea: "",
   serviceType: "",
+  studio: false,
 }
 
 function BookingPage() {
-  const { language } = useI18n()
-  const { content, isLoading } = useCmsContent([
-    "contactPage",
-    "paymentSettings",
-  ])
-
-  if (isLoading) {
-    return <BookingAvailabilityLoading />
-  }
-
-  if (!content.paymentSettings.enabled) {
-    const contactSettings =
-      content.contactPage?.[language] ?? defaultContactPage[language]
-
-    return (
-      <BookingPaymentDisabled
-        contactEmail={contactSettings.contactEmail}
-        contactPhone={contactSettings.contactPhone}
-        contactQrImage={contactSettings.qrImage}
-        language={language}
-      />
-    )
-  }
-
   return <BookingRequestSection />
-}
-
-function BookingAvailabilityLoading() {
-  return (
-    <section className="pt-[calc(60px+2rem)] pb-12 md:pt-[calc(72px+3rem)]">
-      <div className="mx-auto max-w-3xl space-y-4 px-4 sm:px-6">
-        <Skeleton className="h-32 w-full rounded-xl" />
-        <Skeleton className="h-56 w-full rounded-xl" />
-      </div>
-    </section>
-  )
-}
-
-function BookingPaymentDisabled({
-  contactEmail,
-  contactPhone,
-  contactQrImage,
-  language,
-}: {
-  contactEmail: string
-  contactPhone: string
-  contactQrImage: string
-  language: Language
-}) {
-  const isZh = language === "zh"
-
-  return (
-    <section className="relative overflow-hidden pt-[calc(60px+2rem)] pb-12 md:pt-[calc(72px+3rem)] md:pb-16">
-      <div className="relative mx-auto max-w-3xl space-y-4 px-4 sm:px-6">
-        <Card className="animate-fade-up border-blue-200 bg-blue-50/80 p-5 shadow-lg shadow-blue-950/5 sm:p-6 dark:border-blue-400/20 dark:bg-blue-500/10">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white dark:bg-blue-500">
-              <Info size={20} weight="bold" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-slate-950 dark:text-white">
-                {isZh ? "预约请联系企业微信客服" : "Contact WeCom to book"}
-              </h1>
-              <p className="mt-2 text-sm leading-7 text-slate-700 dark:text-slate-200">
-                {isZh
-                  ? "如需预约，请扫描下方二维码添加企业微信客服。网站目前仅用于服务完成后的订单付款。"
-                  : "To make a booking, scan the QR code below and add our WeCom support. The website is currently only used for payment after a service is completed."}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="animate-fade-up p-5 shadow-lg shadow-blue-950/5 sm:p-6">
-          <FooterContactBlock
-            contactDescription={
-              isZh
-                ? "建议优先扫码添加企业微信客服，我们会协助确认服务范围与可预约时间。"
-                : "Scan the QR code to add our WeCom support team. We will help confirm the service scope and availability."
-            }
-            contactEmail={contactEmail}
-            contactPhone={contactPhone}
-            contactQrImage={contactQrImage}
-            title={isZh ? "联系我们" : "Contact Us"}
-          />
-        </Card>
-      </div>
-    </section>
-  )
 }
 
 function BookingRequestSection() {
   const { cityName, language, regionName } = useI18n()
   const { content } = useCmsContent([
+    "bookingConfigs",
     "contactPage",
     "serviceLocations",
     "serviceRegions",
@@ -417,15 +250,56 @@ function BookingRequestSection() {
       ),
     [content.serviceLocations, content.serviceRegions]
   )
+  const bookingConfig = useMemo(
+    () =>
+      getBookingConfigForArea(
+        content.bookingConfigs ?? defaultCmsContent.bookingConfigs,
+        content.serviceLocations ?? defaultCmsContent.serviceLocations,
+        form.serviceArea
+      ),
+    [content.bookingConfigs, content.serviceLocations, form.serviceArea]
+  )
+  const selectedLocation = (content.serviceLocations ?? []).find(
+    (item) => `${item.city} · ${item.country}` === form.serviceArea
+  )
+  const selectedCountryCode = (content.serviceRegions ?? []).find(
+    (item) => item.name === selectedLocation?.country
+  )?.code2
+  const serviceItems = useMemo(
+    () =>
+      (bookingConfig?.items ?? []).filter(
+        (item) => item.type === "service" && item.enabled
+      ),
+    [bookingConfig]
+  )
+  const addOnItems = useMemo(
+    () =>
+      (bookingConfig?.items ?? []).filter(
+        (item) => item.type === "addon" && item.enabled
+      ),
+    [bookingConfig]
+  )
+  const selectedService = serviceItems.find(
+    (item) => item.id === form.serviceType
+  )
   const estimate = useMemo(
     () =>
-      getPriceEstimate({
-        bathrooms: form.bathrooms,
-        bedrooms: form.bedrooms,
-        language,
-        serviceType: form.serviceType,
+      calculateBookingEstimate({
+        addOnIds: form.addOnIds,
+        bathrooms: Number(form.bathrooms),
+        bedrooms: Number(form.bedrooms),
+        config: bookingConfig,
+        serviceTypeId: form.serviceType,
+        studio: form.studio,
       }),
-    [form.bathrooms, form.bedrooms, form.serviceType, language]
+    [
+      bookingConfig,
+      form.addOnIds,
+      form.bathrooms,
+      form.bedrooms,
+      form.serviceType,
+      form.studio,
+    ]
   )
   function updateForm<TField extends keyof BookingFormState>(
     field: TField,
@@ -448,20 +322,33 @@ function BookingRequestSection() {
       )
       return
     }
+    if (!isValidBookingPhone(form.contact, selectedCountryCode)) {
+      setSubmitError(
+        language === "zh"
+          ? "请填写可在服务地区接听的有效电话号码。"
+          : "Enter a valid local phone number for the service area."
+      )
+      return
+    }
     setIsSubmitting(true)
     setSubmitError("")
 
     try {
       const result = await createBookingOrder({
+        addOnIds: form.addOnIds,
+        addOnOther: form.addOnOther,
         bathrooms: form.bathrooms,
         bedrooms: form.bedrooms,
         contact: form.contact,
         customerName: form.fullName,
+        hasPets: form.hasPets,
         note: form.notes,
         serviceAddress: form.serviceAddress,
         serviceArea: form.serviceArea,
         serviceDate: form.preferredDate,
-        serviceType: form.serviceType,
+        serviceType: selectedService?.label ?? "",
+        serviceTypeId: form.serviceType,
+        studio: form.studio,
         timezoneOffsetMinutes: new Date().getTimezoneOffset(),
       })
       setSubmittedOrder(result.order)
@@ -494,6 +381,8 @@ function BookingRequestSection() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_16%,rgba(37,99,235,0.12),transparent_28%),radial-gradient(circle_at_86%_18%,rgba(148,163,184,0.16),transparent_26%)] dark:bg-[radial-gradient(circle_at_14%_16%,rgba(59,130,246,0.18),transparent_28%),radial-gradient(circle_at_86%_18%,rgba(37,99,235,0.14),transparent_26%)]" />
       <div className="relative md:hidden">
         <MobileBookingFlow
+          addOnItems={addOnItems}
+          bookingConfig={bookingConfig}
           copy={copy}
           estimate={estimate}
           form={form}
@@ -501,6 +390,7 @@ function BookingRequestSection() {
           minimumServiceDate={minimumServiceDate}
           onSubmit={handleSubmit}
           regions={serviceRegions}
+          serviceItems={serviceItems}
           submitError={submitError}
           updateForm={updateForm}
         />
@@ -519,6 +409,10 @@ function BookingRequestSection() {
             </div>
 
             <div className="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-6 sm:py-5">
+              <div className="sm:col-span-2">
+                <div className="text-xs font-semibold text-primary">第一步</div>
+                <h3 className="mt-0.5 text-sm font-semibold text-foreground">选择服务</h3>
+              </div>
               <FormField
                 htmlFor="serviceArea"
                 label={copy.serviceArea}
@@ -526,7 +420,15 @@ function BookingRequestSection() {
               >
                 <Select
                   name="serviceArea"
-                  onValueChange={(value) => updateForm("serviceArea", value)}
+                  onValueChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      addOnIds: [],
+                      addOnOther: "",
+                      serviceArea: value,
+                      serviceType: "",
+                    }))
+                  }
                   required
                   value={form.serviceArea}
                 >
@@ -554,9 +456,6 @@ function BookingRequestSection() {
                         })}
                       </SelectGroup>
                     ))}
-                    <SelectItem value={copy.otherCity}>
-                      {copy.otherCity}
-                    </SelectItem>
                   </SelectContent>
                 </Select>
               </FormField>
@@ -579,16 +478,52 @@ function BookingRequestSection() {
                     <SelectValue placeholder={copy.serviceType} />
                   </SelectTrigger>
                   <SelectContent>
-                    {copy.serviceTypes.map((service) => (
-                      <SelectItem key={service} value={service}>
-                        {service}
+                    {serviceItems.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </FormField>
 
-              <FormField htmlFor="bedrooms" label={copy.bedrooms} required>
+              {selectedService?.description ? (
+                <div className="rounded-md border border-blue-200 bg-blue-50/70 px-3 py-2 text-xs leading-5 text-slate-700 sm:col-span-2 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-slate-200">
+                  {selectedService.description}
+                </div>
+              ) : null}
+
+              <div className="mt-2 border-t border-border pt-3 sm:col-span-2">
+                <div className="text-xs font-semibold text-primary">第二步</div>
+                <h3 className="mt-0.5 text-sm font-semibold text-foreground">填写房屋及预约信息</h3>
+              </div>
+
+              <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+                <label className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm">
+                  <Checkbox
+                    checked={form.studio}
+                    onCheckedChange={(checked) =>
+                      setForm((current) => ({
+                        ...current,
+                        bedrooms: checked === true ? "0" : "",
+                        studio: checked === true,
+                      }))
+                    }
+                  />
+                  Studio（开间，无独立卧室）
+                </label>
+
+                <BookingAddOnSelector
+                  addOnOther={form.addOnOther}
+                  currency={bookingConfig?.currency ?? "USD"}
+                  items={addOnItems}
+                  onOtherChange={(value) => updateForm("addOnOther", value)}
+                  onSelectedChange={(value) => updateForm("addOnIds", value)}
+                  selectedIds={form.addOnIds}
+                />
+              </div>
+
+              {!form.studio ? <FormField htmlFor="bedrooms" label={copy.bedrooms} required>
                 <Input
                   className="h-9 rounded-md"
                   id="bedrooms"
@@ -603,7 +538,7 @@ function BookingRequestSection() {
                   type="number"
                   value={form.bedrooms}
                 />
-              </FormField>
+              </FormField> : null}
 
               <FormField htmlFor="bathrooms" label={copy.bathrooms} required>
                 <Input
@@ -616,10 +551,22 @@ function BookingRequestSection() {
                   }
                   placeholder="1.5"
                   required
-                  step="0.5"
+                  step="1"
                   type="number"
                   value={form.bathrooms}
                 />
+              </FormField>
+
+              <FormField label="宠物情况">
+                <label className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm">
+                  <Checkbox
+                    checked={form.hasPets}
+                    onCheckedChange={(checked) =>
+                      updateForm("hasPets", checked === true)
+                    }
+                  />
+                  是否有宠物
+                </label>
               </FormField>
 
               <FormField
@@ -663,12 +610,11 @@ function BookingRequestSection() {
               <PriceEstimatePanel
                 copy={copy}
                 estimate={estimate}
-                hasInputs={Boolean(
-                  form.serviceType && form.bedrooms && form.bathrooms
-                )}
+                hasInputs={Boolean(form.serviceType && (form.studio || form.bedrooms) && form.bathrooms)}
+                service={selectedService}
               />
 
-              <FormField htmlFor="fullName" label={copy.fullName}>
+              <FormField htmlFor="fullName" label={copy.fullName} required>
                 <Input
                   className="h-9 rounded-md"
                   id="fullName"
@@ -677,6 +623,7 @@ function BookingRequestSection() {
                     updateForm("fullName", event.target.value)
                   }
                   placeholder={copy.fullName}
+                  required
                   value={form.fullName}
                 />
               </FormField>
@@ -691,6 +638,7 @@ function BookingRequestSection() {
                   }
                   placeholder={copy.contact}
                   required
+                  type="tel"
                   value={form.contact}
                 />
               </FormField>
@@ -788,13 +736,16 @@ function BookingRequestSection() {
 }
 
 type MobileBookingFlowProps = {
+  addOnItems: CmsBookingCatalogItem[]
+  bookingConfig?: CmsBookingLocationConfig
   copy: BookingCopy
-  estimate: PriceEstimate | null
+  estimate: ReturnType<typeof calculateBookingEstimate>
   form: BookingFormState
   isSubmitting: boolean
   minimumServiceDate: string
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   regions: ReturnType<typeof regionsWithDerivedCities>
+  serviceItems: CmsBookingCatalogItem[]
   submitError: string
   updateForm: <TField extends keyof BookingFormState>(
     field: TField,
@@ -803,6 +754,8 @@ type MobileBookingFlowProps = {
 }
 
 function MobileBookingFlow({
+  addOnItems,
+  bookingConfig,
   copy,
   estimate,
   form,
@@ -810,6 +763,7 @@ function MobileBookingFlow({
   minimumServiceDate,
   onSubmit,
   regions,
+  serviceItems,
   submitError,
   updateForm,
 }: MobileBookingFlowProps) {
@@ -821,7 +775,7 @@ function MobileBookingFlow({
       ? [copy.serviceType, "房屋信息", "联系确认"]
       : [copy.serviceType, "Home details", "Contact"]
   const hasHomeDetails = Boolean(
-    form.bedrooms &&
+    (form.studio || form.bedrooms) &&
     form.bathrooms &&
     form.preferredDate &&
     form.serviceAddress.trim()
@@ -862,12 +816,12 @@ function MobileBookingFlow({
   }
 
   function submitBooking(event: FormEvent<HTMLFormElement>) {
-    if (!form.contact.trim()) {
+    if (!form.fullName.trim() || !isValidBookingPhone(form.contact)) {
       event.preventDefault()
       setStepError(
         language === "zh"
-          ? "请留下至少一种联系方式。"
-          : "Please leave at least one contact method."
+          ? "请填写联系人和可在当地接听的有效电话号码。"
+          : "Enter a contact name and a valid local phone number."
       )
       return
     }
@@ -939,7 +893,12 @@ function MobileBookingFlow({
               >
                 <Select
                   name="serviceArea"
-                  onValueChange={(value) => updateForm("serviceArea", value)}
+                  onValueChange={(value) => {
+                    updateForm("serviceArea", value)
+                    updateForm("serviceType", "")
+                    updateForm("addOnIds", [])
+                    updateForm("addOnOther", "")
+                  }}
                   value={form.serviceArea}
                 >
                   <SelectTrigger
@@ -965,9 +924,6 @@ function MobileBookingFlow({
                         })}
                       </SelectGroup>
                     ))}
-                    <SelectItem value={copy.otherCity}>
-                      {copy.otherCity}
-                    </SelectItem>
                   </SelectContent>
                 </Select>
               </FormField>
@@ -977,8 +933,8 @@ function MobileBookingFlow({
                   {copy.serviceType}
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  {copy.serviceTypes.map((service) => {
-                    const isSelected = form.serviceType === service
+                  {serviceItems.map((service) => {
+                    const isSelected = form.serviceType === service.id
                     return (
                       <button
                         className={`min-h-12 rounded-lg border px-3 text-left text-[13px] font-medium transition ${
@@ -986,15 +942,20 @@ function MobileBookingFlow({
                             ? "border-primary bg-primary text-primary-foreground shadow-sm"
                             : "border-border bg-card text-foreground hover:border-primary/50"
                         }`}
-                        key={service}
-                        onClick={() => updateForm("serviceType", service)}
+                        key={service.id}
+                        onClick={() => updateForm("serviceType", service.id)}
                         type="button"
                       >
-                        {service}
+                        {service.label}
                       </button>
                     )
                   })}
                 </div>
+                {serviceItems.find((item) => item.id === form.serviceType)?.description ? (
+                  <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50/70 p-3 text-xs leading-5 text-slate-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-slate-200">
+                    {serviceItems.find((item) => item.id === form.serviceType)?.description}
+                  </p>
+                ) : null}
               </div>
             </MobileBookingSection>
           </>
@@ -1010,24 +971,48 @@ function MobileBookingFlow({
               }
               title={language === "zh" ? "房屋信息" : "Home details"}
             >
-              <div className="grid grid-cols-2 gap-3">
-                <CountStepper
+              <div className="mb-3 grid grid-cols-2 gap-3">
+                <label className="flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm">
+                  <Checkbox
+                    checked={form.studio}
+                    onCheckedChange={(checked) => {
+                      updateForm("studio", checked === true)
+                      updateForm("bedrooms", checked === true ? "0" : "")
+                    }}
+                  />
+                  Studio（开间）
+                </label>
+                <BookingAddOnSelector
+                  addOnOther={form.addOnOther}
+                  currency={bookingConfig?.currency ?? "USD"}
+                  items={addOnItems}
+                  onOtherChange={(value) => updateForm("addOnOther", value)}
+                  onSelectedChange={(value) => updateForm("addOnIds", value)}
+                  selectedIds={form.addOnIds}
+                />
+              </div>
+              <div className={form.studio ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
+                {!form.studio ? <CountStepper
                   label={copy.bedrooms}
                   max={8}
                   min={1}
                   onChange={(value) => updateForm("bedrooms", value)}
                   step={1}
                   value={form.bedrooms}
-                />
+                /> : null}
                 <CountStepper
                   label={copy.bathrooms}
                   max={8}
                   min={1}
                   onChange={(value) => updateForm("bathrooms", value)}
-                  step={0.5}
+                  step={1}
                   value={form.bathrooms}
                 />
               </div>
+              <label className="mt-3 flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm">
+                <Checkbox checked={form.hasPets} onCheckedChange={(checked) => updateForm("hasPets", checked === true)} />
+                是否有宠物
+              </label>
               <FormField
                 className="mt-4 max-w-full min-w-0 overflow-hidden"
                 htmlFor="mobile-preferred-date"
@@ -1066,9 +1051,8 @@ function MobileBookingFlow({
             <PriceEstimatePanel
               copy={copy}
               estimate={estimate}
-              hasInputs={Boolean(
-                form.serviceType && form.bedrooms && form.bathrooms
-              )}
+              hasInputs={Boolean(form.serviceType && (form.studio || form.bedrooms) && form.bathrooms)}
+              service={serviceItems.find((item) => item.id === form.serviceType)}
             />
           </>
         ) : null}
@@ -1084,7 +1068,7 @@ function MobileBookingFlow({
               title={language === "zh" ? "联系信息" : "Contact details"}
             >
               <div className="space-y-4">
-                <FormField htmlFor="mobile-full-name" label={copy.fullName}>
+                <FormField htmlFor="mobile-full-name" label={copy.fullName} required>
                   <Input
                     className="h-11 rounded-lg text-sm"
                     id="mobile-full-name"
@@ -1092,6 +1076,7 @@ function MobileBookingFlow({
                       updateForm("fullName", event.target.value)
                     }
                     placeholder={copy.fullName}
+                    required
                     value={form.fullName}
                   />
                 </FormField>
@@ -1107,6 +1092,7 @@ function MobileBookingFlow({
                       updateForm("contact", event.target.value)
                     }
                     placeholder={copy.contact}
+                    type="tel"
                     value={form.contact}
                   />
                 </FormField>
@@ -1126,9 +1112,8 @@ function MobileBookingFlow({
             <PriceEstimatePanel
               copy={copy}
               estimate={estimate}
-              hasInputs={Boolean(
-                form.serviceType && form.bedrooms && form.bathrooms
-              )}
+              hasInputs={Boolean(form.serviceType && (form.studio || form.bedrooms) && form.bathrooms)}
+              service={serviceItems.find((item) => item.id === form.serviceType)}
             />
             {submitError ? (
               <MobileMessage tone="red">{submitError}</MobileMessage>
@@ -1290,14 +1275,92 @@ function MobileMessage({
   )
 }
 
+function BookingAddOnSelector({
+  addOnOther,
+  currency,
+  items,
+  onOtherChange,
+  onSelectedChange,
+  selectedIds,
+}: {
+  addOnOther: string
+  currency: string
+  items: CmsBookingCatalogItem[]
+  onOtherChange: (value: string) => void
+  onSelectedChange: (value: string[]) => void
+  selectedIds: string[]
+}) {
+  const selectedItems = items.filter((item) => selectedIds.includes(item.id))
+  const hasOther = selectedItems.some(
+    (item) => item.id.includes("other") || item.label.includes("其他")
+  )
+
+  function toggleItem(itemId: string, checked: boolean) {
+    onSelectedChange(
+      checked
+        ? Array.from(new Set([...selectedIds, itemId]))
+        : selectedIds.filter((id) => id !== itemId)
+    )
+  }
+
+  return (
+    <div className="min-w-0">
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button className="h-9 w-full min-w-0 justify-between rounded-md px-3 text-left" title="附加项目（不包含在基础清洁服务内）" type="button" variant="outline">
+            <span className="min-w-0 truncate text-xs font-medium">
+              附加项目
+              <span className="font-normal text-muted-foreground">
+                {selectedItems.length ? ` · ${selectedItems.map((item) => item.label).join("、")}` : " · 未选择"}
+              </span>
+            </span>
+            <Plus className="size-4 shrink-0" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>选择附加项目</DialogTitle>
+            <DialogDescription>支持多选，项目内容和参考价格由当前服务地区配置。</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[52vh] space-y-2 overflow-y-auto overscroll-contain pr-1">
+            {items.map((item) => (
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:border-primary/40" key={item.id}>
+                <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={(checked) => toggleItem(item.id, checked === true)} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-3 text-sm font-medium">
+                    <span>{item.label}</span>
+                    <span className="shrink-0 font-mono text-xs text-primary">
+                      {item.quoteRequired ? "客服确认" : `${currency} ${item.basePrice.toFixed(2)}`}
+                    </span>
+                  </span>
+                  {item.description ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{item.description}</span> : null}
+                </span>
+              </label>
+            ))}
+            {!items.length ? <div className="py-8 text-center text-sm text-muted-foreground">当前地区暂无可选附加项目</div> : null}
+            {hasOther ? (
+              <FormField label="其他附加项目说明">
+                <Textarea className="min-h-20" onChange={(event) => onOtherChange(event.target.value)} placeholder="请说明需要客服确认的其他项目" value={addOnOther} />
+              </FormField>
+            ) : null}
+          </div>
+          <DialogFooter><DialogClose asChild><Button type="button">确认选择</Button></DialogClose></DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 function PriceEstimatePanel({
   copy,
   estimate,
   hasInputs,
+  service,
 }: {
   copy: BookingCopy
-  estimate: PriceEstimate | null
+  estimate: ReturnType<typeof calculateBookingEstimate>
   hasInputs: boolean
+  service?: CmsBookingCatalogItem
 }) {
   return (
     <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-3 sm:col-span-2 dark:border-blue-400/20 dark:bg-blue-500/10">
@@ -1305,92 +1368,31 @@ function PriceEstimatePanel({
         {copy.estimateTitle}
       </div>
       {estimate ? (
-        <div className="mt-2.5 grid gap-2 text-sm sm:grid-cols-3">
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              {estimate.label}
+        <div className="mt-2.5 grid gap-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <div className="min-w-0">
+            <div className="font-semibold text-slate-950 dark:text-white">
+              {service?.label}
             </div>
-            <div className="mt-0.5 font-semibold text-slate-950 dark:text-white">
-              {estimate.time}
-            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">
+              {service?.description || copy.estimateNote}
+            </p>
           </div>
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              {copy.estimateTitle}
+          <div className="text-left sm:text-right">
+            <div className="text-xl font-bold text-blue-700 dark:text-blue-200">
+              {estimate.currency} {estimate.amount.toFixed(2)}
             </div>
-            <div className="mt-0.5 text-lg font-bold text-blue-700 dark:text-blue-200">
-              {estimate.price}
-            </div>
-          </div>
-          <div className="text-xs leading-5 text-slate-600 dark:text-slate-300">
-            {copy.estimateNote}
+            <div className="mt-1 text-[11px] text-slate-500">最终费用及服务安排由客服确认</div>
           </div>
         </div>
       ) : (
-        <p className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-300">
-          {hasInputs ? copy.estimateCustom : copy.estimateEmpty}
-        </p>
+        <div className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-300">
+          {service?.description ? <p className="mb-1">{service.description}</p> : null}
+          <p>{hasInputs ? copy.estimateCustom : copy.estimateEmpty}</p>
+        </div>
       )}
+      <p className="mt-2 border-t border-blue-200/70 pt-2 text-[11px] leading-5 text-slate-500 dark:border-blue-400/20 dark:text-slate-400">当前价格仅供参考，最终费用及服务安排由客服确认。</p>
     </div>
   )
-}
-
-function getPriceEstimate({
-  bathrooms,
-  bedrooms,
-  language,
-  serviceType,
-}: {
-  bathrooms: string
-  bedrooms: string
-  language: Language
-  serviceType: string
-}): PriceEstimate | null {
-  const pricingKey = getPricingKey(serviceType)
-  const bedroomCount = Number(bedrooms)
-  const bathroomCount = Number(bathrooms)
-
-  if (
-    !pricingKey ||
-    !Number.isFinite(bedroomCount) ||
-    !Number.isFinite(bathroomCount) ||
-    bedroomCount <= 0 ||
-    bathroomCount <= 0
-  ) {
-    return null
-  }
-
-  const tier = pricingTable[pricingKey].find(
-    (item) =>
-      bedroomCount <= item.maxBedrooms && bathroomCount <= item.maxBathrooms
-  )
-
-  return tier
-    ? { label: tier.label, price: tier.price, time: tier.time[language] }
-    : null
-}
-
-function getPricingKey(serviceType: string) {
-  const normalized = serviceType.toLowerCase()
-
-  if (normalized.includes("日常") || normalized.includes("regular")) {
-    return "regular" as const
-  }
-
-  if (normalized.includes("深度") || normalized.includes("deep")) {
-    return "deep" as const
-  }
-
-  if (
-    normalized.includes("退租") ||
-    normalized.includes("开荒") ||
-    normalized.includes("move-out") ||
-    normalized.includes("post-renovation")
-  ) {
-    return "moveOut" as const
-  }
-
-  return null
 }
 
 function getLocalDateKey(date = new Date()) {
@@ -1421,14 +1423,18 @@ function BookingSuccessPage({
   qrImage: string
 }) {
   const isZh = language === "zh"
-  const [isOrderIdCopied, setIsOrderIdCopied] = useState(false)
+  const [isBookingCopied, setIsBookingCopied] = useState(false)
 
-  async function copyOrderId() {
+  async function copyBookingInfo() {
     try {
-      await navigator.clipboard.writeText(order.orderId)
-      setIsOrderIdCopied(true)
-      toast.success(isZh ? "订单号已复制" : "Order number copied")
-      window.setTimeout(() => setIsOrderIdCopied(false), 1800)
+      await navigator.clipboard.writeText(formatBookingRequest(order))
+      setIsBookingCopied(true)
+      toast.success(
+        isZh
+          ? "已复制，请返回企业微信粘贴并发送给客服。"
+          : "Copied. Return to WeCom and send it to support."
+      )
+      window.setTimeout(() => setIsBookingCopied(false), 1800)
     } catch {
       toast.error(isZh ? "复制失败，请手动复制" : "Copy failed")
     }
@@ -1445,7 +1451,7 @@ function BookingSuccessPage({
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-foreground sm:text-2xl">
-                  {isZh ? "预约需求已提交" : "Booking request submitted"}
+                  {isZh ? "预约信息已生成" : "Booking information ready"}
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {copy.success}
@@ -1464,27 +1470,21 @@ function BookingSuccessPage({
                   <div className="min-w-0 flex-1 font-mono text-lg font-semibold break-all text-foreground">
                     {order.orderId}
                   </div>
-                  <Button
-                    aria-label={isZh ? "复制订单号" : "Copy order number"}
-                    className="size-9 shrink-0"
-                    onClick={copyOrderId}
-                    size="icon"
-                    title={isZh ? "复制订单号" : "Copy order number"}
-                    type="button"
-                    variant="outline"
-                  >
-                    {isOrderIdCopied ? (
-                      <Check size={17} weight="bold" />
-                    ) : (
-                      <ClipboardText size={17} weight="bold" />
-                    )}
-                  </Button>
                 </div>
               </div>
+              <Button
+                className="mt-4 h-11 w-full"
+                onClick={copyBookingInfo}
+                type="button"
+                variant="brand"
+              >
+                {isBookingCopied ? <Check size={18} weight="bold" /> : <ClipboardText size={18} weight="bold" />}
+                {isZh ? "一键复制预约信息" : "Copy booking information"}
+              </Button>
               <p className="mt-4 text-sm leading-7 text-muted-foreground">
                 {isZh
-                  ? "请扫码添加企业微信客服，并发送上方订单号。客服会为您分配阿姨，并确认服务细节与最终费用。"
-                  : "Scan to add our WeCom support and send the order number above. Support will assign an auntie and confirm the service details and final price."}
+                  ? "请点击按钮复制完整预约信息，并返回企业微信发送给客服。客服收到信息后，会为您确认服务安排。"
+                  : "Copy the complete booking information and send it to support in WeCom. Support will confirm the arrangement."}
               </p>
               <div className="mt-4 grid gap-2 text-sm">
                 <a

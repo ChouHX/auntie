@@ -2,22 +2,32 @@ import { randomUUID } from "node:crypto"
 
 import type { NextRequest } from "next/server"
 
-import { updateCmsContent } from "@/lib/cms-store"
+import { readCmsContent, updateCmsContent } from "@/lib/cms-store"
+import {
+  createOrderAddOnSnapshot,
+  getBookingConfigForArea,
+  isValidBookingPhone,
+} from "@/lib/booking-config"
 import { logServerEvent, serializeServerError } from "@/lib/server-log"
-import type { CmsPaymentOrder } from "@/types/cms"
+import type { CmsPaymentOrder, CmsServiceLocation, CmsServiceRegion } from "@/types/cms"
 
 export const runtime = "nodejs"
 
 type BookingOrderBody = {
+  addOnIds?: string[]
+  addOnOther?: string
   bathrooms?: string
   bedrooms?: string
   contact?: string
   customerName?: string
+  hasPets?: boolean
   note?: string
   serviceAddress?: string
   serviceArea?: string
   serviceDate?: string
   serviceType?: string
+  serviceTypeId?: string
+  studio?: boolean
   timezoneOffsetMinutes?: number
 }
 
@@ -47,26 +57,21 @@ export async function POST(request: NextRequest) {
   }
   const now = new Date().toISOString()
   const serviceDate = normalizeText(body.serviceDate)
+  const serviceArea = normalizeText(body.serviceArea)
+  const contact = normalizeText(body.contact)
+  const studio = body.studio === true
+  const bedrooms = studio ? 0 : normalizeRoomCount(body.bedrooms)
+  const bathrooms = normalizeRoomCount(body.bathrooms)
   const minimumServiceDate = getLocalDateKey(body.timezoneOffsetMinutes)
-  const orderDraft: Omit<CmsPaymentOrder, "orderId"> = {
-    amount: "",
-    contact: normalizeText(body.contact),
-    createdAt: now,
-    customerName: normalizeText(body.customerName) || "自主预约客户",
-    note: createOrderNote(body),
-    serviceAddress: normalizeText(body.serviceAddress),
-    serviceArea: normalizeText(body.serviceArea),
-    serviceDate,
-    serviceType: normalizeText(body.serviceType),
-    status: "awaiting_confirmation",
-    updatedAt: now,
-  }
 
   if (
-    !orderDraft.contact ||
-    !orderDraft.serviceAddress ||
-    !orderDraft.serviceArea ||
-    !orderDraft.serviceType ||
+    !contact ||
+    !normalizeText(body.customerName) ||
+    !normalizeText(body.serviceAddress) ||
+    !serviceArea ||
+    !normalizeText(body.serviceTypeId || body.serviceType) ||
+    (!studio && bedrooms < 1) ||
+    bathrooms < 1 ||
     !isValidDateKey(serviceDate) ||
     serviceDate < minimumServiceDate
   ) {
@@ -83,11 +88,67 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const bookingContent = await readCmsContent()
+    const config = getBookingConfigForArea(
+      bookingContent.bookingConfigs,
+      bookingContent.serviceLocations,
+      serviceArea
+    )
+    const service = config?.items.find(
+      (item) =>
+        item.type === "service" &&
+        item.enabled &&
+        (item.id === normalizeText(body.serviceTypeId) ||
+          item.label === normalizeText(body.serviceType))
+    )
+    const phoneIsValid = isValidBookingPhone(
+      contact,
+      getServiceAreaCountryCode(
+        bookingContent.serviceLocations,
+        bookingContent.serviceRegions,
+        serviceArea
+      )
+    )
+
+    if (!phoneIsValid || !service) {
+      return bookingJsonResponse(
+        {
+          error: "booking_order_invalid",
+          message: !phoneIsValid
+            ? "A valid local phone number is required."
+            : "Selected cleaning service is unavailable.",
+          requestId,
+        },
+        400,
+        requestId
+      )
+    }
+
     let savedOrder: CmsPaymentOrder | null = null
     await updateCmsContent((content) => {
       const order: CmsPaymentOrder = {
-        ...orderDraft,
+        addOnItems: createOrderAddOnSnapshot(
+          config,
+          Array.isArray(body.addOnIds) ? body.addOnIds : []
+        ),
+        addOnOther: normalizeText(body.addOnOther),
+        amount: "",
+        bathrooms,
+        bedrooms,
+        contact,
+        createdAt: now,
+        customerName: normalizeText(body.customerName),
+        hasPets: body.hasPets === true,
+        note: normalizeText(body.note),
         orderId: createPaymentOrderId(content.paymentOrders ?? []),
+        serviceAddress: normalizeText(body.serviceAddress),
+        serviceArea,
+        serviceDate,
+        serviceType: service.label,
+        serviceTypeId: service.id,
+        status: "awaiting_confirmation",
+        studio,
+        updatedAt: now,
       }
       savedOrder = order
 
@@ -167,17 +228,20 @@ function isValidDateKey(value: string) {
   )
 }
 
-function createOrderNote(body: BookingOrderBody) {
-  const rows = [
-    ["预约来源", "网站自主预约"],
-    ["卧室数量", body.bedrooms],
-    ["卫生间数量", body.bathrooms],
-    ["备注", body.note],
-  ]
-    .map(([label, value]) => [label, normalizeText(value)] as const)
-    .filter(([, value]) => value)
+function normalizeRoomCount(value: unknown) {
+  const count = Number(value)
+  return Number.isFinite(count) && count >= 0 ? count : 0
+}
 
-  return rows.map(([label, value]) => `${label}: ${value}`).join("\n")
+function getServiceAreaCountryCode(
+  locations: CmsServiceLocation[],
+  regions: CmsServiceRegion[],
+  serviceArea: string
+) {
+  const location = locations.find(
+    (item) => `${item.city} · ${item.country}` === serviceArea
+  )
+  return regions.find((item) => item.name === location?.country)?.code2
 }
 
 function createPaymentOrderId(existingOrders: CmsPaymentOrder[]) {

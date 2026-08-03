@@ -3,6 +3,8 @@ import type {
   CmsAfterSalesPageContent,
   CmsBlogCategory,
   CmsBlogPost,
+  CmsBookingCatalogItem,
+  CmsBookingLocationConfig,
   CmsContactPageContent,
   CmsContent,
   CmsGalleryItem,
@@ -436,6 +438,132 @@ const defaultServiceLocations: CmsServiceLocation[] = [
   },
 ]
 
+const defaultBookingCatalogItems: CmsBookingCatalogItem[] = [
+  {
+    basePrice: 98,
+    bathroomPrices: [
+      { amount: 25, quantity: 1 },
+      { amount: 50, quantity: 2 },
+      { amount: 75, quantity: 3 },
+      { amount: 100, quantity: 4 },
+    ],
+    bedroomPrices: [
+      { amount: 25, quantity: 1 },
+      { amount: 50, quantity: 2 },
+      { amount: 75, quantity: 3 },
+      { amount: 100, quantity: 4 },
+      { amount: 125, quantity: 5 },
+    ],
+    description: "适合日常维护，包含客厅、卧室、厨房和卫生间基础清洁。",
+    enabled: true,
+    id: "regular-cleaning",
+    label: "日常清洁",
+    studioPrice: 20,
+    type: "service",
+  },
+  {
+    basePrice: 180,
+    bathroomPrices: [
+      { amount: 50, quantity: 1 },
+      { amount: 100, quantity: 2 },
+      { amount: 150, quantity: 3 },
+      { amount: 200, quantity: 4 },
+    ],
+    bedroomPrices: [
+      { amount: 50, quantity: 1 },
+      { amount: 100, quantity: 2 },
+      { amount: 150, quantity: 3 },
+      { amount: 200, quantity: 4 },
+      { amount: 250, quantity: 5 },
+    ],
+    description: "适合较长时间未彻底清洁的住宅，重点处理厨房、浴室和卫生死角。",
+    enabled: true,
+    id: "deep-cleaning",
+    label: "深度清洁",
+    studioPrice: 40,
+    type: "service",
+  },
+  ...[
+    ["move-out-cleaning", "退租清洁"],
+    ["post-renovation-cleaning", "开荒清洁"],
+    ["carpet-cleaning", "地毯清洗"],
+    ["commercial-cleaning", "商业清洁"],
+    ["recurring-cleaning", "定期清洁"],
+    ["other-cleaning", "其他"],
+  ].map(([id, label]) => ({
+    basePrice: 0,
+    description: "具体服务范围和费用由客服根据实际需求确认。",
+    enabled: true,
+    id,
+    label,
+    quoteRequired: true,
+    type: "service" as const,
+  })),
+  {
+    basePrice: 35,
+    description: "清洁冰箱内部，不包含严重结冰处理。",
+    enabled: true,
+    id: "inside-fridge",
+    label: "冰箱内部清洁",
+    type: "addon",
+  },
+  {
+    basePrice: 35,
+    description: "清洁烤箱内部及可拆卸托盘。",
+    enabled: true,
+    id: "inside-oven",
+    label: "烤箱内部清洁",
+    type: "addon",
+  },
+  {
+    basePrice: 30,
+    description: "清洁橱柜内部，物品需提前清空。",
+    enabled: true,
+    id: "inside-cabinets",
+    label: "橱柜内部清洁",
+    type: "addon",
+  },
+  {
+    basePrice: 0,
+    description: "填写其他不包含在基础服务内的需求，由客服确认。",
+    enabled: true,
+    id: "other-addon",
+    label: "其他",
+    quoteRequired: true,
+    type: "addon",
+  },
+]
+
+const defaultBookingConfigs: CmsBookingLocationConfig[] =
+  defaultServiceLocations.map((location) => ({
+    currency:
+      location.country === "英国"
+        ? "GBP"
+        : location.country === "加拿大"
+          ? "CAD"
+          : location.country === "澳大利亚"
+            ? "AUD"
+            : location.country === "新西兰"
+              ? "NZD"
+              : location.country === "新加坡"
+                ? "SGD"
+                : location.country === "马来西亚"
+                  ? "MYR"
+                  : location.country === "日本"
+                    ? "JPY"
+                    : location.country === "韩国"
+                      ? "KRW"
+                      : location.country === "法国"
+                        ? "EUR"
+                        : "USD",
+    items: defaultBookingCatalogItems.map((item) => ({
+      ...item,
+      bathroomPrices: item.bathroomPrices?.map((price) => ({ ...price })),
+      bedroomPrices: item.bedroomPrices?.map((price) => ({ ...price })),
+    })),
+    locationId: location.id,
+  }))
+
 const defaultContactPage: CmsContent["contactPage"] = {
   zh: {
     company: "AUNTIE CHEN HOME SERVICES INC",
@@ -691,10 +819,12 @@ const defaultCmsContent: CmsContent = {
   afterSalesPage: defaultAfterSalesPage,
   blogCategories: defaultBlogCategories,
   blogPosts: defaultBlogPosts,
+  bookingConfigs: defaultBookingConfigs,
   contactPage: defaultContactPage,
   dashboardTasks: createDefaultTasks(),
   galleryItems: defaultGalleryItems,
   reviewItems: defaultReviewItems,
+  salesMembers: [],
   faq: {
     zh: {
       ...faqContent.zh,
@@ -715,6 +845,26 @@ const defaultCmsContent: CmsContent = {
       })),
     },
   },
+  formulaTemplates: [
+    {
+      createdAt: "",
+      enabled: true,
+      id: "formula-order-profit",
+      name: "默认公司利润",
+      target: "orderProfit",
+      tokens: [
+        { type: "field", value: "receivedAmount" },
+        { type: "operator", value: "-" },
+        { type: "field", value: "auntieSalary" },
+        { type: "operator", value: "-" },
+        { type: "field", value: "otherCost" },
+        { type: "operator", value: "-" },
+        { type: "field", value: "salesCommission" },
+      ],
+      updatedAt: "",
+      version: 1,
+    },
+  ],
   paymentOrders: [],
   paymentSettings: {
     enabled: false,
@@ -742,6 +892,7 @@ export {
   defaultAfterSalesPage,
   defaultBlogCategories,
   defaultBlogPosts,
+  defaultBookingConfigs,
   defaultCmsContent,
   defaultContactPage,
   defaultGalleryItems,

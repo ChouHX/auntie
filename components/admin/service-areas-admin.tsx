@@ -110,7 +110,7 @@ export function ServiceAreasAdmin({
   isSaving: boolean
   onCommit: PersistContent
 }) {
-  const [activeTab, setActiveTab] = useState<"regions" | "locations">("regions")
+  const [activeTab, setActiveTab] = useState<"locations" | "regions">("regions")
   const [editingRegion, setEditingRegion] = useState<RegionDraft | null>(null)
   const [editingLocation, setEditingLocation] = useState<LocationDraft | null>(
     null
@@ -226,6 +226,9 @@ export function ServiceAreasAdmin({
     await onCommit(
       (current) => ({
         ...current,
+        bookingConfigs: current.bookingConfigs.filter((config) =>
+          nextLocations.some((location) => location.id === config.locationId)
+        ),
         serviceRegions: nextRegions,
         serviceLocations: nextLocations,
       }),
@@ -275,6 +278,9 @@ export function ServiceAreasAdmin({
     await onCommit(
       (current) => ({
         ...current,
+        bookingConfigs: current.bookingConfigs.filter(
+          (config) => config.locationId !== locationId
+        ),
         serviceLocations: nextLocations,
       }),
       "服务点已删除"

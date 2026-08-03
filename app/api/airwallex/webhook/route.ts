@@ -14,6 +14,8 @@ import {
   normalizeNotificationSettings,
   sendPaymentOrderNotification,
 } from "@/lib/form-notifications"
+import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
+import { persistOrderProfitCnyIfNeeded } from "@/lib/order-profit-exchange-store"
 import type {
   CmsContent,
   CmsNotificationSettings,
@@ -155,11 +157,9 @@ async function applyAirwallexWebhookEvent(
       return content
     }
 
-    const nextOrder = createOrderFromAirwallexEvent(
-      matchedOrder,
-      eventName,
-      object,
-      event
+    const nextOrder = calculateOrderFinancialsSafely(
+      createOrderFromAirwallexEvent(matchedOrder, eventName, object, event),
+      content
     )
     order = nextOrder
     processed = true
@@ -175,6 +175,10 @@ async function applyAirwallexWebhookEvent(
       ),
     }
   })
+
+  if (order) {
+    order = await persistOrderProfitCnyIfNeeded(order)
+  }
 
   return {
     eventName,
@@ -276,6 +280,7 @@ function createOrderFromAirwallexEvent(
     airwallexPaymentUrl: getString(object.url) || order.airwallexPaymentUrl,
     amountValue: getNumber(object.amount) ?? order.amountValue,
     currency: getString(object.currency) || order.currency,
+    dealStatus: status === "paid" ? "converted" : order.dealStatus,
     failureReason:
       status === "cancelled" || status === "failed"
         ? getFailureReason(object) || order.failureReason
@@ -285,6 +290,10 @@ function createOrderFromAirwallexEvent(
       status === "paid"
         ? order.paidAt || event.created_at || now
         : order.paidAt,
+    receivedAmount:
+      status === "paid"
+        ? (getNumber(object.amount) ?? order.amountValue)
+        : order.receivedAmount,
     provider: "airwallex",
     status,
     updatedAt: now,

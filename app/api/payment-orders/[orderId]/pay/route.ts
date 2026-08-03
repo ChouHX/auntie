@@ -10,6 +10,8 @@ import {
   updateCmsContent,
 } from "@/lib/cms-store"
 import type { CmsPaymentOrder } from "@/types/cms"
+import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
+import { persistOrderProfitCnyIfNeeded } from "@/lib/order-profit-exchange-store"
 
 export const runtime = "nodejs"
 
@@ -49,11 +51,17 @@ export async function POST(
       return content
     }
 
-    const paidOrder = {
-      ...order,
-      status: "paid" as const,
-      updatedAt: new Date().toISOString(),
-    }
+    const paidOrder = calculateOrderFinancialsSafely(
+      {
+        ...order,
+        dealStatus: "converted" as const,
+        paidAt: order.paidAt || new Date().toISOString(),
+        receivedAmount: Number(order.amountValue || order.baseAmountValue || 0),
+        status: "paid" as const,
+        updatedAt: new Date().toISOString(),
+      },
+      content
+    )
     const normalizedOrderId = normalizePaymentOrderId(order.orderId)
     savedOrder = paidOrder
 
@@ -77,6 +85,8 @@ export async function POST(
       { status: 404 }
     )
   }
+
+  savedOrder = await persistOrderProfitCnyIfNeeded(savedOrder)
 
   if (wasAlreadyPaid) {
     return Response.json({

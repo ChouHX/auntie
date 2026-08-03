@@ -41,6 +41,7 @@ type AdminNavItem<TSection extends string> = {
 type AdminLayoutProps<TSection extends string> = {
   activeSection: TSection
   children: ReactNode
+  contentFullWidth?: boolean
   isDarkTheme: boolean
   isRefreshing?: boolean
   isSaving: boolean
@@ -58,6 +59,7 @@ type AdminLayoutProps<TSection extends string> = {
 function AdminLayout<TSection extends string>({
   activeSection,
   children,
+  contentFullWidth = false,
   isDarkTheme,
   isRefreshing = false,
   items,
@@ -205,7 +207,14 @@ function AdminLayout<TSection extends string>({
         </header>
 
         <main className="min-w-0 p-3 sm:p-5 lg:p-6">
-          <div className="mx-auto max-w-[1440px] min-w-0">{children}</div>
+          <div
+            className={cn(
+              "min-w-0",
+              !contentFullWidth && "mx-auto max-w-[1440px]"
+            )}
+          >
+            {children}
+          </div>
         </main>
       </div>
     </div>

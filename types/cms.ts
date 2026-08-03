@@ -106,6 +106,78 @@ type CmsPaymentOrderAmountItem = {
   label: string
 }
 
+type CmsBookingQuantityPrice = {
+  amount: number
+  quantity: number
+}
+
+type CmsBookingCatalogItem = {
+  basePrice: number
+  bathroomPrices?: CmsBookingQuantityPrice[]
+  bedroomPrices?: CmsBookingQuantityPrice[]
+  description: string
+  enabled: boolean
+  id: string
+  label: string
+  quoteRequired?: boolean
+  studioPrice?: number
+  type: "addon" | "service"
+}
+
+type CmsBookingLocationConfig = {
+  currency: string
+  items: CmsBookingCatalogItem[]
+  locationId: string
+}
+
+type CmsOrderAddOnItem = {
+  id: string
+  label: string
+  price: number
+  quoteRequired?: boolean
+}
+
+type CmsFormulaTarget = "orderProfit"
+
+type CmsFormulaField =
+  | "auntieSalary"
+  | "otherCost"
+  | "paymentAmount"
+  | "receivedAmount"
+  | "salesCommission"
+
+type CmsFormulaToken =
+  | { type: "field"; value: CmsFormulaField }
+  | { type: "number"; value: number }
+  | { type: "operator"; value: "+" | "-" | "*" | "/" }
+  | { type: "paren"; value: "(" | ")" }
+  | { type: "percent"; value: number }
+
+type CmsFormulaTemplate = {
+  createdAt: string
+  enabled: boolean
+  id: string
+  name: string
+  target: CmsFormulaTarget
+  tokens: CmsFormulaToken[]
+  updatedAt: string
+  version: number
+}
+
+type CmsOrderCalculationSnapshot = {
+  calculatedAt: string
+  formulaVersions: Partial<
+    Record<CmsFormulaTarget, { id: string; name: string; version: number }>
+  >
+  inputs: {
+    auntieSalary: number
+    otherCost: number
+    paymentAmount: number
+    receivedAmount: number
+    salesCommission: number
+  }
+}
+
 type CmsPaymentOrder = {
   airwallexPaymentIntentClientSecret?: string
   airwallexPaymentIntentId?: string
@@ -114,25 +186,49 @@ type CmsPaymentOrder = {
   amount: string
   amountBreakdown?: CmsPaymentOrderAmountItem[]
   amountValue?: number
+  addOnItems?: CmsOrderAddOnItem[]
+  addOnOther?: string
   assignedAuntieId?: string
+  auntieSalary?: number
+  bathrooms?: number
   baseAmountValue?: number
+  bedrooms?: number
   contact: string
   createdAt: string
   currency?: string
+  customerRelationId?: string
+  customerType?: string
   customerName: string
+  dealStatus?: "converted" | "unconverted"
   failureReason?: string
   gatewayStatus?: string
+  hasPets?: boolean
+  financeNote?: string
+  formulaTemplateIds?: Partial<Record<CmsFormulaTarget, string>>
+  calculationSnapshot?: CmsOrderCalculationSnapshot
   note: string
   orderId: string
+  orderProfit?: number
+  orderProfitCny?: number
+  otherCost?: number
   paidAt?: string
   paymentExpiresAt?: string
-  provider?: "airwallex"
+  provider?: "airwallex" | "offline"
+  profitExchangeRateAt?: string
+  profitExchangeRateToCny?: number
+  receivedAmount?: number
   review?: CmsOrderReview
+  salesCommission?: number
+  salesMemberId?: string
+  salesOwner?: string
+  salesOwnerSource?: "manual" | "wecom_member" | "wecom_tag"
   serviceAddress: string
   serviceArea: string
   serviceDate: string
   serviceType: string
+  serviceTypeId?: string
   status: CmsPaymentOrderStatus
+  studio?: boolean
   tipAmount?: number
   updatedAt: string
   webhookEventIds?: string[]
@@ -181,6 +277,23 @@ type CmsTeamMember = {
   phone?: string
   joinedAt?: string
   serviceAreas?: string[]
+  /** Legacy field migrated to a negative salaryAdjustment at runtime. */
+  salaryDeduction?: number
+  salaryAdjustment?: number
+  salaryPercentage?: number
+}
+
+type CmsSalesMemberStatus = "active" | "inactive"
+
+type CmsSalesMember = {
+  commissionAdjustment?: number
+  commissionPercentage: number
+  createdAt: string
+  id: string
+  name: string
+  status: CmsSalesMemberStatus
+  studentTag: string
+  updatedAt: string
 }
 
 type CmsDashboardTaskPriority = "high" | "medium" | "low"
@@ -228,14 +341,17 @@ type CmsContent = {
   afterSalesPage: Record<Language, CmsAfterSalesPageContent>
   blogCategories: CmsBlogCategory[]
   blogPosts: CmsBlogPost[]
+  bookingConfigs: CmsBookingLocationConfig[]
   contactPage: Record<Language, CmsContactPageContent>
   dashboardTasks: CmsDashboardTask[]
   faq: Record<Language, CmsFaqContent>
+  formulaTemplates: CmsFormulaTemplate[]
   galleryItems: CmsGalleryItem[]
   notificationSettings: CmsNotificationSettings
   paymentOrders: CmsPaymentOrder[]
   paymentSettings: CmsPaymentSettings
   reviewItems: CmsGalleryItem[]
+  salesMembers: CmsSalesMember[]
   serviceRegions: CmsServiceRegion[]
   serviceLocations: CmsServiceLocation[]
   siteSettings: CmsSiteSettings
@@ -250,23 +366,34 @@ export type {
   CmsAdminSettings,
   CmsBlogCategory,
   CmsBlogPost,
+  CmsBookingCatalogItem,
+  CmsBookingLocationConfig,
+  CmsBookingQuantityPrice,
   CmsContactMethod,
   CmsContactPageContent,
   CmsContent,
-  CmsOrderReview,
   CmsDashboardTask,
   CmsDashboardTaskPriority,
   CmsDashboardTaskStatus,
   CmsFaqContent,
   CmsFaqItem,
+  CmsFormulaField,
+  CmsFormulaTarget,
+  CmsFormulaTemplate,
+  CmsFormulaToken,
   CmsGalleryItem,
   CmsNotificationSettings,
+  CmsOrderAddOnItem,
+  CmsOrderCalculationSnapshot,
+  CmsOrderReview,
   CmsPaymentOrder,
   CmsPaymentOrderAmountItem,
   CmsPaymentOrderStatus,
   CmsPaymentSettings,
   CmsServiceLocation,
   CmsServiceRegion,
+  CmsSalesMember,
+  CmsSalesMemberStatus,
   CmsSiteSettings,
   CmsStatus,
   CmsTeamMember,

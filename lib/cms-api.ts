@@ -1,9 +1,27 @@
-import type { CmsContent, CmsPaymentOrder, CmsTeamMember } from "@/types/cms"
+import type {
+  CmsContent,
+  CmsFormulaTemplate,
+  CmsPaymentOrder,
+  CmsSalesMember,
+  CmsTeamMember,
+} from "@/types/cms"
+
+type AdminSalesCommissionSummary = {
+  cnyAmount: number
+  currencies: Array<{ amount: number; currency: string }>
+  missingCnyCount: number
+  salesMemberId: string
+}
 import type {
   AdminAuntieStatsMap,
   AdminDashboardSummary,
 } from "@/lib/admin-analytics"
 import type { WecomCustomerPage, WecomSyncSettings } from "@/lib/wecom-types"
+import type {
+  SalesDashboardQuery,
+  SalesDashboardResult,
+  SalesOrderFinancePatch,
+} from "@/lib/sales-dashboard-types"
 
 const ADMIN_TOKEN_KEY = "auntie-chen-admin-token"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
@@ -40,6 +58,7 @@ type AdminContentSection =
   | "orders"
   | "paymentSettings"
   | "reviews"
+  | "services"
   | "serviceAreas"
   | "shell"
   | "siteSettings"
@@ -94,6 +113,7 @@ type AdminPaymentRuntimeConfig = {
 
 type PublicContentSection =
   | "afterSalesPage"
+  | "bookingConfigs"
   | "blogCategories"
   | "blogPosts"
   | "contactPage"
@@ -108,15 +128,20 @@ type PublicContentSection =
 type PublicFormType = "estimate" | "join"
 type PublicFormPayload = Record<string, boolean | string | string[]>
 type BookingOrderPayload = {
+  addOnIds: string[]
+  addOnOther: string
   bathrooms: string
   bedrooms: string
   contact: string
   customerName: string
+  hasPets: boolean
   note: string
   serviceAddress: string
   serviceArea: string
   serviceDate: string
   serviceType: string
+  serviceTypeId: string
+  studio: boolean
   timezoneOffsetMinutes: number
 }
 
@@ -210,6 +235,62 @@ async function updateAdminWecomSyncSettings(
       body: JSON.stringify(settings),
       headers: createAuthHeaders(token),
       method: "PATCH",
+    }
+  )
+}
+
+async function fetchSalesDashboard(token: string, query: SalesDashboardQuery) {
+  return request<SalesDashboardResult>("/api/admin/sales-dashboard", {
+    body: JSON.stringify(query),
+    headers: createAuthHeaders(token),
+    method: "POST",
+  })
+}
+
+async function fetchAdminSalesMembers(token: string) {
+  return request<{
+    commissionSummaries: AdminSalesCommissionSummary[]
+    salesMembers: CmsSalesMember[]
+    studentTags: string[]
+  }>("/api/admin/sales-members", { headers: createAuthHeaders(token) })
+}
+
+async function saveAdminSalesMembers(
+  token: string,
+  salesMembers: CmsSalesMember[]
+) {
+  return request<{
+    commissionSummaries: AdminSalesCommissionSummary[]
+    salesMembers: CmsSalesMember[]
+    studentTags: string[]
+  }>("/api/admin/sales-members", {
+    body: JSON.stringify({ salesMembers }),
+    headers: createAuthHeaders(token),
+    method: "PUT",
+  })
+}
+
+async function updateSalesOrderFinance(
+  token: string,
+  patch: SalesOrderFinancePatch
+) {
+  return request<{ order: CmsPaymentOrder }>("/api/admin/sales-dashboard", {
+    body: JSON.stringify(patch),
+    headers: createAuthHeaders(token),
+    method: "PATCH",
+  })
+}
+
+async function saveSalesFormulaTemplates(
+  token: string,
+  templates: CmsFormulaTemplate[]
+) {
+  return request<{ templates: CmsFormulaTemplate[] }>(
+    "/api/admin/sales-dashboard",
+    {
+      body: JSON.stringify({ templates }),
+      headers: createAuthHeaders(token),
+      method: "PUT",
     }
   )
 }
@@ -632,6 +713,7 @@ export {
   fetchAdminContent,
   fetchAdminPaymentRuntimeConfig,
   fetchAdminSectionContent,
+  fetchAdminSalesMembers,
   fetchAdminWecomCustomers,
   fetchAuntieDetail,
   fetchAuntiesByArea,
@@ -640,17 +722,21 @@ export {
   fetchPublicAuntie,
   fetchPublicAuntieReviews,
   fetchPublicContent,
+  fetchSalesDashboard,
   getStoredAdminToken,
   isApiRequestError,
   loginAdmin,
   saveAdminContent,
   saveAdminContentSection,
+  saveAdminSalesMembers,
+  saveSalesFormulaTemplates,
   setStoredAdminToken,
   startPaymentOrderCheckout,
   syncPaymentOrder,
   submitOrderReview,
   syncAdminWecomCustomers,
   updateAdminWecomSyncSettings,
+  updateSalesOrderFinance,
   submitPublicForm,
   upsertAdminPaymentOrder,
   uploadAdminImage,
@@ -658,6 +744,7 @@ export {
 }
 
 export type {
+  AdminSalesCommissionSummary,
   AdminContentPagination,
   AdminContentSection,
   AdminContentSectionParams,

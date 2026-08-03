@@ -5,6 +5,7 @@ import type { CmsContent } from "@/types/cms"
 
 const publicContentSections = new Set([
   "afterSalesPage",
+  "bookingConfigs",
   "blogCategories",
   "blogPosts",
   "contactPage",

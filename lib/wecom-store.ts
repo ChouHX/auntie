@@ -121,6 +121,47 @@ export async function listWecomCustomers(options: {
   }
 }
 
+export async function listAllWecomCustomersForAnalytics() {
+  const database = await openDatabase()
+  try {
+    const rows = database
+      .prepare("SELECT * FROM wecom_customers ORDER BY add_time DESC")
+      .all() as CustomerRow[]
+    return rows.map(mapCustomerRow)
+  } finally {
+    database.close()
+  }
+}
+
+export async function getWecomCustomerByRelationId(relationId: string) {
+  const normalizedRelationId = relationId.trim()
+  if (!normalizedRelationId) return null
+
+  const database = await openDatabase()
+  try {
+    const row = database
+      .prepare("SELECT * FROM wecom_customers WHERE relation_id = ?")
+      .get(normalizedRelationId) as CustomerRow | undefined
+    return row ? mapCustomerRow(row) : null
+  } finally {
+    database.close()
+  }
+}
+
+export async function listWecomStudentTags() {
+  const database = await openDatabase()
+  try {
+    const rows = database
+      .prepare("SELECT student_type FROM wecom_customers")
+      .all() as Array<Pick<CustomerRow, "student_type">>
+    return Array.from(
+      new Set(rows.flatMap((row) => splitTagValues(row.student_type)))
+    ).sort((left, right) => left.localeCompare(right, "zh-CN"))
+  } finally {
+    database.close()
+  }
+}
+
 export async function getWecomSyncSettings() {
   const database = await openDatabase()
   try {

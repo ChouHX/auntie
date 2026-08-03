@@ -5,6 +5,11 @@ export async function register() {
   ) {
     const { rescheduleWecomCustomerSync } =
       await import("@/lib/wecom-scheduler")
-    await rescheduleWecomCustomerSync()
+    const { startPaymentOrderLifecycleScheduler } =
+      await import("@/lib/order-lifecycle-scheduler")
+    await Promise.all([
+      rescheduleWecomCustomerSync(),
+      startPaymentOrderLifecycleScheduler(),
+    ])
   }
 }
