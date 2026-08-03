@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   const query: SalesDashboardQuery = {
     filters: Array.isArray(body.filters) ? body.filters.slice(0, 20) : [],
     logic: body.logic === "any" ? "any" : "all",
-    ordersOnly: body.ordersOnly === true,
+    ordersOnly: body.ordersOnly !== false,
     page: Number(body.page) || 1,
     pageSize: Number(body.pageSize) || 20,
   }

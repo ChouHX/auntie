@@ -89,6 +89,7 @@ import type {
 const emptyQuery: SalesDashboardQuery = {
   filters: [],
   logic: "all",
+  ordersOnly: true,
   page: 1,
   pageSize: 20,
 }
