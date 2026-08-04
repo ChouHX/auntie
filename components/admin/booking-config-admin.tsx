@@ -37,7 +37,6 @@ import { Textarea } from "@/components/ui/textarea"
 import type {
   CmsBookingCatalogItem,
   CmsBookingLocationConfig,
-  CmsBookingQuantityPrice,
   CmsContent,
 } from "@/types/cms"
 
@@ -60,14 +59,11 @@ function createItem(
 ): CmsBookingCatalogItem {
   return {
     basePrice: 0,
-    bathroomPrices: type === "service" ? [] : undefined,
-    bedroomPrices: type === "service" ? [] : undefined,
     description: "",
     enabled: true,
     id: createId(type),
     label: "",
     quoteRequired: false,
-    studioPrice: type === "service" ? 0 : undefined,
     type,
   }
 }
@@ -195,7 +191,7 @@ export function BookingConfigAdmin({
               {selectedLocation?.city ?? "城市"}预约项目
             </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              价格只用于网站参考，最终费用由客服确认。
+              配置用于前台参考价和后台订单自动计价，最终费用仍由客服确认。
             </p>
           </div>
           <div className="flex gap-2">
@@ -224,7 +220,7 @@ export function BookingConfigAdmin({
               <TableHead className="w-24">类型</TableHead>
               <TableHead>项目</TableHead>
               <TableHead>服务说明</TableHead>
-              <TableHead className="w-28">基础价格</TableHead>
+              <TableHead className="w-36">计价标准</TableHead>
               <TableHead className="w-20">状态</TableHead>
               <TableHead className="w-24 text-right">操作</TableHead>
             </TableRow>
@@ -246,7 +242,7 @@ export function BookingConfigAdmin({
                 <TableCell className="font-mono text-xs">
                   {item.quoteRequired
                     ? "客服确认"
-                    : `${draft.currency} ${item.basePrice.toFixed(2)}`}
+                    : `${draft.currency} ${item.basePrice.toFixed(2)} / ${item.type === "service" ? "小时" : "次"}`}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {item.enabled ? "启用" : "停用"}
@@ -322,7 +318,7 @@ function BookingItemDialog({
             {item?.type === "addon" ? "附加项目" : "清洁需求"}
           </DialogTitle>
           <DialogDescription>
-            编辑客户可选择的项目、说明及地区价格规则。
+            清洁需求按小时计费，附加项目按次计费。
           </DialogDescription>
         </DialogHeader>
         {item ? (
@@ -357,7 +353,14 @@ function BookingItemDialog({
                 value={item.description}
               />
             </FormField>
-            <FormField label="基础价格">
+            <FormField
+              description={
+                item.type === "service"
+                  ? "订单金额将按每小时单价乘以服务时长计算。"
+                  : "客户每选择一次该附加项目，收取一次费用。"
+              }
+              label={item.type === "service" ? "每小时价格" : "每次价格"}
+            >
               <NumberInput
                 className="h-9"
                 min="0"
@@ -366,33 +369,6 @@ function BookingItemDialog({
                 value={item.basePrice}
               />
             </FormField>
-            {item.type === "service" ? (
-              <FormField label="Studio 加价">
-                <NumberInput
-                  className="h-9"
-                  min="0"
-                  onValueChange={(studioPrice) => update({ studioPrice })}
-                  step="0.01"
-                  value={item.studioPrice ?? 0}
-                />
-              </FormField>
-            ) : null}
-            {item.type === "service" ? (
-              <>
-                <PriceRulesField
-                  key={`${item.id}-bedrooms`}
-                  label="卧室数量加价"
-                  onChange={(bedroomPrices) => update({ bedroomPrices })}
-                  value={item.bedroomPrices}
-                />
-                <PriceRulesField
-                  key={`${item.id}-bathrooms`}
-                  label="卫生间数量加价"
-                  onChange={(bathroomPrices) => update({ bathroomPrices })}
-                  value={item.bathroomPrices}
-                />
-              </>
-            ) : null}
             <FormField label="前台状态">
               <label className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm">
                 <Checkbox
@@ -431,70 +407,14 @@ function BookingItemDialog({
   )
 }
 
-function PriceRulesField({
-  label,
-  onChange,
-  value,
-}: {
-  label: string
-  onChange: (value: CmsBookingQuantityPrice[]) => void
-  value?: CmsBookingQuantityPrice[]
-}) {
-  const [text, setText] = useState(() => formatPriceRules(value))
-
-  return (
-    <FormField
-      description="格式：数量:加价，逗号分隔，如 1:25, 2:50"
-      label={label}
-    >
-      <Input
-        className="h-9"
-        onChange={(event) => {
-          setText(event.target.value)
-          onChange(parsePriceRules(event.target.value))
-        }}
-        placeholder="1:25, 2:50"
-        value={text}
-      />
-    </FormField>
-  )
-}
-
-function parsePriceRules(value: string) {
-  return value
-    .split(/[,，]/)
-    .map((part) => {
-      const [quantity, amount] = part.split(":").map(Number)
-      return { amount, quantity }
-    })
-    .filter(
-      (item) =>
-        Number.isFinite(item.quantity) &&
-        item.quantity >= 0 &&
-        Number.isFinite(item.amount) &&
-        item.amount >= 0
-    )
-}
-
-function formatPriceRules(value?: CmsBookingQuantityPrice[]) {
-  return (value ?? [])
-    .map((item) => `${item.quantity}:${item.amount}`)
-    .join(", ")
-}
-
 function normalizeItem(item: CmsBookingCatalogItem): CmsBookingCatalogItem {
   return {
     ...item,
     basePrice: Math.max(0, Number(item.basePrice) || 0),
-    bathroomPrices:
-      item.type === "service" ? (item.bathroomPrices ?? []) : undefined,
-    bedroomPrices:
-      item.type === "service" ? (item.bedroomPrices ?? []) : undefined,
+    bathroomPrices: undefined,
+    bedroomPrices: undefined,
     description: item.description.trim(),
     label: item.label.trim(),
-    studioPrice:
-      item.type === "service"
-        ? Math.max(0, Number(item.studioPrice) || 0)
-        : undefined,
+    studioPrice: undefined,
   }
 }

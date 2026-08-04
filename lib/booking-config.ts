@@ -12,6 +12,7 @@ type BookingEstimateInput = {
   bathrooms: number
   bedrooms: number
   config?: CmsBookingLocationConfig
+  serviceDurationHours?: number
   serviceTypeId: string
   studio: boolean
 }
@@ -24,7 +25,9 @@ function getBookingConfigForArea(
   const normalizedArea = serviceArea.trim().toLowerCase()
   const location = (locations ?? []).find((item) => {
     const option = `${item.city} · ${item.country}`.toLowerCase()
-    return option === normalizedArea || item.city.toLowerCase() === normalizedArea
+    return (
+      option === normalizedArea || item.city.toLowerCase() === normalizedArea
+    )
   })
 
   return location
@@ -34,60 +37,47 @@ function getBookingConfigForArea(
 
 function calculateBookingEstimate({
   addOnIds,
-  bathrooms,
-  bedrooms,
   config,
+  serviceDurationHours,
   serviceTypeId,
-  studio,
 }: BookingEstimateInput) {
   const service = config?.items.find(
-    (item) => item.type === "service" && item.id === serviceTypeId && item.enabled
+    (item) =>
+      item.type === "service" && item.id === serviceTypeId && item.enabled
   )
 
   if (!config || !service || service.quoteRequired) return null
 
-  const roomPrice = studio
-    ? Number.isFinite(service.studioPrice)
-      ? Number(service.studioPrice)
-      : null
-    : getQuantityPrice(service.bedroomPrices, bedrooms)
-  const bathroomPrice = getQuantityPrice(service.bathroomPrices, bathrooms)
   const addOns = config.items.filter(
     (item) =>
       item.type === "addon" && item.enabled && addOnIds.includes(item.id)
   )
-  if (
-    roomPrice === null ||
-    bathroomPrice === null ||
-    addOns.some((item) => item.quoteRequired)
-  ) {
+  if (addOns.some((item) => item.quoteRequired)) {
     return null
   }
-  const amount =
-    Number(service.basePrice || 0) +
-    roomPrice +
-    bathroomPrice +
-    addOns.reduce((sum, item) => sum + Number(item.basePrice || 0), 0)
+  const hourlyRate = Number(service.basePrice || 0)
+  const duration = Number(serviceDurationHours)
+  const normalizedDuration =
+    Number.isFinite(duration) && duration > 0 ? duration : 0
+  const addOnAmount = addOns.reduce(
+    (sum, item) => sum + Number(item.basePrice || 0),
+    0
+  )
+  const amount = normalizedDuration
+    ? hourlyRate * normalizedDuration + addOnAmount
+    : null
 
   return {
-    amount: Number(amount.toFixed(2)),
+    addOnAmount: Number(addOnAmount.toFixed(2)),
+    amount: amount === null ? null : Number(amount.toFixed(2)),
     currency: config.currency || "USD",
+    hourlyRate: Number(hourlyRate.toFixed(2)),
     service,
+    serviceDurationHours: normalizedDuration,
   }
 }
 
-function getQuantityPrice(
-  prices: CmsBookingCatalogItem["bedroomPrices"],
-  quantity: number
-) {
-  const exact = (prices ?? []).find(
-    (item) =>
-      Number.isFinite(item.quantity) &&
-      Number.isFinite(item.amount) &&
-      item.quantity === quantity
-  )
-  return exact ? Number(exact.amount) : null
-}
+const serviceAmountLabelPrefix = "服务费用："
 
 function createOrderAddOnSnapshot(
   config: CmsBookingLocationConfig | undefined,
@@ -108,6 +98,42 @@ function createOrderAddOnSnapshot(
 
 const addOnAmountLabelPrefix = "附加项目："
 
+function createConfiguredOrderAmountBreakdown(
+  service: CmsBookingCatalogItem | undefined,
+  serviceDurationHours: number | undefined,
+  addOns: CmsOrderAddOnItem[] | undefined
+) {
+  const duration = Number(serviceDurationHours)
+  const hourlyRate = Number(service?.basePrice)
+  const serviceItems =
+    service &&
+    !service.quoteRequired &&
+    Number.isFinite(duration) &&
+    duration > 0 &&
+    Number.isFinite(hourlyRate) &&
+    hourlyRate > 0
+      ? [
+          {
+            amount: Number((duration * hourlyRate).toFixed(2)),
+            label: `${serviceAmountLabelPrefix}${service.label}（${formatCompactNumber(duration)}小时 × ${formatCompactNumber(hourlyRate)}/小时）`,
+          },
+        ]
+      : []
+  const addOnItems = (addOns ?? [])
+    .filter(
+      (item) =>
+        !item.quoteRequired &&
+        Number.isFinite(Number(item.price)) &&
+        Number(item.price) > 0
+    )
+    .map((item) => ({
+      amount: Number(Number(item.price).toFixed(2)),
+      label: `${addOnAmountLabelPrefix}${item.label.trim()}（按次）`,
+    }))
+
+  return [...serviceItems, ...addOnItems]
+}
+
 function mergeAddOnsIntoAmountBreakdown(
   items: CmsPaymentOrderAmountItem[] | undefined,
   addOns: CmsOrderAddOnItem[] | undefined,
@@ -118,7 +144,9 @@ function mergeAddOnsIntoAmountBreakdown(
   )
   const normalizedManualItems = manualItems.length
     ? manualItems
-    : Number.isFinite(fallbackBaseAmount) && fallbackBaseAmount > 0
+    : (items ?? []).length === 0 &&
+        Number.isFinite(fallbackBaseAmount) &&
+        fallbackBaseAmount > 0
       ? [{ amount: Number(fallbackBaseAmount.toFixed(2)), label: "基础费用" }]
       : []
   const manualLabels = new Set(
@@ -134,7 +162,7 @@ function mergeAddOnsIntoAmountBreakdown(
     )
     .map((item) => ({
       amount: Number(Number(item.price).toFixed(2)),
-      label: `${addOnAmountLabelPrefix}${item.label.trim()}`,
+      label: `${addOnAmountLabelPrefix}${item.label.trim()}（按次）`,
     }))
 
   return [...normalizedManualItems, ...addOnItems]
@@ -224,7 +252,9 @@ function isValidBookingPhone(value: string, countryCode?: string) {
 
   const code = countryCode?.trim().toUpperCase()
   if (code === "US" || code === "CA") {
-    return digits.length === 10 || (digits.length === 11 && digits.startsWith("1"))
+    return (
+      digits.length === 10 || (digits.length === 11 && digits.startsWith("1"))
+    )
   }
   if (code === "SG") return digits.length === 8 || digits.length === 10
   if (code === "AU") return digits.length >= 9 && digits.length <= 11
@@ -236,6 +266,7 @@ function isValidBookingPhone(value: string, countryCode?: string) {
 
 export {
   calculateBookingEstimate,
+  createConfiguredOrderAmountBreakdown,
   createOrderAddOnSnapshot,
   formatBookingRequest,
   getBookingConfigForArea,

@@ -108,11 +108,11 @@ const bookingCopy: Record<Language, BookingCopy> = {
     bedrooms: "卧室数量",
     contact: "联系电话",
     details: "备注",
-    estimateCustom: "该户型或服务类型需要客服确认参考价格",
-    estimateEmpty: "选择服务类型并输入卧室、卫生间数量后显示参考价。",
+    estimateCustom: "该服务需要客服进一步确认参考价格",
+    estimateEmpty: "选择服务类型后显示每小时参考单价。",
     estimateNote:
       "仅供预估参考，不会写入预约订单。最终费用由客服根据城市、房屋状态和服务细节确认。",
-    estimateTitle: "参考时间与预估价格",
+    estimateTitle: "参考价格",
     formDescription:
       "填写预约需求后，客服会与您确认服务细节、费用和阿姨安排。此步骤不会生成付款链接。",
     formTitle: "提交预约需求",
@@ -154,11 +154,10 @@ const bookingCopy: Record<Language, BookingCopy> = {
     contact: "Local phone number",
     details: "Notes",
     estimateCustom: "Contact support for a reference price for this request",
-    estimateEmpty:
-      "Select a service type and enter bedrooms and bathrooms to see a reference price.",
+    estimateEmpty: "Select a service type to see the hourly reference rate.",
     estimateNote:
       "For reference only and not saved as the booking amount. Support will confirm the final price based on location, home condition, and service details.",
-    estimateTitle: "Reference time and estimated price",
+    estimateTitle: "Reference price",
     formDescription:
       "Submit your booking request and support will confirm the service details, price, and auntie assignment. No payment link is created at this step.",
     formTitle: "Submit a booking request",
@@ -411,7 +410,9 @@ function BookingRequestSection() {
             <div className="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-6 sm:py-5">
               <div className="sm:col-span-2">
                 <div className="text-xs font-semibold text-primary">第一步</div>
-                <h3 className="mt-0.5 text-sm font-semibold text-foreground">选择服务</h3>
+                <h3 className="mt-0.5 text-sm font-semibold text-foreground">
+                  选择服务
+                </h3>
               </div>
               <FormField
                 htmlFor="serviceArea"
@@ -480,7 +481,10 @@ function BookingRequestSection() {
                   <SelectContent>
                     {serviceItems.map((service) => (
                       <SelectItem key={service.id} value={service.id}>
-                        {service.label}
+                        {service.label} ·{" "}
+                        {service.quoteRequired
+                          ? "客服确认"
+                          : `${bookingConfig?.currency ?? "USD"} ${service.basePrice.toFixed(2)}/小时`}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -495,7 +499,9 @@ function BookingRequestSection() {
 
               <div className="mt-2 border-t border-border pt-3 sm:col-span-2">
                 <div className="text-xs font-semibold text-primary">第二步</div>
-                <h3 className="mt-0.5 text-sm font-semibold text-foreground">填写房屋及预约信息</h3>
+                <h3 className="mt-0.5 text-sm font-semibold text-foreground">
+                  填写房屋及预约信息
+                </h3>
               </div>
 
               <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
@@ -523,22 +529,24 @@ function BookingRequestSection() {
                 />
               </div>
 
-              {!form.studio ? <FormField htmlFor="bedrooms" label={copy.bedrooms} required>
-                <Input
-                  className="h-9 rounded-md"
-                  id="bedrooms"
-                  min="0"
-                  name="bedrooms"
-                  onChange={(event) =>
-                    updateForm("bedrooms", event.target.value)
-                  }
-                  placeholder="2"
-                  required
-                  step="1"
-                  type="number"
-                  value={form.bedrooms}
-                />
-              </FormField> : null}
+              {!form.studio ? (
+                <FormField htmlFor="bedrooms" label={copy.bedrooms} required>
+                  <Input
+                    className="h-9 rounded-md"
+                    id="bedrooms"
+                    min="0"
+                    name="bedrooms"
+                    onChange={(event) =>
+                      updateForm("bedrooms", event.target.value)
+                    }
+                    placeholder="2"
+                    required
+                    step="1"
+                    type="number"
+                    value={form.bedrooms}
+                  />
+                </FormField>
+              ) : null}
 
               <FormField htmlFor="bathrooms" label={copy.bathrooms} required>
                 <Input
@@ -610,7 +618,11 @@ function BookingRequestSection() {
               <PriceEstimatePanel
                 copy={copy}
                 estimate={estimate}
-                hasInputs={Boolean(form.serviceType && (form.studio || form.bedrooms) && form.bathrooms)}
+                hasInputs={Boolean(
+                  form.serviceType &&
+                  (form.studio || form.bedrooms) &&
+                  form.bathrooms
+                )}
                 service={selectedService}
               />
 
@@ -946,14 +958,29 @@ function MobileBookingFlow({
                         onClick={() => updateForm("serviceType", service.id)}
                         type="button"
                       >
-                        {service.label}
+                        <span className="block">{service.label}</span>
+                        <span
+                          className={`mt-0.5 block text-[10px] font-normal ${
+                            isSelected
+                              ? "text-primary-foreground/80"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {service.quoteRequired
+                            ? "客服确认"
+                            : `${bookingConfig?.currency ?? "USD"} ${service.basePrice.toFixed(2)}/小时`}
+                        </span>
                       </button>
                     )
                   })}
                 </div>
-                {serviceItems.find((item) => item.id === form.serviceType)?.description ? (
+                {serviceItems.find((item) => item.id === form.serviceType)
+                  ?.description ? (
                   <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50/70 p-3 text-xs leading-5 text-slate-700 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-slate-200">
-                    {serviceItems.find((item) => item.id === form.serviceType)?.description}
+                    {
+                      serviceItems.find((item) => item.id === form.serviceType)
+                        ?.description
+                    }
                   </p>
                 ) : null}
               </div>
@@ -991,15 +1018,23 @@ function MobileBookingFlow({
                   selectedIds={form.addOnIds}
                 />
               </div>
-              <div className={form.studio ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
-                {!form.studio ? <CountStepper
-                  label={copy.bedrooms}
-                  max={8}
-                  min={1}
-                  onChange={(value) => updateForm("bedrooms", value)}
-                  step={1}
-                  value={form.bedrooms}
-                /> : null}
+              <div
+                className={
+                  form.studio
+                    ? "grid grid-cols-1 gap-3"
+                    : "grid grid-cols-2 gap-3"
+                }
+              >
+                {!form.studio ? (
+                  <CountStepper
+                    label={copy.bedrooms}
+                    max={8}
+                    min={1}
+                    onChange={(value) => updateForm("bedrooms", value)}
+                    step={1}
+                    value={form.bedrooms}
+                  />
+                ) : null}
                 <CountStepper
                   label={copy.bathrooms}
                   max={8}
@@ -1010,7 +1045,12 @@ function MobileBookingFlow({
                 />
               </div>
               <label className="mt-3 flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-sm">
-                <Checkbox checked={form.hasPets} onCheckedChange={(checked) => updateForm("hasPets", checked === true)} />
+                <Checkbox
+                  checked={form.hasPets}
+                  onCheckedChange={(checked) =>
+                    updateForm("hasPets", checked === true)
+                  }
+                />
                 是否有宠物
               </label>
               <FormField
@@ -1051,8 +1091,14 @@ function MobileBookingFlow({
             <PriceEstimatePanel
               copy={copy}
               estimate={estimate}
-              hasInputs={Boolean(form.serviceType && (form.studio || form.bedrooms) && form.bathrooms)}
-              service={serviceItems.find((item) => item.id === form.serviceType)}
+              hasInputs={Boolean(
+                form.serviceType &&
+                (form.studio || form.bedrooms) &&
+                form.bathrooms
+              )}
+              service={serviceItems.find(
+                (item) => item.id === form.serviceType
+              )}
             />
           </>
         ) : null}
@@ -1068,7 +1114,11 @@ function MobileBookingFlow({
               title={language === "zh" ? "联系信息" : "Contact details"}
             >
               <div className="space-y-4">
-                <FormField htmlFor="mobile-full-name" label={copy.fullName} required>
+                <FormField
+                  htmlFor="mobile-full-name"
+                  label={copy.fullName}
+                  required
+                >
                   <Input
                     className="h-11 rounded-lg text-sm"
                     id="mobile-full-name"
@@ -1112,8 +1162,14 @@ function MobileBookingFlow({
             <PriceEstimatePanel
               copy={copy}
               estimate={estimate}
-              hasInputs={Boolean(form.serviceType && (form.studio || form.bedrooms) && form.bathrooms)}
-              service={serviceItems.find((item) => item.id === form.serviceType)}
+              hasInputs={Boolean(
+                form.serviceType &&
+                (form.studio || form.bedrooms) &&
+                form.bathrooms
+              )}
+              service={serviceItems.find(
+                (item) => item.id === form.serviceType
+              )}
             />
             {submitError ? (
               <MobileMessage tone="red">{submitError}</MobileMessage>
@@ -1307,11 +1363,18 @@ function BookingAddOnSelector({
     <div className="min-w-0">
       <Dialog>
         <DialogTrigger asChild>
-          <Button className="h-9 w-full min-w-0 justify-between rounded-md px-3 text-left" title="附加项目（不包含在基础清洁服务内）" type="button" variant="outline">
+          <Button
+            className="h-9 w-full min-w-0 justify-between rounded-md px-3 text-left"
+            title="附加项目（不包含在基础清洁服务内）"
+            type="button"
+            variant="outline"
+          >
             <span className="min-w-0 truncate text-xs font-medium">
               附加项目
               <span className="font-normal text-muted-foreground">
-                {selectedItems.length ? ` · ${selectedItems.map((item) => item.label).join("、")}` : " · 未选择"}
+                {selectedItems.length
+                  ? ` · ${selectedItems.map((item) => item.label).join("、")}`
+                  : " · 未选择"}
               </span>
             </span>
             <Plus className="size-4 shrink-0" />
@@ -1320,31 +1383,60 @@ function BookingAddOnSelector({
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>选择附加项目</DialogTitle>
-            <DialogDescription>支持多选，项目内容和参考价格由当前服务地区配置。</DialogDescription>
+            <DialogDescription>
+              支持多选，项目内容和参考价格由当前服务地区配置。
+            </DialogDescription>
           </DialogHeader>
           <div className="max-h-[52vh] space-y-2 overflow-y-auto overscroll-contain pr-1">
             {items.map((item) => (
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:border-primary/40" key={item.id}>
-                <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={(checked) => toggleItem(item.id, checked === true)} />
+              <label
+                className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:border-primary/40"
+                key={item.id}
+              >
+                <Checkbox
+                  checked={selectedIds.includes(item.id)}
+                  onCheckedChange={(checked) =>
+                    toggleItem(item.id, checked === true)
+                  }
+                />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-3 text-sm font-medium">
                     <span>{item.label}</span>
                     <span className="shrink-0 font-mono text-xs text-primary">
-                      {item.quoteRequired ? "客服确认" : `${currency} ${item.basePrice.toFixed(2)}`}
+                      {item.quoteRequired
+                        ? "客服确认"
+                        : `${currency} ${item.basePrice.toFixed(2)} / 次`}
                     </span>
                   </span>
-                  {item.description ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{item.description}</span> : null}
+                  {item.description ? (
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      {item.description}
+                    </span>
+                  ) : null}
                 </span>
               </label>
             ))}
-            {!items.length ? <div className="py-8 text-center text-sm text-muted-foreground">当前地区暂无可选附加项目</div> : null}
+            {!items.length ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                当前地区暂无可选附加项目
+              </div>
+            ) : null}
             {hasOther ? (
               <FormField label="其他附加项目说明">
-                <Textarea className="min-h-20" onChange={(event) => onOtherChange(event.target.value)} placeholder="请说明需要客服确认的其他项目" value={addOnOther} />
+                <Textarea
+                  className="min-h-20"
+                  onChange={(event) => onOtherChange(event.target.value)}
+                  placeholder="请说明需要客服确认的其他项目"
+                  value={addOnOther}
+                />
               </FormField>
             ) : null}
           </div>
-          <DialogFooter><DialogClose asChild><Button type="button">确认选择</Button></DialogClose></DialogFooter>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button">确认选择</Button>
+            </DialogClose>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -1379,18 +1471,28 @@ function PriceEstimatePanel({
           </div>
           <div className="text-left sm:text-right">
             <div className="text-xl font-bold text-blue-700 dark:text-blue-200">
-              {estimate.currency} {estimate.amount.toFixed(2)}
+              {estimate.amount !== null
+                ? `${estimate.currency} ${estimate.amount.toFixed(2)}`
+                : `${estimate.currency} ${estimate.hourlyRate.toFixed(2)} / 小时`}
             </div>
-            <div className="mt-1 text-[11px] text-slate-500">最终费用及服务安排由客服确认</div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              {estimate.addOnAmount > 0
+                ? `另含附加项目 ${estimate.currency} ${estimate.addOnAmount.toFixed(2)} / 次`
+                : "附加项目按次收费"}
+            </div>
           </div>
         </div>
       ) : (
         <div className="mt-2 text-sm leading-5 text-slate-600 dark:text-slate-300">
-          {service?.description ? <p className="mb-1">{service.description}</p> : null}
+          {service?.description ? (
+            <p className="mb-1">{service.description}</p>
+          ) : null}
           <p>{hasInputs ? copy.estimateCustom : copy.estimateEmpty}</p>
         </div>
       )}
-      <p className="mt-2 border-t border-blue-200/70 pt-2 text-[11px] leading-5 text-slate-500 dark:border-blue-400/20 dark:text-slate-400">当前价格仅供参考，最终费用及服务安排由客服确认。</p>
+      <p className="mt-2 border-t border-blue-200/70 pt-2 text-[11px] leading-5 text-slate-500 dark:border-blue-400/20 dark:text-slate-400">
+        当前价格仅供参考，最终费用及服务安排由客服确认。
+      </p>
     </div>
   )
 }
@@ -1478,7 +1580,11 @@ function BookingSuccessPage({
                 type="button"
                 variant="brand"
               >
-                {isBookingCopied ? <Check size={18} weight="bold" /> : <ClipboardText size={18} weight="bold" />}
+                {isBookingCopied ? (
+                  <Check size={18} weight="bold" />
+                ) : (
+                  <ClipboardText size={18} weight="bold" />
+                )}
                 {isZh ? "一键复制预约信息" : "Copy booking information"}
               </Button>
               <p className="mt-4 text-sm leading-7 text-muted-foreground">

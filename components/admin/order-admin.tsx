@@ -35,6 +35,7 @@ import {
 import { cn } from "@/lib/utils"
 import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
 import {
+  createConfiguredOrderAmountBreakdown,
   createOrderAddOnSnapshot,
   formatBookingRequest,
   getBookingConfigForArea,
@@ -174,10 +175,7 @@ function normalizePaymentOrderDraft(order: CmsPaymentOrder): CmsPaymentOrder {
     serviceAddress: (order.serviceAddress ?? "").trim(),
     serviceArea: order.serviceArea.trim(),
     serviceDate: order.serviceDate.trim(),
-    serviceDurationHours: Math.max(
-      0,
-      Number(order.serviceDurationHours) || 0
-    ),
+    serviceDurationHours: Math.max(0, Number(order.serviceDurationHours) || 0),
     serviceType: order.serviceType.trim(),
     provider: "airwallex",
     status: order.status,
@@ -208,6 +206,31 @@ function getOrderBaseAmount(order: CmsPaymentOrder) {
   return breakdownTotal > 0
     ? breakdownTotal
     : Math.max(0, parsePaymentAmount(order.amount))
+}
+
+function createConfiguredPricingPatch(
+  currency: string,
+  service: CmsBookingCatalogItem | undefined,
+  serviceDurationHours: number | undefined,
+  addOnItems: NonNullable<CmsPaymentOrder["addOnItems"]>
+): Partial<CmsPaymentOrder> {
+  const amountBreakdown = createConfiguredOrderAmountBreakdown(
+    service,
+    serviceDurationHours,
+    addOnItems
+  )
+  const baseAmountValue = sumAmountBreakdown(amountBreakdown)
+
+  return {
+    amount:
+      baseAmountValue > 0
+        ? normalizeAdminPaymentAmount(String(baseAmountValue))
+        : "",
+    amountBreakdown,
+    amountValue: baseAmountValue,
+    baseAmountValue,
+    currency,
+  }
 }
 
 function normalizeAdminAmountBreakdown(
@@ -295,17 +318,22 @@ export function OrderAdmin({
   void remotePagination
   const { confirmAction, noticeDialog } = useAdminNoticeDialog()
   const existingEditingOrder = editingOrder
-    ? (content.paymentOrders ?? []).find(
+    ? ((content.paymentOrders ?? []).find(
         (order) => order.orderId === editingOrder.orderId
-      ) ?? (editingOrder.orderId ? editingOrder : null)
+      ) ?? (editingOrder.orderId ? editingOrder : null))
     : null
   const isEditingCompletedOrder = Boolean(
     existingEditingOrder && isPaymentOrderCompleted(existingEditingOrder)
   )
   const isCreatingBooking = Boolean(
     editingOrder &&
-      !existingEditingOrder &&
-      editingOrder.status === "awaiting_confirmation"
+    !existingEditingOrder &&
+    editingOrder.status === "awaiting_confirmation"
+  )
+  const shouldUseConfiguredPricing = Boolean(
+    !existingEditingOrder ||
+    (existingEditingOrder.status === "awaiting_confirmation" &&
+      getOrderBaseAmount(existingEditingOrder) <= 0)
   )
   const activeLoadByAuntieId = useMemo(
     () =>
@@ -351,8 +379,7 @@ export function OrderAdmin({
     (item) => item.type === "addon" && item.enabled
   )
   const editingLocation = content.serviceLocations.find(
-    (item) =>
-      `${item.city} · ${item.country}` === editingOrder?.serviceArea
+    (item) => `${item.city} · ${item.country}` === editingOrder?.serviceArea
   )
   const editingCountryCode = content.serviceRegions.find(
     (item) => item.name === editingLocation?.country
@@ -479,6 +506,16 @@ export function OrderAdmin({
       Number(normalized.serviceDurationHours) <= 0
     ) {
       setOrderError("所选阿姨按时薪计算，请填写大于 0 的服务时长。")
+      return
+    }
+
+    if (
+      selectedService &&
+      !selectedService.quoteRequired &&
+      Number(selectedService.basePrice) > 0 &&
+      Number(normalized.serviceDurationHours) <= 0
+    ) {
+      setOrderError("该服务按小时计费，请填写大于 0 的服务时长。")
       return
     }
 
@@ -642,7 +679,8 @@ export function OrderAdmin({
                         customer.remarkMobiles.split(/[,，]/)[0]?.trim() ||
                         "",
                       customerRelationId: customer.relationId,
-                      customerType: customer.nameAndType.split("@").at(-1)?.trim() ?? "",
+                      customerType:
+                        customer.nameAndType.split("@").at(-1)?.trim() ?? "",
                       customerName: customer.nameAndType.split("@")[0].trim(),
                       salesMemberId: salesMember?.id,
                       salesOwner: salesMember?.name ?? "",
@@ -687,6 +725,10 @@ export function OrderAdmin({
                       updateEditingOrder({
                         addOnItems: [],
                         addOnOther: "",
+                        amount: "",
+                        amountBreakdown: [],
+                        amountValue: 0,
+                        baseAmountValue: 0,
                         currency: config?.currency ?? editingOrder.currency,
                         serviceArea,
                         serviceType: "",
@@ -714,7 +756,21 @@ export function OrderAdmin({
                   disabled={isEditingCompletedOrder}
                   min="0"
                   onValueChange={(serviceDurationHours) =>
-                    updateEditingOrder({ serviceDurationHours })
+                    updateEditingOrder({
+                      ...(shouldUseConfiguredPricing
+                        ? createConfiguredPricingPatch(
+                            editingBookingConfig?.currency ??
+                              editingOrder.currency ??
+                              "USD",
+                            editingServiceItems.find(
+                              (item) => item.id === editingOrder.serviceTypeId
+                            ),
+                            serviceDurationHours,
+                            editingOrder.addOnItems ?? []
+                          )
+                        : {}),
+                      serviceDurationHours,
+                    })
                   }
                   placeholder="例如 4"
                   step="0.25"
@@ -723,6 +779,11 @@ export function OrderAdmin({
               </FormField>
               <FormField label="服务类型" required>
                 <OrderServiceTypeSelect
+                  currency={
+                    editingBookingConfig?.currency ??
+                    editingOrder.currency ??
+                    "USD"
+                  }
                   disabled={isEditingCompletedOrder}
                   items={editingServiceItems}
                   onChange={(serviceTypeId) => {
@@ -730,6 +791,16 @@ export function OrderAdmin({
                       (item) => item.id === serviceTypeId
                     )
                     updateEditingOrder({
+                      ...(shouldUseConfiguredPricing
+                        ? createConfiguredPricingPatch(
+                            editingBookingConfig?.currency ??
+                              editingOrder.currency ??
+                              "USD",
+                            service,
+                            editingOrder.serviceDurationHours,
+                            editingOrder.addOnItems ?? []
+                          )
+                        : {}),
                       serviceType: service?.label ?? "",
                       serviceTypeId,
                     })
@@ -763,11 +834,33 @@ export function OrderAdmin({
                   Studio（开间，无独立卧室）
                 </label>
                 <AdminAddOnSelector
-                  currency={editingBookingConfig?.currency ?? editingOrder.currency ?? "USD"}
+                  currency={
+                    editingBookingConfig?.currency ??
+                    editingOrder.currency ??
+                    "USD"
+                  }
                   disabled={isEditingCompletedOrder}
                   items={editingAddOnItems}
-                  onChange={(addOnItems) => updateEditingOrder({ addOnItems })}
-                  onOtherChange={(addOnOther) => updateEditingOrder({ addOnOther })}
+                  onChange={(addOnItems) =>
+                    updateEditingOrder({
+                      addOnItems,
+                      ...(shouldUseConfiguredPricing
+                        ? createConfiguredPricingPatch(
+                            editingBookingConfig?.currency ??
+                              editingOrder.currency ??
+                              "USD",
+                            editingServiceItems.find(
+                              (item) => item.id === editingOrder.serviceTypeId
+                            ),
+                            editingOrder.serviceDurationHours,
+                            addOnItems
+                          )
+                        : {}),
+                    })
+                  }
+                  onOtherChange={(addOnOther) =>
+                    updateEditingOrder({ addOnOther })
+                  }
                   other={editingOrder.addOnOther ?? ""}
                   selected={editingOrder.addOnItems ?? []}
                 />
@@ -779,7 +872,9 @@ export function OrderAdmin({
                     disabled={isEditingCompletedOrder}
                     min="1"
                     onChange={(event) =>
-                      updateEditingOrder({ bedrooms: Number(event.target.value) })
+                      updateEditingOrder({
+                        bedrooms: Number(event.target.value),
+                      })
                     }
                     step="1"
                     type="number"
@@ -793,7 +888,9 @@ export function OrderAdmin({
                   disabled={isEditingCompletedOrder}
                   min="1"
                   onChange={(event) =>
-                    updateEditingOrder({ bathrooms: Number(event.target.value) })
+                    updateEditingOrder({
+                      bathrooms: Number(event.target.value),
+                    })
                   }
                   step="1"
                   type="number"
@@ -812,59 +909,65 @@ export function OrderAdmin({
                   是否有宠物
                 </label>
               </FormField>
-              {!isCreatingBooking ? <FormField label="分配阿姨">
-                <AuntieAssignmentSelect
-                  assignedAuntieId={editingOrder.assignedAuntieId}
-                  activeLoadByAuntieId={activeLoadByAuntieId}
-                  aunties={content.teamMembers ?? []}
-                  disabled={isEditingCompletedOrder}
-                  mode={editingAssignmentMode}
-                  onChange={(change) => {
-                    setEditingAssignmentMode(change.mode)
-                    updateEditingOrder({
-                      assignedAuntieId: change.assignedAuntieId,
-                    })
-                  }}
-                  orders={content.paymentOrders ?? []}
-                  serviceArea={editingOrder.serviceArea}
-                />
-              </FormField> : null}
-              {!isCreatingBooking ? <FormField label="订单金额明细" required>
-                <OrderAmountBreakdownEditor
-                  currency={
-                    editingOrder.currency || content.paymentSettings.currency
-                  }
-                  disabled={
-                    isEditingCompletedOrder ||
-                    Boolean(editingOrder.airwallexPaymentIntentId)
-                  }
-                  fallbackAmount={getOrderBaseAmount(editingOrder)}
-                  items={mergeAddOnsIntoAmountBreakdown(
-                    editingOrder.amountBreakdown,
-                    editingOrder.addOnItems,
-                    getOrderBaseAmount(editingOrder)
-                  )}
-                  onChange={(amountBreakdown, baseAmountValue) =>
-                    updateEditingOrder({
-                      amount: normalizeAdminPaymentAmount(
-                        String(baseAmountValue)
-                      ),
-                      amountBreakdown,
-                      amountValue: baseAmountValue,
-                      baseAmountValue,
-                    })
-                  }
-                />
-              </FormField> : null}
-              {!isCreatingBooking ? <FormField label="币种">
-                <PaymentCurrencySelect
-                  disabled={isEditingCompletedOrder}
-                  onChange={(currency) => updateEditingOrder({ currency })}
-                  value={
-                    editingOrder.currency || content.paymentSettings.currency
-                  }
-                />
-              </FormField> : null}
+              {!isCreatingBooking ? (
+                <FormField label="分配阿姨">
+                  <AuntieAssignmentSelect
+                    assignedAuntieId={editingOrder.assignedAuntieId}
+                    activeLoadByAuntieId={activeLoadByAuntieId}
+                    aunties={content.teamMembers ?? []}
+                    disabled={isEditingCompletedOrder}
+                    mode={editingAssignmentMode}
+                    onChange={(change) => {
+                      setEditingAssignmentMode(change.mode)
+                      updateEditingOrder({
+                        assignedAuntieId: change.assignedAuntieId,
+                      })
+                    }}
+                    orders={content.paymentOrders ?? []}
+                    serviceArea={editingOrder.serviceArea}
+                  />
+                </FormField>
+              ) : null}
+              {!isCreatingBooking ? (
+                <FormField label="订单金额明细" required>
+                  <OrderAmountBreakdownEditor
+                    currency={
+                      editingOrder.currency || content.paymentSettings.currency
+                    }
+                    disabled={
+                      isEditingCompletedOrder ||
+                      Boolean(editingOrder.airwallexPaymentIntentId)
+                    }
+                    fallbackAmount={getOrderBaseAmount(editingOrder)}
+                    items={mergeAddOnsIntoAmountBreakdown(
+                      editingOrder.amountBreakdown,
+                      editingOrder.addOnItems,
+                      getOrderBaseAmount(editingOrder)
+                    )}
+                    onChange={(amountBreakdown, baseAmountValue) =>
+                      updateEditingOrder({
+                        amount: normalizeAdminPaymentAmount(
+                          String(baseAmountValue)
+                        ),
+                        amountBreakdown,
+                        amountValue: baseAmountValue,
+                        baseAmountValue,
+                      })
+                    }
+                  />
+                </FormField>
+              ) : null}
+              {!isCreatingBooking ? (
+                <FormField label="币种">
+                  <PaymentCurrencySelect
+                    disabled={isEditingCompletedOrder}
+                    onChange={(currency) => updateEditingOrder({ currency })}
+                    value={
+                      editingOrder.currency || content.paymentSettings.currency
+                    }
+                  />
+                </FormField>
+              ) : null}
               <FormField className="sm:col-span-2" label="备注">
                 <Textarea
                   className="min-h-24 rounded-md"
@@ -1085,7 +1188,9 @@ export function OrderCustomerSelect({
             {displayedCustomer ? (
               <span className="flex min-w-0 items-center gap-2 text-foreground">
                 <CustomerAvatar customer={displayedCustomer} />
-                <span className="truncate">{displayedCustomer.nameAndType}</span>
+                <span className="truncate">
+                  {displayedCustomer.nameAndType}
+                </span>
               </span>
             ) : customerRelationId ? (
               <span className="truncate text-foreground">
@@ -1434,11 +1539,13 @@ export function OrderServiceAreaSelect({
 }
 
 function OrderServiceTypeSelect({
+  currency,
   disabled,
   items,
   onChange,
   value,
 }: {
+  currency: string
   disabled?: boolean
   items: CmsBookingCatalogItem[]
   onChange: (value: string) => void
@@ -1453,7 +1560,10 @@ function OrderServiceTypeSelect({
         <SelectGroup>
           {items.map((option) => (
             <SelectItem key={option.id} value={option.id}>
-              {option.label}
+              {option.label} ·{" "}
+              {option.quoteRequired
+                ? "客服确认"
+                : `${currency} ${option.basePrice.toFixed(2)}/小时`}
             </SelectItem>
           ))}
         </SelectGroup>
@@ -1489,7 +1599,7 @@ function AdminAddOnSelector({
   function toggle(item: CmsBookingCatalogItem, checked: boolean) {
     onChange(
       checked
-          ? [
+        ? [
             ...selected.filter((entry) => entry.id !== item.id),
             {
               id: item.id,
@@ -1520,18 +1630,42 @@ function AdminAddOnSelector({
             <CaretDown size={14} />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[min(28rem,calc(100vw-2rem))] p-2" align="start">
+        <PopoverContent
+          className="w-[min(28rem,calc(100vw-2rem))] p-2"
+          align="start"
+        >
           <div className="max-h-64 space-y-1 overflow-y-auto overscroll-contain">
             {items.map((item) => (
-              <label className="flex cursor-pointer items-start gap-2 rounded-md p-2 hover:bg-muted" key={item.id}>
-                <Checkbox checked={selectedIds.has(item.id)} onCheckedChange={(checked) => toggle(item, checked === true)} />
+              <label
+                className="flex cursor-pointer items-start gap-2 rounded-md p-2 hover:bg-muted"
+                key={item.id}
+              >
+                <Checkbox
+                  checked={selectedIds.has(item.id)}
+                  onCheckedChange={(checked) => toggle(item, checked === true)}
+                />
                 <span className="min-w-0 flex-1 text-xs">
-                  <span className="flex justify-between gap-2 font-medium"><span>{item.label}</span><span className="shrink-0 text-primary">{item.quoteRequired ? "客服确认" : `${currency} ${item.basePrice.toFixed(2)}`}</span></span>
-                  {item.description ? <span className="mt-0.5 block text-muted-foreground">{item.description}</span> : null}
+                  <span className="flex justify-between gap-2 font-medium">
+                    <span>{item.label}</span>
+                    <span className="shrink-0 text-primary">
+                      {item.quoteRequired
+                        ? "客服确认"
+                        : `${currency} ${item.basePrice.toFixed(2)}/次`}
+                    </span>
+                  </span>
+                  {item.description ? (
+                    <span className="mt-0.5 block text-muted-foreground">
+                      {item.description}
+                    </span>
+                  ) : null}
                 </span>
               </label>
             ))}
-            {!items.length ? <div className="p-4 text-center text-xs text-muted-foreground">当前地区暂无附加项目</div> : null}
+            {!items.length ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">
+                当前地区暂无附加项目
+              </div>
+            ) : null}
           </div>
         </PopoverContent>
       </Popover>

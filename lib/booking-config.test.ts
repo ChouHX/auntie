@@ -6,6 +6,7 @@ import type { CmsBookingLocationConfig } from "@/types/cms"
 const booking = await import("./booking-config.ts")
 const {
   calculateBookingEstimate,
+  createConfiguredOrderAmountBreakdown,
   formatBookingRequest,
   getBookingConfigForArea,
   isValidBookingPhone,
@@ -57,17 +58,20 @@ test("matches booking configuration by the selected service area", () => {
   assert.equal(result?.locationId, "los-angeles")
 })
 
-test("uses Studio pricing and selected add-ons without bedroom pricing", () => {
+test("uses hourly service pricing and per-use add-ons", () => {
   const result = calculateBookingEstimate({
     addOnIds: ["oven"],
     bathrooms: 1,
     bedrooms: 0,
     config,
+    serviceDurationHours: 2,
     serviceTypeId: "regular",
     studio: true,
   })
 
-  assert.equal(result?.amount, 160)
+  assert.equal(result?.amount, 225)
+  assert.equal(result?.hourlyRate, 100)
+  assert.equal(result?.addOnAmount, 25)
   assert.equal(result?.currency, "USD")
 })
 
@@ -118,13 +122,42 @@ test("adds fixed-price add-ons to the payment breakdown without duplicates", () 
 
   assert.deepEqual(breakdown, [
     { amount: 100, label: "基础清洁" },
-    { amount: 25, label: "附加项目：烤箱内部清洁" },
+    { amount: 25, label: "附加项目：烤箱内部清洁（按次）" },
   ])
   assert.deepEqual(
     mergeAddOnsIntoAmountBreakdown(breakdown, [
       { id: "oven", label: "烤箱内部清洁", price: 25 },
     ]),
     breakdown
+  )
+})
+
+test("creates order amount lines from hourly service and per-use add-ons", () => {
+  assert.deepEqual(
+    createConfiguredOrderAmountBreakdown(config.items[0], 4, [
+      { id: "oven", label: "烤箱内部清洁", price: 25 },
+    ]),
+    [
+      {
+        amount: 400,
+        label: "服务费用：日常清洁（4小时 × 100/小时）",
+      },
+      {
+        amount: 25,
+        label: "附加项目：烤箱内部清洁（按次）",
+      },
+    ]
+  )
+})
+
+test("does not duplicate an add-on-only configured breakdown", () => {
+  assert.deepEqual(
+    mergeAddOnsIntoAmountBreakdown(
+      [{ amount: 25, label: "附加项目：烤箱内部清洁（按次）" }],
+      [{ id: "oven", label: "烤箱内部清洁", price: 25 }],
+      25
+    ),
+    [{ amount: 25, label: "附加项目：烤箱内部清洁（按次）" }]
   )
 })
 
@@ -137,7 +170,7 @@ test("preserves a legacy base amount when adding add-ons", () => {
     ),
     [
       { amount: 100, label: "基础费用" },
-      { amount: 25, label: "附加项目：烤箱内部清洁" },
+      { amount: 25, label: "附加项目：烤箱内部清洁（按次）" },
     ]
   )
 })

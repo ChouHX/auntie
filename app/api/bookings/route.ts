@@ -10,7 +10,11 @@ import {
   isValidBookingPhone,
 } from "@/lib/booking-config"
 import { logServerEvent, serializeServerError } from "@/lib/server-log"
-import type { CmsPaymentOrder, CmsServiceLocation, CmsServiceRegion } from "@/types/cms"
+import type {
+  CmsPaymentOrder,
+  CmsServiceLocation,
+  CmsServiceRegion,
+} from "@/types/cms"
 
 export const runtime = "nodejs"
 
@@ -148,7 +152,7 @@ export async function POST(request: NextRequest) {
         contact,
         createdAt: now,
         customerName: normalizeText(body.customerName),
-        estimatedAmountValue: estimate?.amount,
+        estimatedAmountValue: estimate?.amount ?? undefined,
         estimatedCurrency: estimate?.currency,
         hasPets: body.hasPets === true,
         note: normalizeText(body.note),
