@@ -121,6 +121,8 @@ function createAuntieDraft(): CmsTeamMember {
     joinedAt: new Date().toISOString().split("T")[0],
     serviceAreas: [],
     salaryAdjustment: 0,
+    salaryHourlyRate: 0,
+    salaryMode: "percentage",
     salaryPercentage: 0,
   }
 }
@@ -141,6 +143,8 @@ function normalizeAuntieDraft(auntie: CmsTeamMember): CmsTeamMember {
         ? -(Number(auntie.salaryDeduction) || 0)
         : Number(auntie.salaryAdjustment) || 0,
     salaryDeduction: undefined,
+    salaryHourlyRate: Math.max(0, Number(auntie.salaryHourlyRate) || 0),
+    salaryMode: auntie.salaryMode === "hourly" ? "hourly" : "percentage",
     salaryPercentage: Math.min(
       100,
       Math.max(0, Number(auntie.salaryPercentage) || 0)
@@ -844,27 +848,61 @@ export function AuntieAdmin({
                         value={editingAuntie.area}
                       />
                     </FormField>
-                    <FormField
-                      className="space-y-1.5"
-                      description="按订单金额计算的薪资比例。"
-                      label="阿姨薪资比例（%）"
-                    >
-                      <NumberInput
-                        className="h-8 rounded-md"
-                        max="100"
-                        min="0"
-                        onValueChange={(salaryPercentage) =>
-                          updateEditingAuntie({
-                            salaryPercentage,
-                          })
+                    <FormField className="space-y-1.5" label="薪资计算方式">
+                      <Select
+                        onValueChange={(salaryMode: "hourly" | "percentage") =>
+                          updateEditingAuntie({ salaryMode })
                         }
-                        step="0.01"
-                        value={editingAuntie.salaryPercentage ?? 0}
-                      />
+                        value={editingAuntie.salaryMode ?? "percentage"}
+                      >
+                        <SelectTrigger className="h-8 rounded-md">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">
+                            按比例计算（基于订单金额）
+                          </SelectItem>
+                          <SelectItem value="hourly">按时薪计算</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormField>
+                    {editingAuntie.salaryMode === "hourly" ? (
+                      <FormField
+                        className="space-y-1.5"
+                        description="薪资按订单服务时长乘以时薪计算。"
+                        label="时薪（订单币种）"
+                      >
+                        <NumberInput
+                          className="h-8 rounded-md"
+                          min="0"
+                          onValueChange={(salaryHourlyRate) =>
+                            updateEditingAuntie({ salaryHourlyRate })
+                          }
+                          step="0.01"
+                          value={editingAuntie.salaryHourlyRate ?? 0}
+                        />
+                      </FormField>
+                    ) : (
+                      <FormField
+                        className="space-y-1.5"
+                        description="按订单金额计算的薪资比例。"
+                        label="阿姨薪资比例（%）"
+                      >
+                        <NumberInput
+                          className="h-8 rounded-md"
+                          max="100"
+                          min="0"
+                          onValueChange={(salaryPercentage) =>
+                            updateEditingAuntie({ salaryPercentage })
+                          }
+                          step="0.01"
+                          value={editingAuntie.salaryPercentage ?? 0}
+                        />
+                      </FormField>
+                    )}
                     <FormField
                       className="space-y-1.5"
-                      description="薪资 = 订单金额 × 比例 + 固定调整；正数增加，负数扣减。"
+                      description="在比例或时薪计算结果上增加或扣减；正数增加，负数扣减。"
                       label="固定调整（订单币种）"
                     >
                       <NumberInput

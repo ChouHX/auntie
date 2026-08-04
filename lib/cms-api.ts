@@ -16,7 +16,11 @@ import type {
   AdminAuntieStatsMap,
   AdminDashboardSummary,
 } from "@/lib/admin-analytics"
-import type { WecomCustomerPage, WecomSyncSettings } from "@/lib/wecom-types"
+import type {
+  WecomCustomer,
+  WecomCustomerPage,
+  WecomSyncSettings,
+} from "@/lib/wecom-types"
 import type {
   SalesDashboardQuery,
   SalesDashboardResult,
@@ -210,6 +214,14 @@ async function fetchAdminWecomCustomers(
   return request<WecomCustomerPage>(`/api/admin/wecom-customers?${query}`, {
     headers: createAuthHeaders(token),
   })
+}
+
+async function fetchAdminWecomCustomer(token: string, relationId: string) {
+  const query = new URLSearchParams({ relationId })
+  return request<{ customer: WecomCustomer }>(
+    `/api/admin/wecom-customers?${query}`,
+    { headers: createAuthHeaders(token) }
+  )
 }
 
 async function syncAdminWecomCustomers(token: string) {
@@ -714,6 +726,7 @@ export {
   fetchAdminPaymentRuntimeConfig,
   fetchAdminSectionContent,
   fetchAdminSalesMembers,
+  fetchAdminWecomCustomer,
   fetchAdminWecomCustomers,
   fetchAuntieDetail,
   fetchAuntiesByArea,

@@ -160,10 +160,56 @@ function formatBookingRequest(order: CmsPaymentOrder) {
     `详细地址：${order.serviceAddress || "无"}`,
     `附加项目：${addOns.length ? addOns.join("、") : "无"}`,
     `客户备注：${order.note?.trim() || "无"}`,
+    `预估价格: ${formatBookingEstimate(order)}`,
     `联系人：${order.customerName || "无"}`,
     `联系电话：${order.contact || "无"}`,
     "请客服协助确认服务安排。",
   ].join("\n")
+}
+
+function formatBookingEstimate(order: CmsPaymentOrder) {
+  const duration = Number(order.serviceDurationHours)
+  const amount = getBookingOrderAmount(order)
+  const durationText =
+    Number.isFinite(duration) && duration > 0
+      ? `${formatCompactNumber(duration)}小时-`
+      : ""
+
+  if (amount <= 0) return `${durationText}待客服确认`
+
+  const currency = String(
+    order.amountValue || order.baseAmountValue
+      ? order.currency || "USD"
+      : order.estimatedCurrency || order.currency || "USD"
+  ).toUpperCase()
+  const symbol =
+    {
+      AUD: "A$",
+      CAD: "C$",
+      EUR: "€",
+      GBP: "£",
+      HKD: "HK$",
+      SGD: "S$",
+      USD: "$",
+    }[currency] ?? `${currency} `
+
+  return `${durationText}${symbol}${formatCompactNumber(amount)}`
+}
+
+function getBookingOrderAmount(order: CmsPaymentOrder) {
+  const storedAmount = Number(
+    order.amountValue || order.baseAmountValue || order.estimatedAmountValue
+  )
+  if (Number.isFinite(storedAmount) && storedAmount > 0) return storedAmount
+
+  const parsed = Number(
+    order.amount?.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/)?.[0] ?? 0
+  )
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+function formatCompactNumber(value: number) {
+  return Number(value.toFixed(2)).toString()
 }
 
 function formatRoomCount(value: number | undefined) {

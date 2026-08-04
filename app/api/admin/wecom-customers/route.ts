@@ -1,7 +1,10 @@
 import type { NextRequest } from "next/server"
 
 import { isAdminToken } from "@/lib/cms-store"
-import { listWecomCustomers } from "@/lib/wecom-store"
+import {
+  getWecomCustomerByRelationId,
+  listWecomCustomers,
+} from "@/lib/wecom-store"
 
 export const runtime = "nodejs"
 
@@ -14,6 +17,17 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams
+  const relationId = searchParams.get("relationId")?.trim()
+  if (relationId) {
+    const customer = await getWecomCustomerByRelationId(relationId)
+    return customer
+      ? Response.json({ customer })
+      : Response.json(
+          { error: "customer_not_found", message: "企业微信客户不存在。" },
+          { status: 404 }
+        )
+  }
+
   const result = await listWecomCustomers({
     page: Number(searchParams.get("page")) || 1,
     pageSize: Number(searchParams.get("pageSize")) || 20,

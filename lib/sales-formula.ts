@@ -180,6 +180,8 @@ function calculateOrderFinancials(
       (member.id === order.salesMemberId || member.name === order.salesOwner)
   )
   const salaryPercentage = normalizePercentage(auntie?.salaryPercentage)
+  const salaryHourlyRate = normalizeNumber(auntie?.salaryHourlyRate)
+  const serviceDurationHours = normalizeNumber(order.serviceDurationHours)
   const salaryAdjustment = normalizeSignedNumber(
     auntie?.salaryAdjustment ?? -normalizeNumber(auntie?.salaryDeduction)
   )
@@ -189,9 +191,17 @@ function calculateOrderFinancials(
   const commissionAdjustment = normalizeSignedNumber(
     salesMember?.commissionAdjustment
   )
-  const auntieSalary = roundMoney(
-    Math.max(0, paymentAmount * (salaryPercentage / 100) + salaryAdjustment)
-  )
+  const auntieSalary =
+    auntie?.salaryMode === "hourly" && serviceDurationHours <= 0
+      ? normalizeNumber(order.auntieSalary)
+      : roundMoney(
+          Math.max(
+            0,
+            (auntie?.salaryMode === "hourly"
+              ? serviceDurationHours * salaryHourlyRate
+              : paymentAmount * (salaryPercentage / 100)) + salaryAdjustment
+          )
+        )
   const salesCommission = roundMoney(
     Math.max(
       0,
@@ -232,6 +242,7 @@ function calculateOrderFinancials(
         paymentAmount,
         receivedAmount,
         salesCommission,
+        serviceDurationHours,
       },
     },
     formulaTemplateIds: template ? { orderProfit: template.id } : {},

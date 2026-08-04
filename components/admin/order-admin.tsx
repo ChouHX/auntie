@@ -19,6 +19,7 @@ import {
 import { SalesOrderDataPanel } from "@/components/admin/sales-dashboard-admin"
 import { AuntieAssignmentSelect } from "@/components/common/auntie-assignment-select"
 import {
+  fetchAdminWecomCustomer,
   fetchAdminWecomCustomers,
   fetchPaymentOrder,
   type AdminAuntieStatsMap,
@@ -52,6 +53,7 @@ import {
 } from "@/components/ui/dialog"
 import { FormField } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
+import { NumberInput } from "@/components/ui/number-input"
 import {
   Popover,
   PopoverContent,
@@ -134,8 +136,9 @@ function createPaymentOrderDraft(defaultCurrency = "USD"): CmsPaymentOrder {
     serviceAddress: "",
     serviceArea: "",
     serviceDate: "",
+    serviceDurationHours: 0,
     serviceType: "",
-    status: "awaiting_confirmation",
+    status: "unpaid",
     studio: false,
     updatedAt: now,
     webhookEventIds: [],
@@ -171,6 +174,10 @@ function normalizePaymentOrderDraft(order: CmsPaymentOrder): CmsPaymentOrder {
     serviceAddress: (order.serviceAddress ?? "").trim(),
     serviceArea: order.serviceArea.trim(),
     serviceDate: order.serviceDate.trim(),
+    serviceDurationHours: Math.max(
+      0,
+      Number(order.serviceDurationHours) || 0
+    ),
     serviceType: order.serviceType.trim(),
     provider: "airwallex",
     status: order.status,
@@ -463,6 +470,17 @@ export function OrderAdmin({
     }
 
     const normalized = normalizePaymentOrderDraft(orderToSave)
+    const assignedAuntie = content.teamMembers.find(
+      (member) => member.id === normalized.assignedAuntieId
+    )
+
+    if (
+      assignedAuntie?.salaryMode === "hourly" &&
+      Number(normalized.serviceDurationHours) <= 0
+    ) {
+      setOrderError("所选阿姨按时薪计算，请填写大于 0 的服务时长。")
+      return
+    }
 
     if (
       !normalized.orderId ||
@@ -610,6 +628,8 @@ export function OrderAdmin({
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="选择用户">
                 <OrderCustomerSelect
+                  customerName={editingOrder.customerName}
+                  customerRelationId={editingOrder.customerRelationId}
                   disabled={isEditingCompletedOrder}
                   onSelect={(customer) => {
                     const salesMember = findSalesMemberForStudentTags(
@@ -686,6 +706,19 @@ export function OrderAdmin({
                   }
                   type="date"
                   value={editingOrder.serviceDate}
+                />
+              </FormField>
+              <FormField label="服务时长（小时）">
+                <NumberInput
+                  className="h-9 rounded-md"
+                  disabled={isEditingCompletedOrder}
+                  min="0"
+                  onValueChange={(serviceDurationHours) =>
+                    updateEditingOrder({ serviceDurationHours })
+                  }
+                  placeholder="例如 4"
+                  step="0.25"
+                  value={editingOrder.serviceDurationHours ?? 0}
                 />
               </FormField>
               <FormField label="服务类型" required>
@@ -921,10 +954,14 @@ export function OrderAdmin({
 }
 
 export function OrderCustomerSelect({
+  customerName,
+  customerRelationId,
   disabled,
   onSelect,
   token,
 }: {
+  customerName?: string
+  customerRelationId?: string
   disabled?: boolean
   onSelect: (customer: WecomCustomer) => void
   token: string
@@ -934,12 +971,28 @@ export function OrderCustomerSelect({
   const [customers, setCustomers] = useState<WecomCustomer[]>([])
   const [selectedCustomer, setSelectedCustomer] =
     useState<WecomCustomer | null>(null)
-  const [selectedCustomerName, setSelectedCustomerName] = useState("")
   const [pagination, setPagination] =
     useState<WecomCustomerPage["pagination"]>()
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    const relationId = customerRelationId?.trim() ?? ""
+    if (!relationId) return
+
+    let isMounted = true
+    fetchAdminWecomCustomer(token, relationId)
+      .then(({ customer }) => {
+        if (!isMounted) return
+        setSelectedCustomer(customer)
+      })
+      .catch(() => undefined)
+
+    return () => {
+      isMounted = false
+    }
+  }, [customerRelationId, token])
 
   useEffect(() => {
     if (!open) return
@@ -1014,6 +1067,11 @@ export function OrderCustomerSelect({
     }
   }
 
+  const displayedCustomer =
+    selectedCustomer?.relationId === customerRelationId
+      ? selectedCustomer
+      : null
+
   return (
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger asChild>
@@ -1024,10 +1082,14 @@ export function OrderCustomerSelect({
           variant="outline"
         >
           <span className="truncate text-muted-foreground">
-            {selectedCustomer ? (
+            {displayedCustomer ? (
               <span className="flex min-w-0 items-center gap-2 text-foreground">
-                <CustomerAvatar customer={selectedCustomer} />
-                <span className="truncate">{selectedCustomerName}</span>
+                <CustomerAvatar customer={displayedCustomer} />
+                <span className="truncate">{displayedCustomer.nameAndType}</span>
+              </span>
+            ) : customerRelationId ? (
+              <span className="truncate text-foreground">
+                {customerName || customerRelationId}
               </span>
             ) : open ? (
               "选择企业微信客户"
@@ -1087,7 +1149,6 @@ export function OrderCustomerSelect({
                 onClick={() => {
                   onSelect(customer)
                   setSelectedCustomer(customer)
-                  setSelectedCustomerName(customer.nameAndType)
                   setOpen(false)
                 }}
                 type="button"

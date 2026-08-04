@@ -90,6 +90,11 @@ function withRuntimeDefaults(content: CmsContent): CmsContent {
         member.salaryAdjustment === undefined
           ? -normalizeFinanceAmount(salaryDeduction)
           : normalizeSignedFinanceAmount(member.salaryAdjustment),
+      salaryHourlyRate: normalizeFinanceAmount(member.salaryHourlyRate),
+      salaryMode:
+        member.salaryMode === "hourly"
+          ? ("hourly" as const)
+          : ("percentage" as const),
       salaryPercentage: normalizePercentage(member.salaryPercentage),
     }
   })
@@ -177,6 +182,10 @@ function normalizePaymentOrder(
       order.dealStatus === "converted" || status === "paid"
         ? "converted"
         : "unconverted",
+    estimatedAmountValue: normalizeFinanceAmount(order.estimatedAmountValue),
+    estimatedCurrency: normalizePaymentCurrency(
+      order.estimatedCurrency || currency
+    ),
     financeNote: order.financeNote ?? "",
     formulaTemplateIds: order.formulaTemplateIds?.orderProfit
       ? { orderProfit: order.formulaTemplateIds.orderProfit }
@@ -200,6 +209,9 @@ function normalizePaymentOrder(
     salesMemberId: order.salesMemberId ?? "",
     salesOwner: order.salesOwner ?? "",
     serviceAddress: order.serviceAddress ?? "",
+    serviceDurationHours: normalizeServiceDurationHours(
+      order.serviceDurationHours
+    ),
     status,
     tipAmount: normalizeTipAmount(order.tipAmount),
     webhookEventIds: Array.isArray(order.webhookEventIds)
@@ -230,6 +242,13 @@ function normalizePercentage(value: unknown) {
 function normalizeBookingRoomCount(value: unknown, fallback: number) {
   const count = Number(value)
   return Number.isFinite(count) && count >= 0 ? count : fallback
+}
+
+function normalizeServiceDurationHours(value: unknown) {
+  const duration = Number(value)
+  return Number.isFinite(duration) && duration > 0
+    ? Number(Math.min(duration, 168).toFixed(2))
+    : 0
 }
 
 function normalizeTipAmount(value: unknown) {
@@ -452,6 +471,8 @@ function toPublicContent(content: CmsContent): CmsContent {
     const publicMember = { ...member }
     delete publicMember.salaryDeduction
     delete publicMember.salaryAdjustment
+    delete publicMember.salaryHourlyRate
+    delete publicMember.salaryMode
     delete publicMember.salaryPercentage
     return publicMember
   })

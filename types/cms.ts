@@ -175,6 +175,7 @@ type CmsOrderCalculationSnapshot = {
     paymentAmount: number
     receivedAmount: number
     salesCommission: number
+    serviceDurationHours?: number
   }
 }
 
@@ -200,6 +201,8 @@ type CmsPaymentOrder = {
   customerType?: string
   customerName: string
   dealStatus?: "converted" | "unconverted"
+  estimatedAmountValue?: number
+  estimatedCurrency?: string
   failureReason?: string
   gatewayStatus?: string
   hasPets?: boolean
@@ -225,6 +228,7 @@ type CmsPaymentOrder = {
   serviceAddress: string
   serviceArea: string
   serviceDate: string
+  serviceDurationHours?: number
   serviceType: string
   serviceTypeId?: string
   status: CmsPaymentOrderStatus
@@ -262,6 +266,7 @@ type CmsAdminSettings = {
 }
 
 type CmsTeamMemberStatus = "available" | "on-task" | "off-duty" | "on-leave"
+type CmsAuntieSalaryMode = "hourly" | "percentage"
 
 type CmsTeamMember = {
   id: string
@@ -280,6 +285,8 @@ type CmsTeamMember = {
   /** Legacy field migrated to a negative salaryAdjustment at runtime. */
   salaryDeduction?: number
   salaryAdjustment?: number
+  salaryHourlyRate?: number
+  salaryMode?: CmsAuntieSalaryMode
   salaryPercentage?: number
 }
 
@@ -364,6 +371,7 @@ export type {
   CmsAfterSalesPageContent,
   CmsAfterSalesQrItem,
   CmsAdminSettings,
+  CmsAuntieSalaryMode,
   CmsBlogCategory,
   CmsBlogPost,
   CmsBookingCatalogItem,

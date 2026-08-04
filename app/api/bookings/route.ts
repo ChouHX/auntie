@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server"
 
 import { readCmsContent, updateCmsContent } from "@/lib/cms-store"
 import {
+  calculateBookingEstimate,
   createOrderAddOnSnapshot,
   getBookingConfigForArea,
   isValidBookingPhone,
@@ -124,6 +125,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const estimate = calculateBookingEstimate({
+      addOnIds: Array.isArray(body.addOnIds) ? body.addOnIds : [],
+      bathrooms,
+      bedrooms,
+      config,
+      serviceTypeId: service.id,
+      studio,
+    })
+
     let savedOrder: CmsPaymentOrder | null = null
     await updateCmsContent((content) => {
       const order: CmsPaymentOrder = {
@@ -138,6 +148,8 @@ export async function POST(request: NextRequest) {
         contact,
         createdAt: now,
         customerName: normalizeText(body.customerName),
+        estimatedAmountValue: estimate?.amount,
+        estimatedCurrency: estimate?.currency,
         hasPets: body.hasPets === true,
         note: normalizeText(body.note),
         orderId: createPaymentOrderId(content.paymentOrders ?? []),

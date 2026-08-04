@@ -104,3 +104,92 @@ test("计算阿姨薪资、学员提成和公司利润", () => {
     1
   )
 })
+
+test("按服务时长和时薪计算阿姨薪资并保留固定调整", () => {
+  const now = new Date().toISOString()
+  const order = calculateOrderFinancials(
+    {
+      amount: "$438",
+      amountValue: 438,
+      assignedAuntieId: "auntie-hourly",
+      contact: "1234567",
+      createdAt: now,
+      customerName: "客户",
+      note: "",
+      orderId: "ORD-HOURLY",
+      receivedAmount: 438,
+      serviceAddress: "地址",
+      serviceArea: "纽约 · 美国",
+      serviceDate: "2026-08-04",
+      serviceDurationHours: 4,
+      serviceType: "深度清洁",
+      status: "paid",
+      updatedAt: now,
+    } as CmsPaymentOrder,
+    {
+      formulaTemplates: [],
+      salesMembers: [],
+      teamMembers: [
+        {
+          area: "",
+          avatar: "",
+          completedCount: 0,
+          id: "auntie-hourly",
+          name: "李阿姨",
+          rating: 0,
+          role: "保洁师",
+          salaryAdjustment: 10,
+          salaryHourlyRate: 30,
+          salaryMode: "hourly",
+          status: "available",
+        },
+      ],
+    }
+  )
+
+  assert.equal(order.auntieSalary, 130)
+  assert.equal(order.calculationSnapshot?.inputs.serviceDurationHours, 4)
+})
+
+test("缺少服务时长的历史订单保留已记录的阿姨薪资", () => {
+  const now = new Date().toISOString()
+  const order = calculateOrderFinancials(
+    {
+      amount: "$200",
+      amountValue: 200,
+      assignedAuntieId: "auntie-hourly",
+      auntieSalary: 95,
+      contact: "1234567",
+      createdAt: now,
+      customerName: "客户",
+      note: "",
+      orderId: "ORD-LEGACY-HOURLY",
+      serviceAddress: "地址",
+      serviceArea: "纽约 · 美国",
+      serviceDate: "2026-08-01",
+      serviceType: "日常清洁",
+      status: "paid",
+      updatedAt: now,
+    } as CmsPaymentOrder,
+    {
+      formulaTemplates: [],
+      salesMembers: [],
+      teamMembers: [
+        {
+          area: "",
+          avatar: "",
+          completedCount: 0,
+          id: "auntie-hourly",
+          name: "李阿姨",
+          rating: 0,
+          role: "保洁师",
+          salaryHourlyRate: 30,
+          salaryMode: "hourly",
+          status: "available",
+        },
+      ],
+    }
+  )
+
+  assert.equal(order.auntieSalary, 95)
+})

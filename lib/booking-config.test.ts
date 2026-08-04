@@ -71,7 +71,7 @@ test("uses Studio pricing and selected add-ons without bedroom pricing", () => {
   assert.equal(result?.currency, "USD")
 })
 
-test("formats the copied request without reference pricing", () => {
+test("formats the copied request with duration and estimated pricing", () => {
   const text = formatBookingRequest({
     addOnItems: [{ id: "oven", label: "烤箱内部清洁", price: 25 }],
     amount: "",
@@ -80,12 +80,15 @@ test("formats the copied request without reference pricing", () => {
     contact: "+1 213 555 0123",
     createdAt: "2026-08-03T00:00:00.000Z",
     customerName: "陈女士",
+    estimatedAmountValue: 438,
+    estimatedCurrency: "USD",
     hasPets: true,
     note: "请提前联系",
     orderId: "ORD20260803TEST",
     serviceAddress: "123 Main St",
     serviceArea: "洛杉矶 · 美国",
     serviceDate: "2026-08-10",
+    serviceDurationHours: 4,
     serviceType: "日常清洁",
     status: "awaiting_confirmation",
     studio: true,
@@ -94,7 +97,7 @@ test("formats the copied request without reference pricing", () => {
 
   assert.match(text, /房屋情况：Studio（开间）\/ 1 卫/)
   assert.match(text, /附加项目：烤箱内部清洁/)
-  assert.doesNotMatch(text, /参考|USD|价格/)
+  assert.match(text, /预估价格: 4小时-\$438/)
 })
 
 test("validates local phone number length for configured countries", () => {
