@@ -413,6 +413,10 @@ function AdminPage() {
   }
 
   function handleSectionChange(section: AdminSection) {
+    if (section === activeSection) {
+      return
+    }
+
     setIsLoading(true)
     setGenericPage(1)
     setGenericQuery("")
