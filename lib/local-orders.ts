@@ -140,6 +140,7 @@ function normalizeText(value: unknown) {
 
 function normalizeStatus(value: unknown): LocalPaymentOrder["status"] {
   switch (value) {
+    case "awaiting_confirmation":
     case "cancelled":
     case "failed":
     case "paid":

@@ -33,10 +33,12 @@ function SharedOrderEntry({ orderId }: { orderId: string }) {
         if (!isMounted) return
 
         saveLocalPaymentOrder(order)
-        const destination =
-          order.status === "paid" && !order.review
-            ? `/review?order=${encodeURIComponent(order.orderId)}`
-            : `/checkout?order=${encodeURIComponent(order.orderId)}`
+        let destination = `/checkout?order=${encodeURIComponent(order.orderId)}`
+        if (order.status === "unpaid" || order.status === "pending") {
+          destination = "/"
+        } else if (order.status === "paid" && !order.review) {
+          destination = `/review?order=${encodeURIComponent(order.orderId)}`
+        }
 
         navigate(destination, { replace: true })
       })
