@@ -421,15 +421,13 @@ function SalesLogin({ onSuccess }: { onSuccess: () => void }) {
   return (
     <main className="grid min-h-screen bg-background md:grid-cols-2">
       <div className="relative hidden min-h-screen md:block">
-        <Image
+        {/* Match the admin login artwork exactly; this image should not be recompressed. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           alt="陈阿姨到家服务团队"
           className="absolute inset-0 size-full object-cover"
-          fill
-          priority
-          sizes="50vw"
           src="/about_us.png"
         />
-        <div className="absolute inset-0 bg-slate-950/20" />
       </div>
       <div className="flex items-center justify-center px-5 py-10">
         <form className="w-full max-w-sm" onSubmit={submit}>

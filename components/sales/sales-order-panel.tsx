@@ -110,7 +110,7 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
       </div>
 
       <div className="overflow-x-auto">
-        <Table className="min-w-[920px] text-xs">
+        <Table className="min-w-[1040px] text-xs">
           <TableHeader>
             <TableRow>
               <TableHead>订单号</TableHead>
@@ -119,7 +119,8 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
               <TableHead>地区</TableHead>
               <TableHead>清洁类型</TableHead>
               <TableHead>服务日期</TableHead>
-              <TableHead className="text-right">订单金额</TableHead>
+              <TableHead className="text-right">结算金额</TableHead>
+              <TableHead className="text-right">学员提成</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -127,7 +128,7 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
               <TableRow>
                 <TableCell
                   className="h-28 text-center text-muted-foreground"
-                  colSpan={7}
+                  colSpan={8}
                 >
                   正在加载订单数据...
                 </TableCell>
@@ -140,7 +141,7 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
               <TableRow>
                 <TableCell
                   className="h-28 text-center text-muted-foreground"
-                  colSpan={7}
+                  colSpan={8}
                 >
                   {query ? "没有找到匹配的订单" : "暂无归属到你的订单"}
                 </TableCell>
@@ -191,12 +192,18 @@ function SalesOrderRow({ order }: { order: SalesOrder }) {
       <TableCell>{order.cleaningType || "-"}</TableCell>
       <TableCell>{order.serviceDate || "-"}</TableCell>
       <TableCell className="text-right font-semibold tabular-nums">
-        {order.currency}{" "}
-        {order.amount.toLocaleString("zh-CN", {
-          maximumFractionDigits: 2,
-          minimumFractionDigits: 2,
-        })}
+        {formatMoney(order.amount, order.currency)}
+      </TableCell>
+      <TableCell className="text-right font-semibold text-primary tabular-nums">
+        {formatMoney(order.salesCommission, order.currency)}
       </TableCell>
     </TableRow>
   )
+}
+
+function formatMoney(amount: number, currency: string) {
+  return `${currency} ${amount.toLocaleString("zh-CN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`
 }

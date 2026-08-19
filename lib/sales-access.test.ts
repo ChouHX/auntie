@@ -39,6 +39,7 @@ test("订单存在销售 ID 时不因销售同名泄露给其他账号", () => {
     result.orders.map((item) => item.orderId),
     ["order-legacy"]
   )
+  assert.equal(result.orders[0].salesCommission, 12.5)
 })
 
 function member(id: string, name: string, studentTag: string) {
@@ -68,6 +69,7 @@ function order(orderId: string, salesMemberId: string, salesOwner: string) {
     currency: "USD",
     orderId,
     salesMemberId,
+    salesCommission: 12.5,
     salesOwner,
     status: "paid",
   } as CmsPaymentOrder

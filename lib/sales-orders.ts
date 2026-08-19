@@ -8,6 +8,7 @@ type SalesOrder = {
   customerName: string
   orderId: string
   region: string
+  salesCommission: number
   serviceDate: string
   status: CmsPaymentOrder["status"]
 }
@@ -84,6 +85,7 @@ function toSalesOrder(order: CmsPaymentOrder): SalesOrder {
     customerName: order.customerName,
     orderId: order.orderId,
     region: order.serviceArea,
+    salesCommission: normalizeAmount(order.salesCommission),
     serviceDate: order.serviceDate,
     status: order.status,
   }
