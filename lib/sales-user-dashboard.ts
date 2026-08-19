@@ -2,6 +2,8 @@
 import { findSalesMemberForStudentTags } from "./sales-attribution.ts"
 import type { WecomCustomer } from "@/lib/wecom-types"
 import type { CmsContent, CmsPaymentOrder, CmsSalesMember } from "@/types/cms"
+// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+import { isOrderOwnedBySalesMember } from "./sales-orders.ts"
 
 type MoneyTotal = { amount: number; currency: string }
 type SalesOrderRanking = {
@@ -36,14 +38,15 @@ function createSalesUserDashboard(
         ?.id === currentMember.id
   )
   const ownedPaidOrders = content.paymentOrders.filter(
-    (order) => order.status === "paid" && isOwnedOrder(order, currentMember)
+    (order) =>
+      order.status === "paid" && isOrderOwnedBySalesMember(order, currentMember)
   )
   const monthlyPaidOrders = content.paymentOrders.filter(
     (order) =>
       order.status === "paid" &&
-      shanghaiDate(new Date(order.paidAt || order.updatedAt || order.createdAt)).startsWith(
-        month
-      )
+      shanghaiDate(
+        new Date(order.paidAt || order.updatedAt || order.createdAt)
+      ).startsWith(month)
   )
   const rankings = content.salesMembers
     .filter((member) => member.status === "active")
@@ -71,32 +74,38 @@ function createSalesUserDashboard(
     monthLabel: `${Number(month.slice(5, 7))} 月`,
     monthlyProfit: sumMoney(
       ownedPaidOrders.filter((order) =>
-        shanghaiDate(new Date(order.paidAt || order.updatedAt || order.createdAt)).startsWith(
-          month
-        )
+        shanghaiDate(
+          new Date(order.paidAt || order.updatedAt || order.createdAt)
+        ).startsWith(month)
       ),
       "orderProfit"
     ),
     orderCountRanking: rankings.toSorted(
-      (left, right) => right.orderCount - left.orderCount || right.amountCny - left.amountCny
+      (left, right) =>
+        right.orderCount - left.orderCount || right.amountCny - left.amountCny
     ),
     orderProfitTotal: sumMoney(ownedPaidOrders, "orderProfit"),
     orderRevenueRanking: rankings.toSorted(
-      (left, right) => right.amountCny - left.amountCny || right.orderCount - left.orderCount
+      (left, right) =>
+        right.amountCny - left.amountCny || right.orderCount - left.orderCount
     ),
   }
 }
 
 function createRanking(member: CmsSalesMember, orders: CmsPaymentOrder[]) {
-  const memberOrders = orders.filter((order) => isOwnedOrder(order, member))
+  const memberOrders = orders.filter((order) =>
+    isOrderOwnedBySalesMember(order, member)
+  )
   return {
     amountCny: roundMoney(
       memberOrders.reduce((total, order) => {
         const amount = Number(order.receivedAmount ?? order.amountValue) || 0
         const currency = (order.currency || "USD").toUpperCase()
-        const rate = currency === "CNY" ? 1 : Number(order.profitExchangeRateToCny)
-        return total +
-          (Number.isFinite(rate) && rate > 0 ? amount * rate : amount)
+        const rate =
+          currency === "CNY" ? 1 : Number(order.profitExchangeRateToCny)
+        return (
+          total + (Number.isFinite(rate) && rate > 0 ? amount * rate : amount)
+        )
       }, 0)
     ),
     amounts: sumMoney(memberOrders, "receivedAmount"),
@@ -104,10 +113,6 @@ function createRanking(member: CmsSalesMember, orders: CmsPaymentOrder[]) {
     salesMemberId: member.id,
     salesName: member.name,
   }
-}
-
-function isOwnedOrder(order: CmsPaymentOrder, member: CmsSalesMember) {
-  return order.salesMemberId === member.id || order.salesOwner === member.name
 }
 
 function sumMoney(

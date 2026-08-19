@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react"
+import Image from "next/image"
 import {
   CaretDown,
   CaretLeft,
@@ -45,6 +46,7 @@ type AdminLayoutProps<TSection extends string> = {
   activeSection: TSection
   children: ReactNode
   contentFullWidth?: boolean
+  headerTitle?: string
   isDarkTheme: boolean
   isRefreshing?: boolean
   isSaving: boolean
@@ -67,6 +69,7 @@ function AdminLayout<TSection extends string>({
   activeSection,
   children,
   contentFullWidth = false,
+  headerTitle,
   isDarkTheme,
   isRefreshing = false,
   items,
@@ -178,10 +181,19 @@ function AdminLayout<TSection extends string>({
               </>
             ) : null}
 
+            {headerTitle ? (
+              <Image
+                alt=""
+                className="size-9 shrink-0 rounded-md object-contain"
+                height={36}
+                src={logoImage}
+                width={36}
+              />
+            ) : null}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h1 className="truncate text-xl font-semibold tracking-[-0.03em] text-slate-950 dark:text-white">
-                  {activeItem?.label ?? title}
+                  {headerTitle ?? activeItem?.label ?? title}
                 </h1>
                 {loading ? (
                   <Badge className="hidden h-6 border-border bg-muted text-[11px] text-muted-foreground sm:inline-flex">

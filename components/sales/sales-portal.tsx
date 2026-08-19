@@ -6,6 +6,9 @@ import { HouseLine } from "@phosphor-icons/react"
 import {
   CalendarDays,
   CircleDollarSign,
+  ClipboardList,
+  LayoutDashboard,
+  Medal,
   Trophy,
   UserPlus,
   Users,
@@ -14,6 +17,8 @@ import {
 import { toast } from "sonner"
 
 import { AdminLayout, type AdminNavItem } from "@/components/admin/admin-layout"
+import { SalesCustomerPanel } from "@/components/sales/sales-customer-panel"
+import { SalesOrderPanel } from "@/components/sales/sales-order-panel"
 import { useTheme } from "@/components/theme-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,21 +39,36 @@ import type {
   SalesUserDashboard,
 } from "@/lib/sales-user-dashboard"
 
-type SalesSection = "dashboard"
+type SalesSection = "customers" | "dashboard" | "orders"
 
 const salesSections: AdminNavItem<SalesSection>[] = [
   { id: "dashboard", label: "Dashboard", icon: HouseLine, group: "main" },
 ]
 
+const salesTabs: Array<{
+  icon: LucideIcon
+  id: SalesSection
+  label: string
+}> = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "customers", label: "客户", icon: Users },
+  { id: "orders", label: "订单", icon: ClipboardList },
+]
+
 export function SalesPortal() {
   const [data, setData] = useState<SalesUserDashboard | null>(null)
+  const [activeSection, setActiveSection] = useState<SalesSection>("dashboard")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
+  const [dataReloadKey, setDataReloadKey] = useState(0)
   const { setTheme, theme } = useTheme()
 
   const loadDashboard = useCallback(async (manual = false) => {
-    if (manual) setRefreshing(true)
+    if (manual) {
+      setRefreshing(true)
+      setDataReloadKey((current) => current + 1)
+    }
     try {
       const response = await fetch("/api/sales/dashboard", {
         cache: "no-store",
@@ -95,7 +115,8 @@ export function SalesPortal() {
       <AdminLayout
         accountName={data.member.name}
         accountSubtitle={`销售账号 · ${data.member.username}`}
-        activeSection="dashboard"
+        activeSection={activeSection}
+        headerTitle="销售工作台"
         isDarkTheme={theme === "dark"}
         isRefreshing={refreshing}
         isSaving={false}
@@ -104,69 +125,21 @@ export function SalesPortal() {
         onLogout={() => void logout()}
         onPasswordChange={() => setPasswordDialogOpen(true)}
         onRefresh={() => void loadDashboard(true)}
-        onSectionChange={() => undefined}
+        onSectionChange={setActiveSection}
         onThemeToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
         showSidebar={false}
-        subtitle={`${data.member.name} · 截至今日的客户与成交数据`}
+        subtitle={`${data.member.name} · ${data.member.username}`}
         title="Dashboard"
       >
-        <div className="space-y-5">
-          <div className="mb-5">
-            <h2 className="text-xl font-semibold">你好，{data.member.name}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              截至今日的客户与成交数据
-            </p>
-          </div>
-
-          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard
-              icon={Users}
-              label="总添加客户数"
-              value={String(data.customerCounts.total)}
-            />
-            <MetricCard
-              icon={UserPlus}
-              label="今日添加客户数"
-              value={String(data.customerCounts.today)}
-            />
-            <MetricCard
-              icon={CalendarDays}
-              label="本周添加客户数"
-              value={String(data.customerCounts.week)}
-            />
-            <MetricCard
-              icon={CalendarDays}
-              label="本月添加客户数"
-              value={String(data.customerCounts.month)}
-            />
-            <MetricCard
-              className="col-span-2 lg:col-span-2"
-              icon={CircleDollarSign}
-              label={`${data.monthLabel}利润`}
-              value={formatMoneyTotals(data.monthlyProfit)}
-            />
-            <MetricCard
-              className="col-span-2 lg:col-span-2"
-              icon={CircleDollarSign}
-              label="订单总利润"
-              value={formatMoneyTotals(data.orderProfitTotal)}
-            />
-          </section>
-
-          <section className="mt-6 grid gap-4 lg:grid-cols-2">
-            <RankingPanel
-              currentMemberId={data.member.id}
-              mode="count"
-              rankings={data.orderCountRanking}
-              title="本月成交订单量排行"
-            />
-            <RankingPanel
-              currentMemberId={data.member.id}
-              mode="revenue"
-              rankings={data.orderRevenueRanking}
-              title="本月成交金额排行"
-            />
-          </section>
+        <div className="space-y-4">
+          <SalesTabs active={activeSection} onChange={setActiveSection} />
+          {activeSection === "dashboard" ? (
+            <SalesDashboardContent data={data} />
+          ) : activeSection === "customers" ? (
+            <SalesCustomerPanel reloadKey={dataReloadKey} />
+          ) : (
+            <SalesOrderPanel reloadKey={dataReloadKey} />
+          )}
         </div>
       </AdminLayout>
       <SalesPasswordDialog
@@ -174,6 +147,109 @@ export function SalesPortal() {
         open={passwordDialogOpen}
       />
     </>
+  )
+}
+
+function SalesTabs({
+  active,
+  onChange,
+}: {
+  active: SalesSection
+  onChange: (section: SalesSection) => void
+}) {
+  return (
+    <nav
+      aria-label="销售工作台页面"
+      className="flex w-full gap-1 overflow-x-auto border-b border-border"
+      role="tablist"
+    >
+      {salesTabs.map((tab) => {
+        const Icon = tab.icon
+        const selected = active === tab.id
+        return (
+          <button
+            aria-selected={selected}
+            className={cn(
+              "relative flex h-11 min-w-24 shrink-0 items-center justify-center gap-2 px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+              selected && "text-primary"
+            )}
+            key={tab.id}
+            onClick={() => onChange(tab.id)}
+            role="tab"
+            type="button"
+          >
+            <Icon className="size-4" />
+            {tab.label}
+            {selected ? (
+              <span className="absolute inset-x-2 bottom-0 h-0.5 bg-primary" />
+            ) : null}
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+function SalesDashboardContent({ data }: { data: SalesUserDashboard }) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-semibold">你好，{data.member.name}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          截至今日的客户与成交数据
+        </p>
+      </div>
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard
+          icon={Users}
+          label="总添加客户数"
+          value={String(data.customerCounts.total)}
+        />
+        <MetricCard
+          icon={UserPlus}
+          label="今日添加客户数"
+          value={String(data.customerCounts.today)}
+        />
+        <MetricCard
+          icon={CalendarDays}
+          label="本周添加客户数"
+          value={String(data.customerCounts.week)}
+        />
+        <MetricCard
+          icon={CalendarDays}
+          label="本月添加客户数"
+          value={String(data.customerCounts.month)}
+        />
+        <MetricCard
+          className="col-span-2"
+          icon={CircleDollarSign}
+          label={`${data.monthLabel}利润`}
+          value={formatMoneyTotals(data.monthlyProfit)}
+        />
+        <MetricCard
+          className="col-span-2"
+          icon={CircleDollarSign}
+          label="订单总利润"
+          value={formatMoneyTotals(data.orderProfitTotal)}
+        />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <RankingPanel
+          currentMemberId={data.member.id}
+          mode="count"
+          rankings={data.orderCountRanking}
+          title="本月成交订单量排行"
+        />
+        <RankingPanel
+          currentMemberId={data.member.id}
+          mode="revenue"
+          rankings={data.orderRevenueRanking}
+          title="本月成交金额排行"
+        />
+      </section>
+    </div>
   )
 }
 
@@ -468,9 +544,7 @@ function RankingPanel({
               )}
               key={item.salesMemberId}
             >
-              <span className="text-sm font-semibold text-muted-foreground tabular-nums">
-                {index + 1}
-              </span>
+              <RankMark rank={index + 1} />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">
@@ -494,6 +568,39 @@ function RankingPanel({
         })}
       </div>
     </Card>
+  )
+}
+
+function RankMark({ rank }: { rank: number }) {
+  if (rank > 3) {
+    return (
+      <span className="flex size-8 items-center justify-center text-sm font-semibold text-muted-foreground tabular-nums">
+        {rank}
+      </span>
+    )
+  }
+
+  const isChampion = rank === 1
+  return (
+    <span
+      aria-label={`第 ${rank} 名`}
+      className={cn(
+        "flex size-8 items-center justify-center rounded-full border shadow-sm",
+        rank === 1 &&
+          "border-amber-400 bg-amber-100 text-amber-700 dark:border-amber-500/70 dark:bg-amber-500/15 dark:text-amber-300",
+        rank === 2 &&
+          "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-500 dark:bg-slate-400/15 dark:text-slate-300",
+        rank === 3 &&
+          "border-orange-400 bg-orange-100 text-orange-700 dark:border-orange-500/70 dark:bg-orange-500/15 dark:text-orange-300"
+      )}
+      title={`第 ${rank} 名`}
+    >
+      {isChampion ? (
+        <Trophy aria-hidden="true" className="size-4" />
+      ) : (
+        <Medal aria-hidden="true" className="size-4" />
+      )}
+    </span>
   )
 }
 
