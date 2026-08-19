@@ -1,10 +1,11 @@
 "use client"
 
 import { type FormEvent, useEffect, useState } from "react"
-import { ChevronLeft, ChevronRight, Search, Users } from "lucide-react"
+import { Search, Users } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
+import { SalesDataPagination } from "@/components/sales/sales-data-pagination"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -30,13 +31,14 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
   const [input, setInput] = useState("")
   const [query, setQuery] = useState("")
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
     const params = new URLSearchParams({
       page: String(page),
-      pageSize: "10",
+      pageSize: String(pageSize),
       query,
     })
     fetch(`/api/sales/customers?${params}`, { cache: "no-store" })
@@ -61,7 +63,7 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
     return () => {
       mounted = false
     }
-  }, [page, query, reloadKey])
+  }, [page, pageSize, query, reloadKey])
 
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -81,9 +83,6 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
             <h2 className="text-sm font-semibold">我的客户</h2>
             <Badge variant="secondary">{pagination.totalCount}</Badge>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            已按你的销售标签自动筛选
-          </p>
         </div>
         <form className="flex w-full gap-2 sm:w-80" onSubmit={search}>
           <Input
@@ -149,40 +148,20 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
         </Table>
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <span>
-          共 {pagination.totalCount} 位客户 · 第 {pagination.page} /{" "}
-          {pagination.totalPages} 页
-        </span>
-        <div className="flex items-center gap-2">
-          <Button
-            disabled={loading || pagination.page <= 1}
-            onClick={() => {
-              setLoading(true)
-              setPage((current) => Math.max(1, current - 1))
-            }}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <ChevronLeft className="size-4" />
-            上一页
-          </Button>
-          <Button
-            disabled={loading || pagination.page >= pagination.totalPages}
-            onClick={() => {
-              setLoading(true)
-              setPage((current) => current + 1)
-            }}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            下一页
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-      </div>
+      <SalesDataPagination
+        disabled={loading}
+        itemLabel="位客户"
+        onPageChange={(nextPage) => {
+          setLoading(true)
+          setPage(nextPage)
+        }}
+        onPageSizeChange={(nextPageSize) => {
+          setLoading(true)
+          setPage(1)
+          setPageSize(nextPageSize)
+        }}
+        {...pagination}
+      />
     </Card>
   )
 }
