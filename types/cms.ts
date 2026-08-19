@@ -293,11 +293,14 @@ type CmsTeamMember = {
 type CmsSalesMemberStatus = "active" | "inactive"
 
 type CmsSalesMember = {
+  accountUsername?: string
+  authVersion?: number
   commissionAdjustment?: number
   commissionPercentage: number
   createdAt: string
   id: string
   name: string
+  passwordHash?: string
   status: CmsSalesMemberStatus
   studentTag: string
   updatedAt: string

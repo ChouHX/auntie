@@ -45,6 +45,7 @@ export function SalesAdmin({ token }: { token: string }) {
     AdminSalesCommissionSummary[]
   >([])
   const [editing, setEditing] = useState<CmsSalesMember | null>(null)
+  const [editingPassword, setEditingPassword] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const { confirmAction, noticeDialog } = useAdminNoticeDialog()
@@ -74,6 +75,7 @@ export function SalesAdmin({ token }: { token: string }) {
   function createMember() {
     const now = new Date().toISOString()
     setEditing({
+      accountUsername: "",
       commissionAdjustment: 0,
       commissionPercentage: 0,
       createdAt: now,
@@ -83,16 +85,24 @@ export function SalesAdmin({ token }: { token: string }) {
       studentTag: "",
       updatedAt: now,
     })
+    setEditingPassword("")
   }
 
   async function persist(nextMembers: CmsSalesMember[]) {
     setIsSaving(true)
     try {
-      const result = await saveAdminSalesMembers(token, nextMembers)
+      const result = await saveAdminSalesMembers(
+        token,
+        nextMembers,
+        editing && editingPassword
+          ? { [editing.id]: editingPassword }
+          : undefined
+      )
       setMembers(result.salesMembers)
       setStudentTags(result.studentTags)
       setCommissionSummaries(result.commissionSummaries)
       setEditing(null)
+      setEditingPassword("")
       toast.success("销售资料已保存")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "销售资料保存失败")
@@ -145,6 +155,7 @@ export function SalesAdmin({ token }: { token: string }) {
             <TableHeader>
               <TableRow>
                 <TableHead>销售名称</TableHead>
+                <TableHead>登录账号</TableHead>
                 <TableHead>学员分区标签</TableHead>
                 <TableHead>分成规则</TableHead>
                 <TableHead>累计提成（原币 / 人民币）</TableHead>
@@ -157,6 +168,15 @@ export function SalesAdmin({ token }: { token: string }) {
                 members.map((member) => (
                   <TableRow key={member.id}>
                     <TableCell className="font-medium">{member.name}</TableCell>
+                    <TableCell>
+                      {member.accountUsername ? (
+                        <span className="font-mono text-xs">
+                          {member.accountUsername}
+                        </span>
+                      ) : (
+                        <Badge variant="secondary">未开通</Badge>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{member.studentTag}</Badge>
                     </TableCell>
@@ -183,7 +203,10 @@ export function SalesAdmin({ token }: { token: string }) {
                         <Button
                           aria-label="编辑销售"
                           className="size-8"
-                          onClick={() => setEditing({ ...member })}
+                          onClick={() => {
+                            setEditingPassword("")
+                            setEditing({ ...member })
+                          }}
                           size="icon-sm"
                           variant="navIcon"
                         >
@@ -206,7 +229,7 @@ export function SalesAdmin({ token }: { token: string }) {
                 <TableRow>
                   <TableCell
                     className="h-28 text-center text-muted-foreground"
-                    colSpan={6}
+                    colSpan={7}
                   >
                     {isLoading
                       ? "正在加载..."
@@ -219,7 +242,12 @@ export function SalesAdmin({ token }: { token: string }) {
         </Card>
       </div>
       <Dialog
-        onOpenChange={(open) => !open && setEditing(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditing(null)
+            setEditingPassword("")
+          }
+        }}
         open={Boolean(editing)}
       >
         <DialogContent className="max-w-lg gap-3">
@@ -242,6 +270,45 @@ export function SalesAdmin({ token }: { token: string }) {
                     setEditing({ ...editing, name: event.target.value })
                   }
                   value={editing.name}
+                />
+              </FormField>
+              <FormField
+                description="用于登录 /sales，支持小写字母、数字、点、下划线和连字符。"
+                label="登录账号"
+              >
+                <Input
+                  autoComplete="off"
+                  className="h-8"
+                  onChange={(event) =>
+                    setEditing({
+                      ...editing,
+                      accountUsername: event.target.value.toLocaleLowerCase(),
+                    })
+                  }
+                  placeholder="例如 chen.li"
+                  value={editing.accountUsername ?? ""}
+                />
+              </FormField>
+              <FormField
+                description={
+                  members.some((item) => item.id === editing.id)
+                    ? "留空保留原密码；填写后会重置密码并退出旧会话。"
+                    : "开通账号时需设置至少 8 位密码。"
+                }
+                label={
+                  members.some((item) => item.id === editing.id)
+                    ? "重置登录密码"
+                    : "初始登录密码"
+                }
+              >
+                <Input
+                  autoComplete="new-password"
+                  className="h-8"
+                  minLength={8}
+                  onChange={(event) => setEditingPassword(event.target.value)}
+                  placeholder="至少 8 位"
+                  type="password"
+                  value={editingPassword}
                 />
               </FormField>
               <FormField label="学员分区标签" required>
@@ -335,7 +402,14 @@ export function SalesAdmin({ token }: { token: string }) {
             <Button
               className="h-8"
               disabled={
-                isSaving || !editing?.name.trim() || !editing?.studentTag
+                isSaving ||
+                !editing?.name.trim() ||
+                !editing?.studentTag ||
+                (Boolean(editing?.accountUsername) &&
+                  !members.find((item) => item.id === editing?.id)
+                    ?.accountUsername &&
+                  editingPassword.length < 8) ||
+                (editingPassword.length > 0 && editingPassword.length < 8)
               }
               onClick={() =>
                 editing &&

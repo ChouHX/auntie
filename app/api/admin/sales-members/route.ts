@@ -1,8 +1,10 @@
 import type { NextRequest } from "next/server"
+import { randomBytes } from "node:crypto"
 
 import { isAdminToken, readCmsContent, updateCmsContent } from "@/lib/cms-store"
 import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
 import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
+import { hashSalesPassword } from "@/lib/sales-auth"
 import {
   listAllWecomCustomersForAnalytics,
   listWecomStudentTags,
@@ -24,7 +26,7 @@ export async function GET(request: NextRequest) {
   ])
   return Response.json({
     commissionSummaries: createCommissionSummaries(content),
-    salesMembers: content.salesMembers,
+    salesMembers: sanitizeSalesMembers(content.salesMembers),
     studentTags,
   })
 }
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   if (!(await requireAdmin(request))) return unauthorized()
   const body = (await request.json().catch(() => ({}))) as {
+    passwordUpdates?: Record<string, string>
     salesMembers?: CmsSalesMember[]
   }
   if (!Array.isArray(body.salesMembers)) {
@@ -43,20 +46,48 @@ export async function PUT(request: NextRequest) {
   try {
     const ids = new Set<string>()
     const tags = new Set<string>()
+    const usernames = new Set<string>()
     const now = new Date().toISOString()
+    const currentContent = await readCmsContent()
+    const currentMembers = new Map(
+      currentContent.salesMembers.map((member) => [member.id, member])
+    )
     const salesMembers = body.salesMembers.map((member) => {
       const id = member.id.trim()
       const name = member.name.trim()
       const studentTag = member.studentTag.trim()
+      const accountUsername = (member.accountUsername ?? "")
+        .trim()
+        .toLocaleLowerCase()
+      const existing = currentMembers.get(id)
+      const password = body.passwordUpdates?.[id] ?? ""
       if (!id || !name || !studentTag)
         throw new Error("销售名称和学员分区标签不能为空。")
       if (ids.has(id)) throw new Error("销售 ID 重复。")
       if (tags.has(studentTag))
         throw new Error("一个学员分区标签只能绑定一位销售。")
+      if (
+        accountUsername &&
+        !/^[a-z0-9][a-z0-9._-]{2,39}$/.test(accountUsername)
+      ) {
+        throw new Error("登录账号需为 3-40 位小写字母、数字、点、下划线或连字符。")
+      }
+      if (accountUsername && usernames.has(accountUsername))
+        throw new Error("销售登录账号不能重复。")
+      if (password && password.length < 8)
+        throw new Error("销售登录密码至少需要 8 位。")
+      if (accountUsername && !existing?.passwordHash && !password)
+        throw new Error(`请为销售「${name}」设置至少 8 位的登录密码。`)
       ids.add(id)
       tags.add(studentTag)
+      if (accountUsername) usernames.add(accountUsername)
+      const accountChanged = accountUsername !== (existing?.accountUsername ?? "")
+      const authVersion =
+        (existing?.authVersion ?? 1) + (password || accountChanged ? 1 : 0)
       return {
         ...member,
+        accountUsername,
+        authVersion,
         commissionAdjustment: normalizeSignedAmount(
           member.commissionAdjustment
         ),
@@ -64,6 +95,9 @@ export async function PUT(request: NextRequest) {
         createdAt: member.createdAt || now,
         id,
         name,
+        passwordHash: password
+          ? hashSalesPassword(password, randomBytes(16).toString("hex"))
+          : existing?.passwordHash,
         status:
           member.status === "inactive"
             ? ("inactive" as const)
@@ -112,7 +146,7 @@ export async function PUT(request: NextRequest) {
     })
     return Response.json({
       commissionSummaries: createCommissionSummaries(savedContent),
-      salesMembers,
+      salesMembers: sanitizeSalesMembers(salesMembers),
       studentTags: await listWecomStudentTags(),
     })
   } catch (error) {
@@ -165,6 +199,14 @@ function createCommissionSummaries(
       missingCnyCount,
       salesMemberId: member.id,
     }
+  })
+}
+
+function sanitizeSalesMembers(members: CmsSalesMember[]) {
+  return members.map((member) => {
+    const sanitized = { ...member }
+    delete sanitized.passwordHash
+    return sanitized
   })
 }
 

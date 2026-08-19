@@ -70,6 +70,11 @@ function withRuntimeDefaults(content: CmsContent): CmsContent {
     content.salesMembers ?? defaultCmsContent.salesMembers
   ).map((member) => ({
     ...member,
+    accountUsername: member.accountUsername?.trim().toLocaleLowerCase() ?? "",
+    authVersion:
+      Number.isInteger(Number(member.authVersion)) && Number(member.authVersion) > 0
+        ? Number(member.authVersion)
+        : 1,
     commissionAdjustment: normalizeSignedFinanceAmount(
       member.commissionAdjustment
     ),

@@ -13,7 +13,8 @@ import { I18nProvider } from "@/lib/i18n"
 
 function SiteShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const isAdmin = pathname?.startsWith("/admin")
+  const isAdmin =
+    pathname?.startsWith("/admin") || pathname?.startsWith("/sales")
   const isCheckout = pathname === "/checkout" || pathname === "/pay"
   const isHome = pathname === "/"
 

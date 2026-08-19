@@ -6,6 +6,7 @@ import {
   ArrowsClockwise,
   List,
   MoonStars,
+  Password,
   SignOut,
   Sun,
   UserCircle,
@@ -39,6 +40,8 @@ type AdminNavItem<TSection extends string> = {
 }
 
 type AdminLayoutProps<TSection extends string> = {
+  accountName?: string
+  accountSubtitle?: string
   activeSection: TSection
   children: ReactNode
   contentFullWidth?: boolean
@@ -49,14 +52,18 @@ type AdminLayoutProps<TSection extends string> = {
   loading?: boolean
   logoImage?: string
   onLogout: () => void
+  onPasswordChange?: () => void
   onRefresh?: () => void
   onSectionChange: (section: TSection) => void
   onThemeToggle: () => void
+  showSidebar?: boolean
   subtitle: string
   title: string
 }
 
 function AdminLayout<TSection extends string>({
+  accountName = "管理员",
+  accountSubtitle = "内容管理后台",
   activeSection,
   children,
   contentFullWidth = false,
@@ -66,9 +73,11 @@ function AdminLayout<TSection extends string>({
   loading,
   logoImage = "/logo.webp",
   onLogout,
+  onPasswordChange,
   onRefresh,
   onSectionChange,
   onThemeToggle,
+  showSidebar = true,
   subtitle,
   title,
 }: AdminLayoutProps<TSection>) {
@@ -89,72 +98,85 @@ function AdminLayout<TSection extends string>({
       className="min-h-screen bg-muted text-foreground"
       data-sidebar-collapsed={isSidebarCollapsed ? "true" : "false"}
     >
-      <AdminSidebar
-        activeSection={activeSection}
-        collapsed={isSidebarCollapsed}
-        items={items}
-        logoImage={logoImage}
-        onSectionChange={handleSectionChange}
-      />
-
-      <button
-        aria-hidden="true"
-        className={cn(
-          "fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-sm transition-opacity lg:hidden",
-          isNavOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        )}
-        onClick={() => setIsNavOpen(false)}
-        tabIndex={-1}
-        type="button"
-      />
-
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 w-[230px] border-r border-border bg-card shadow-xl transition-transform lg:hidden",
-          isNavOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <AdminSidebarContent
+      {showSidebar ? (
+        <AdminSidebar
           activeSection={activeSection}
+          collapsed={isSidebarCollapsed}
           items={items}
           logoImage={logoImage}
-          onClose={() => setIsNavOpen(false)}
           onSectionChange={handleSectionChange}
         />
-      </aside>
+      ) : null}
+
+      {showSidebar ? (
+        <>
+          <button
+            aria-hidden="true"
+            className={cn(
+              "fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-sm transition-opacity lg:hidden",
+              isNavOpen ? "opacity-100" : "pointer-events-none opacity-0"
+            )}
+            onClick={() => setIsNavOpen(false)}
+            tabIndex={-1}
+            type="button"
+          />
+
+          <aside
+            className={cn(
+              "fixed inset-y-0 left-0 z-50 w-[230px] border-r border-border bg-card shadow-xl transition-transform lg:hidden",
+              isNavOpen ? "translate-x-0" : "-translate-x-full"
+            )}
+          >
+            <AdminSidebarContent
+              activeSection={activeSection}
+              items={items}
+              logoImage={logoImage}
+              onClose={() => setIsNavOpen(false)}
+              onSectionChange={handleSectionChange}
+            />
+          </aside>
+        </>
+      ) : null}
 
       <div
         className={cn(
-          "min-w-0 transition-[padding] duration-300 lg:pl-[230px]",
-          isSidebarCollapsed && "lg:pl-[88px]"
+          "min-w-0 transition-[padding] duration-300",
+          showSidebar && "lg:pl-[230px]",
+          showSidebar && isSidebarCollapsed && "lg:pl-[88px]"
         )}
       >
         <header className="sticky top-0 z-30 border-b border-border bg-card">
           <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
-            <Button
-              aria-label="打开后台菜单"
-              className="size-8 rounded-md lg:hidden"
-              onClick={() => setIsNavOpen(true)}
-              size="icon-sm"
-              type="button"
-              variant="navIcon"
-            >
-              <List size={17} weight="bold" />
-            </Button>
-            <Button
-              aria-label={isSidebarCollapsed ? "展开后台菜单" : "折叠后台菜单"}
-              className="hidden size-8 rounded-md lg:inline-flex"
-              onClick={() => setIsSidebarCollapsed((current) => !current)}
-              size="icon-sm"
-              type="button"
-              variant="navIcon"
-            >
-              {isSidebarCollapsed ? (
-                <CaretRight size={17} weight="bold" />
-              ) : (
-                <CaretLeft size={17} weight="bold" />
-              )}
-            </Button>
+            {showSidebar ? (
+              <>
+                <Button
+                  aria-label="打开后台菜单"
+                  className="size-8 rounded-md lg:hidden"
+                  onClick={() => setIsNavOpen(true)}
+                  size="icon-sm"
+                  type="button"
+                  variant="navIcon"
+                >
+                  <List size={17} weight="bold" />
+                </Button>
+                <Button
+                  aria-label={
+                    isSidebarCollapsed ? "展开后台菜单" : "折叠后台菜单"
+                  }
+                  className="hidden size-8 rounded-md lg:inline-flex"
+                  onClick={() => setIsSidebarCollapsed((current) => !current)}
+                  size="icon-sm"
+                  type="button"
+                  variant="navIcon"
+                >
+                  {isSidebarCollapsed ? (
+                    <CaretRight size={17} weight="bold" />
+                  ) : (
+                    <CaretLeft size={17} weight="bold" />
+                  )}
+                </Button>
+              </>
+            ) : null}
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -202,7 +224,12 @@ function AdminLayout<TSection extends string>({
               {isDarkTheme ? <Sun size={18} /> : <MoonStars size={18} />}
             </Button>
 
-            <AdminProfileMenu onLogout={onLogout} />
+            <AdminProfileMenu
+              accountName={accountName}
+              accountSubtitle={accountSubtitle}
+              onLogout={onLogout}
+              onPasswordChange={onPasswordChange}
+            />
           </div>
         </header>
 
@@ -395,7 +422,17 @@ function AdminSidebarButton<TSection extends string>({
   )
 }
 
-function AdminProfileMenu({ onLogout }: { onLogout: () => void }) {
+function AdminProfileMenu({
+  accountName,
+  accountSubtitle,
+  onLogout,
+  onPasswordChange,
+}: {
+  accountName: string
+  accountSubtitle: string
+  onLogout: () => void
+  onPasswordChange?: () => void
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -407,19 +444,27 @@ function AdminProfileMenu({ onLogout }: { onLogout: () => void }) {
           <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground">
             <UserCircle size={18} weight="bold" />
           </span>
-          <span className="hidden text-sm font-medium md:inline">管理员</span>
+          <span className="hidden max-w-32 truncate text-sm font-medium md:inline">
+            {accountName}
+          </span>
           <CaretDown className="hidden md:block" size={14} weight="bold" />
           <span className="sr-only">打开账号菜单</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
-          <div className="text-sm font-medium">管理员</div>
+          <div className="text-sm font-medium">{accountName}</div>
           <div className="text-xs font-normal text-muted-foreground">
-            内容管理后台
+            {accountSubtitle}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {onPasswordChange ? (
+          <DropdownMenuItem onClick={onPasswordChange}>
+            <Password size={15} />
+            修改密码
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onClick={onLogout}>
           <SignOut size={15} />
           退出登录

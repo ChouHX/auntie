@@ -269,14 +269,15 @@ async function fetchAdminSalesMembers(token: string) {
 
 async function saveAdminSalesMembers(
   token: string,
-  salesMembers: CmsSalesMember[]
+  salesMembers: CmsSalesMember[],
+  passwordUpdates: Record<string, string> = {}
 ) {
   return request<{
     commissionSummaries: AdminSalesCommissionSummary[]
     salesMembers: CmsSalesMember[]
     studentTags: string[]
   }>("/api/admin/sales-members", {
-    body: JSON.stringify({ salesMembers }),
+    body: JSON.stringify({ passwordUpdates, salesMembers }),
     headers: createAuthHeaders(token),
     method: "PUT",
   })
