@@ -108,7 +108,7 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
           <TableHeader>
             <TableRow>
               <TableHead>客户</TableHead>
-              <TableHead>学员区分</TableHead>
+              <TableHead>销售区分</TableHead>
               <TableHead>地区</TableHead>
               <TableHead>描述</TableHead>
               <TableHead>添加时间</TableHead>
