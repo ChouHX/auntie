@@ -62,7 +62,7 @@ export const navItems: NavItem[] = [
 ]
 
 export const heroStats: StatItem[] = [
-  { value: "97%", label: "好评率" },
+  { value: "99%", label: "好评率" },
   { value: "100+", label: "合作阿姨" },
   { value: "7 年", label: "经验沉淀" },
 ]
@@ -70,7 +70,7 @@ export const heroStats: StatItem[] = [
 export const stats: StatItem[] = [
   { value: "7 年", label: "团队阿姨从业经验" },
   { value: "10000+", label: "累计服务华人家庭" },
-  { value: "97%", label: "客户好评率" },
+  { value: "99%", label: "客户好评率" },
   { value: "100+", label: "长期合作阿姨" },
 ]
 

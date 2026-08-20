@@ -157,7 +157,7 @@ const dictionaries = {
       stats: [
         { to: 7, suffix: " 年", label: "团队从业经验" },
         { to: 10000, suffix: "+", label: "累计服务华人家庭" },
-        { to: 98, suffix: "%", label: "客户好评率" },
+        { to: 99, suffix: "%", label: "客户好评率" },
         { to: 100, suffix: "+", label: "团队阿姨" },
       ],
     },
@@ -1131,7 +1131,7 @@ const dictionaries = {
       stats: [
         { to: 7, suffix: " yrs", label: "Team experience" },
         { to: 10000, suffix: "+", label: "Chinese families served" },
-        { to: 98, suffix: "%", label: "Positive feedback" },
+        { to: 99, suffix: "%", label: "Positive feedback" },
         { to: 100, suffix: "+", label: "Team aunties" },
       ],
     },

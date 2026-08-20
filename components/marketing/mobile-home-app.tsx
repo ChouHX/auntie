@@ -22,7 +22,7 @@ import { Link } from "@/lib/router-compat"
 const statItems = [
   { value: "100000+", label: { zh: "累计服务", en: "Orders served" } },
   { value: "100+", label: { zh: "服务阿姨", en: "Aunties" } },
-  { value: "97%", label: { zh: "客户好评", en: "Positive rate" } },
+  { value: "99%", label: { zh: "客户好评", en: "Positive rate" } },
   { value: "7 年", label: { zh: "经验沉淀", en: "Experience" } },
 ] as const
 
