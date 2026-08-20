@@ -120,7 +120,7 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
               <TableHead>清洁类型</TableHead>
               <TableHead>服务日期</TableHead>
               <TableHead className="text-right">结算金额</TableHead>
-              <TableHead className="text-right">学员提成</TableHead>
+              <TableHead className="text-right">销售分成</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

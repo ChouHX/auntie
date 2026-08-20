@@ -7,7 +7,6 @@ type SalesCustomer = Pick<
   WecomCustomer,
   | "addTime"
   | "addWay"
-  | "auntie"
   | "avatar"
   | "corpName"
   | "description"
@@ -16,7 +15,6 @@ type SalesCustomer = Pick<
   | "position"
   | "region"
   | "relationId"
-  | "remarkMobiles"
   | "studentType"
 >
 
@@ -50,9 +48,7 @@ function createSalesCustomerPage(
           customer.position,
           customer.studentType,
           customer.region,
-          customer.auntie,
           customer.description,
-          customer.remarkMobiles,
           customer.addWay,
         ].some((value) => value.toLocaleLowerCase().includes(query))
       )
@@ -78,7 +74,6 @@ function toSalesCustomer(customer: WecomCustomer): SalesCustomer {
   return {
     addTime: customer.addTime,
     addWay: customer.addWay,
-    auntie: customer.auntie,
     avatar: customer.avatar,
     corpName: customer.corpName,
     description: customer.description,
@@ -87,7 +82,6 @@ function toSalesCustomer(customer: WecomCustomer): SalesCustomer {
     position: customer.position,
     region: customer.region,
     relationId: customer.relationId,
-    remarkMobiles: customer.remarkMobiles,
     studentType: customer.studentType,
   }
 }

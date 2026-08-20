@@ -24,6 +24,8 @@ test("销售客户接口只返回当前销售标签归属的客户", () => {
 
   assert.equal(result.pagination.totalCount, 1)
   assert.equal(result.customers[0].relationId, "a")
+  assert.equal("auntie" in result.customers[0], false)
+  assert.equal("remarkMobiles" in result.customers[0], false)
 })
 
 test("订单存在销售 ID 时不因销售同名泄露给其他账号", () => {

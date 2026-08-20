@@ -104,14 +104,12 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
       </div>
 
       <div className="overflow-x-auto">
-        <Table className="min-w-[1080px] text-xs">
+        <Table className="min-w-[840px] text-xs">
           <TableHeader>
             <TableRow>
               <TableHead>客户</TableHead>
               <TableHead>学员区分</TableHead>
               <TableHead>地区</TableHead>
-              <TableHead>对接阿姨</TableHead>
-              <TableHead>联系方式</TableHead>
               <TableHead>描述</TableHead>
               <TableHead>添加时间</TableHead>
               <TableHead>来源</TableHead>
@@ -122,7 +120,7 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
               <TableRow>
                 <TableCell
                   className="h-28 text-center text-muted-foreground"
-                  colSpan={8}
+                  colSpan={6}
                 >
                   正在加载客户数据...
                 </TableCell>
@@ -138,7 +136,7 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
               <TableRow>
                 <TableCell
                   className="h-28 text-center text-muted-foreground"
-                  colSpan={8}
+                  colSpan={6}
                 >
                   {query ? "没有找到匹配的客户" : "暂无归属到你的客户"}
                 </TableCell>
@@ -204,8 +202,6 @@ function SalesCustomerRow({ customer }: { customer: SalesCustomer }) {
         <TagList value={customer.studentType} />
       </TableCell>
       <CompactCell value={customer.region} />
-      <CompactCell value={customer.auntie} />
-      <CompactCell value={customer.remarkMobiles} />
       <CompactCell value={customer.description} />
       <CompactCell value={formatCustomerTime(customer.addTime)} />
       <CompactCell value={customer.addWay} />
