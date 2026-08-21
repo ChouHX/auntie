@@ -74,6 +74,10 @@ const dictionaries = {
       payNow: "继续付款",
       viewOrder: "查看订单",
       localOnly: "仅保存在当前设备",
+      serviceDate: "服务日期",
+      serviceArea: "服务区域",
+      customer: "客户",
+      serviceType: "清洁类型",
       orderId: "订单号",
       amount: "金额",
       status: {
@@ -1036,6 +1040,10 @@ const dictionaries = {
       payNow: "Continue payment",
       viewOrder: "View order",
       localOnly: "Saved on this device only",
+      serviceDate: "Service date",
+      serviceArea: "Service area",
+      customer: "Customer",
+      serviceType: "Cleaning type",
       orderId: "Order",
       amount: "Amount",
       status: {

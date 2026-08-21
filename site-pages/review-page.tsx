@@ -89,7 +89,7 @@ function ReviewPage() {
           setAssignedAuntie(null)
         }
 
-        if (orderData.status !== "paid") {
+        if (orderData.status !== "paid" && !orderData.zellePaymentProof) {
           setState("not_paid")
         } else if (orderData.review) {
           setState("already_reviewed")

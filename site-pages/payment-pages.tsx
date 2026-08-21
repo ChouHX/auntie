@@ -1,4 +1,11 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import {
   ArrowLeft,
   CheckCircle,
@@ -7,6 +14,7 @@ import {
   CreditCard,
   ImageSquare,
   LockKey,
+  MapPin,
   ShieldCheck,
   Star,
   Trash,
@@ -21,12 +29,6 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -34,6 +36,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   fetchPaymentOrder,
   startPaymentOrderCheckout,
@@ -137,16 +144,16 @@ type PaymentCopy = {
   zellePaymentMethod: string
   zellePaymentMethodDescription: string
   choosePaymentMethod: string
+  backToTip: string
   backToPaymentMethods: string
-  zelleTitle: string
   zelleCompanyName: string
-  zelleId: string
   zelleEmail: string
   zellePaymentNote: string
   zellePaymentNoteDescription: string
   zelleUploadTitle: string
   zelleUploadDescription: string
   zelleUploadButton: string
+  zelleUploadSuccess: string
   zelleSelectedFile: string
   copyValue: string
   copiedValue: string
@@ -208,7 +215,8 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     reviewNotice: "提交服务评价",
     secureTitle: "安全付款",
     tipAmount: "小费",
-    tipDescription: "请填写小费金额；如不打赏，请填写 0。",
+    tipDescription:
+      "阿姨认真完成每一次上门服务。如果您认可她今天的服务，可以给她一点小费作为鼓励吗？小费将 100% 直接给到阿姨。",
     tipPlaceholder: "0.00",
     tipValidationMessage: "请填写 0 - 1000 之间的小费金额。",
     totalAmount: "确认支付金额",
@@ -219,18 +227,18 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     zellePaymentMethod: "Zelle 付款",
     zellePaymentMethodDescription: "通过 Zelle 转账，并上传付款截图",
     choosePaymentMethod: "请选择付款方式",
+    backToTip: "返回小费填写",
     backToPaymentMethods: "返回付款方式",
-    zelleTitle: "Zelle 付款信息",
     zelleCompanyName: "公司名称",
-    zelleId: "Zelle ID",
     zelleEmail: "Zelle Email",
     zellePaymentNote: "付款备注",
     zellePaymentNoteDescription:
       "付款时请将订单编号粘贴到付款备注中，方便我们核对订单。如有报账或记录需要，您可以在订单编号后继续添加自己的付款说明。",
-    zelleUploadTitle: "上传付款截图",
+    zelleUploadTitle: "上传付款凭证",
     zelleUploadDescription:
       "请从手机相册选择刚刚保存的付款截图。点击后将打开系统图片选择器。",
     zelleUploadButton: "上传付款截图",
+    zelleUploadSuccess: "付款凭证已提交，正在进入订单评价。",
     zelleSelectedFile: "已选择",
     copyValue: "复制",
     copiedValue: "已复制",
@@ -294,7 +302,7 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     secureTitle: "Secure payment",
     tipAmount: "Tip",
     tipDescription:
-      "Enter a tip amount. Enter 0 if you do not wish to add a tip.",
+      "Your service professional works hard on every visit. If you appreciate today's service, would you like to leave a tip as encouragement? 100% of the tip goes directly to her.",
     tipPlaceholder: "0.00",
     tipValidationMessage: "Enter a tip amount from 0 to 1000.",
     totalAmount: "Payment total",
@@ -307,18 +315,18 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     zellePaymentMethodDescription:
       "Send a Zelle transfer and upload your payment screenshot",
     choosePaymentMethod: "Choose a payment method",
+    backToTip: "Back to tip",
     backToPaymentMethods: "Back to payment methods",
-    zelleTitle: "Zelle payment information",
     zelleCompanyName: "Company name",
-    zelleId: "Zelle ID",
     zelleEmail: "Zelle Email",
     zellePaymentNote: "Payment note",
     zellePaymentNoteDescription:
       "Please paste the order number into the payment note so we can match your payment. If you need a reimbursement or record, you may add your own note after the order number.",
-    zelleUploadTitle: "Upload payment screenshot",
+    zelleUploadTitle: "Upload payment proof",
     zelleUploadDescription:
       "Choose the payment screenshot from your phone’s photo library. Tapping the button opens the system image picker.",
     zelleUploadButton: "Upload payment screenshot",
+    zelleUploadSuccess: "Payment proof submitted. Opening your review.",
     zelleSelectedFile: "Selected",
     copyValue: "Copy",
     copiedValue: "Copied",
@@ -599,6 +607,14 @@ function PaymentPage() {
               language={language}
               logoImage={logoImage}
               onOrderUpdate={handleOrderUpdate}
+              onZelleSubmitted={(submittedOrderId) => {
+                window.setTimeout(() => {
+                  navigate(
+                    `/review?order=${encodeURIComponent(submittedOrderId)}`,
+                    { replace: true }
+                  )
+                }, 900)
+              }}
               order={exclusiveOrder}
             />
           ) : (
@@ -627,6 +643,7 @@ function ExclusiveOrderCard({
   language,
   logoImage,
   onOrderUpdate,
+  onZelleSubmitted,
   order,
 }: {
   brandName: string
@@ -634,6 +651,7 @@ function ExclusiveOrderCard({
   language: Language
   logoImage: string
   onOrderUpdate: (order: CmsPaymentOrder) => void
+  onZelleSubmitted: (orderId: string) => void
   order: PaymentOrder
 }) {
   const [isReceiptOpen, setIsReceiptOpen] = useState(false)
@@ -689,46 +707,43 @@ function ExclusiveOrderCard({
 
   if (isPaid) {
     return (
-      <div className="w-full max-w-xl">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-300/25 dark:border-white/10 dark:bg-slate-900 dark:shadow-black/30">
         <PaymentSuccessPanel
           brandName={brandName}
           copy={copy}
           logoImage={logoImage}
           order={paidOrder ?? order}
-          onOpenReceipt={() => setIsReceiptOpen(true)}
         />
         <OrderSummary
-          className="mt-4 max-w-none"
+          className="mt-0 max-w-none rounded-none border-x-0 border-t-0 border-b shadow-none"
           copy={copy}
           includeIdentity
           order={paidOrder ?? order}
         />
-        {order.review ? (
-          <PaymentReviewSummary order={order} />
-        ) : (
-          <Button
-            asChild
-            className="mt-4 h-10 w-full rounded-lg"
-            variant="brand"
-          >
-            <Link to={`/review?order=${encodeURIComponent(order.orderId)}`}>
-              <Star weight="fill" />
-              {copy.reviewNotice}
-            </Link>
-          </Button>
-        )}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Button
-            className="h-10 rounded-lg"
-            onClick={() => setIsReceiptOpen(true)}
-            variant="brand"
-          >
-            <CreditCard weight="fill" />
-            {copy.viewReceipt}
-          </Button>
-          <Button asChild className="h-10 rounded-lg" variant="outline">
-            <Link to="/after-sales">{copy.contactSupport}</Link>
-          </Button>
+        <div className="border-t border-slate-100 p-4 dark:border-white/10">
+          {order.review ? (
+            <PaymentReviewSummary className="mt-0" order={order} />
+          ) : (
+            <Button asChild className="h-11 w-full rounded-lg" variant="brand">
+              <Link to={`/review?order=${encodeURIComponent(order.orderId)}`}>
+                <Star weight="fill" />
+                {copy.reviewNotice}
+              </Link>
+            </Button>
+          )}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Button
+              className="h-10 rounded-lg"
+              onClick={() => setIsReceiptOpen(true)}
+              variant="outline"
+            >
+              <CreditCard weight="fill" />
+              {copy.viewReceipt}
+            </Button>
+            <Button asChild className="h-10 rounded-lg" variant="outline">
+              <Link to="/after-sales">{copy.contactSupport}</Link>
+            </Button>
+          </div>
         </div>
         {receiptDialog}
       </div>
@@ -736,8 +751,8 @@ function ExclusiveOrderCard({
   }
 
   return (
-    <div className="grid w-full overflow-hidden border-y border-slate-200 bg-white shadow-xl shadow-slate-300/30 md:rounded-2xl md:border md:shadow-2xl md:shadow-slate-300/40 lg:min-h-[38rem] lg:grid-cols-[minmax(19rem,0.9fr)_minmax(0,1.1fr)] dark:border-white/10 dark:bg-slate-900 dark:shadow-black/40">
-      <aside className="flex flex-col gap-4 border-b border-slate-200 bg-gradient-to-br from-slate-50 via-white to-blue-50/70 p-4 text-slate-950 md:gap-6 md:p-7 lg:border-r lg:border-b-0 lg:p-8 dark:border-white/10 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 dark:text-white">
+    <div className="grid w-full overflow-hidden bg-transparent md:rounded-2xl md:border md:border-slate-200 md:bg-white md:shadow-2xl md:shadow-slate-300/40 lg:min-h-[38rem] lg:grid-cols-[minmax(19rem,0.9fr)_minmax(0,1.1fr)] md:dark:border-white/10 md:dark:bg-slate-900 md:dark:shadow-black/40">
+      <aside className="flex flex-col gap-2 bg-transparent p-4 text-slate-950 md:gap-6 md:bg-gradient-to-br md:from-slate-50 md:via-white md:to-blue-50/70 md:p-7 lg:border-r lg:border-b-0 lg:border-slate-200 lg:p-8 dark:text-white md:dark:from-slate-900 md:dark:via-slate-900 md:dark:to-slate-800 lg:dark:border-white/10">
         <div className="flex items-center justify-between gap-4">
           <CheckoutBrandHeader
             brandName={brandName}
@@ -753,46 +768,53 @@ function ExclusiveOrderCard({
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {copy.fields.amount}
           </p>
-          <div className="mt-1 text-3xl font-normal tracking-tight text-slate-950 md:mt-2 md:text-5xl dark:text-white">
-            {displayOrder.amount}
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 md:mt-2">
+            <div className="shrink-0 text-2xl font-semibold tracking-tight text-slate-950 md:text-5xl md:font-normal dark:text-white">
+              {displayOrder.amount}
+            </div>
+            <div className="inline-flex max-w-full min-w-0 shrink-0 items-center rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] text-blue-800 md:px-3 md:text-xs dark:border-white/10 dark:bg-white/8 dark:text-blue-100">
+              <span className="truncate">
+                {order.serviceType} · {order.serviceDate}
+              </span>
+            </div>
           </div>
-          <div className="mt-3 inline-flex max-w-full items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs text-blue-800 dark:border-white/10 dark:bg-white/8 dark:text-blue-100">
-            <span className="truncate">
-              {order.serviceType} · {order.serviceDate}
+          <div className="mt-2 flex items-center justify-between gap-3 lg:hidden">
+            <span className="min-w-0 truncate text-[11px] text-slate-500 dark:text-slate-400">
+              {copy.fields.orderId}: {order.orderId}
+            </span>
+            <span className="flex shrink-0 items-center text-slate-500 dark:text-slate-400">
+              <PaymentInfoPopover
+                copy={copy}
+                showPaymentNotice={paymentMethod === "airwallex"}
+              />
             </span>
           </div>
         </div>
 
         {!needsPaymentConfirmation ? (
-          <PaymentAmountBreakdown copy={copy} order={displayOrder} />
+          <div className="hidden lg:block">
+            <PaymentAmountBreakdown copy={copy} order={displayOrder} />
+          </div>
         ) : null}
 
         <div className="hidden lg:block">
           <CheckoutOrderSummary copy={copy} order={displayOrder} />
         </div>
 
-        <MobileCheckoutOrderDetails copy={copy} order={displayOrder} />
-
-        <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-          {copy.paymentNotice}
-        </p>
-        <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+        {paymentMethod === "airwallex" ? (
+          <p className="hidden text-xs leading-5 text-slate-500 lg:block dark:text-slate-400">
+            {copy.paymentNotice}
+          </p>
+        ) : null}
+        <p className="hidden text-xs leading-5 text-slate-500 lg:block dark:text-slate-400">
           {copy.policyNotice}
         </p>
-        <CheckoutPolicyLinks copy={copy} />
+        <div className="hidden lg:block">
+          <CheckoutPolicyLinks copy={copy} />
+        </div>
       </aside>
 
-      <div className="flex min-h-[28rem] flex-col justify-start bg-white px-4 py-5 md:min-h-[32rem] md:justify-center md:px-8 md:py-6 lg:px-10 dark:bg-slate-900">
-        <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 lg:hidden dark:border-white/10">
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-950 dark:text-white">
-            <CreditCard size={18} weight="fill" />
-            {copy.paymentMethodLabel}
-          </span>
-          <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-            <LockKey size={13} weight="bold" />
-            {copy.secureTitle}
-          </span>
-        </div>
+      <div className="flex min-h-0 flex-col justify-start bg-transparent px-4 py-2 md:min-h-[32rem] md:justify-center md:bg-gradient-to-br md:from-slate-50 md:via-white md:to-blue-50/70 md:px-8 md:py-6 lg:bg-white lg:px-10 md:dark:from-slate-900 md:dark:via-slate-900 md:dark:to-slate-800 lg:dark:bg-slate-900">
         <AnimatePresence initial={false} mode="wait">
           <motion.div
             animate={{ opacity: 1, x: 0 }}
@@ -805,6 +827,7 @@ function ExclusiveOrderCard({
             {needsPaymentConfirmation ? (
               <PaymentConfirmationPanel
                 copy={copy}
+                initialTipAmount={draftTipAmount}
                 onConfirm={(tipAmount) => {
                   setConfirmedTipAmount(tipAmount)
                   setDraftTipAmount(tipAmount)
@@ -818,8 +841,8 @@ function ExclusiveOrderCard({
                 copy={copy}
                 onBack={() => setPaymentMethod(null)}
                 onUploaded={(nextOrder) => onOrderUpdate(nextOrder)}
+                onSubmitted={() => onZelleSubmitted(order.orderId)}
                 order={order}
-                tipAmount={confirmedTipAmount}
               />
             ) : paymentMethod === "airwallex" ? (
               <AirwallexDropInPayment
@@ -833,6 +856,10 @@ function ExclusiveOrderCard({
             ) : (
               <PaymentMethodSelection
                 copy={copy}
+                onBack={() => {
+                  setPaymentMethod(null)
+                  setIsPaymentConfirmed(false)
+                }}
                 onSelect={setPaymentMethod}
                 order={order}
                 tipAmount={confirmedTipAmount}
@@ -849,16 +876,20 @@ function ExclusiveOrderCard({
 
 function PaymentConfirmationPanel({
   copy,
+  initialTipAmount,
   onConfirm,
   onTipChange,
   order,
 }: {
   copy: PaymentCopy
+  initialTipAmount: number
   onConfirm: (tipAmount: number) => void
   onTipChange: (tipAmount: number) => void
   order: PaymentOrder
 }) {
-  const [tipInput, setTipInput] = useState("")
+  const [tipInput, setTipInput] = useState(() =>
+    initialTipAmount > 0 ? initialTipAmount.toFixed(2) : ""
+  )
   const parsedTipAmount = tipInput.trim() ? Number(tipInput) : 0
   const isTipValid =
     tipInput.trim() !== "" &&
@@ -867,14 +898,35 @@ function PaymentConfirmationPanel({
     parsedTipAmount <= 1000
   const baseAmountValue = getBasePaymentAmount(order)
   const totalAmount = baseAmountValue + (isTipValid ? parsedTipAmount : 0)
+  const confirmationOrder: PaymentOrder = {
+    ...order,
+    amount: formatPaymentAmount(totalAmount, order.amount),
+    amountValue: totalAmount,
+    tipAmount: isTipValid ? parsedTipAmount : 0,
+  }
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
-      <div className="text-base font-semibold text-slate-950 dark:text-white">
+    <div className="mx-auto w-full max-w-md rounded-xl p-0 lg:border lg:border-slate-200 lg:bg-slate-50/70 lg:p-4 lg:shadow-sm lg:dark:border-white/10 lg:dark:bg-white/[0.04]">
+      <div className="text-sm font-semibold text-slate-950 lg:text-base dark:text-white">
         {copy.paymentSummaryTitle}
       </div>
       <div className="mt-3">
-        <PaymentAmountBreakdown copy={copy} order={order} />
+        <PaymentAmountBreakdown copy={copy} order={confirmationOrder} />
+      </div>
+      <div className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-2.5 text-xs dark:border-white/10 dark:bg-white/[0.04]">
+        <MapPin
+          className="mt-0.5 shrink-0 text-slate-500 dark:text-slate-400"
+          size={15}
+          weight="fill"
+        />
+        <div className="min-w-0">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            {copy.fields.serviceAddress}
+          </div>
+          <div className="mt-0.5 leading-5 break-words text-slate-900 dark:text-white">
+            {formatCheckoutAddress(order)}
+          </div>
+        </div>
       </div>
       <label className="mt-4 block text-sm font-medium text-slate-950 dark:text-white">
         {copy.tipAmount}
@@ -918,7 +970,7 @@ function PaymentConfirmationPanel({
           {formatPaymentAmount(totalAmount, order.amount)}
         </span>
       </div>
-      <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+      <p className="mt-3 hidden text-xs leading-5 text-slate-500 lg:block dark:text-slate-400">
         {copy.confirmPaymentDescription}
       </p>
       <Button
@@ -937,27 +989,60 @@ function PaymentConfirmationPanel({
 
 function PaymentMethodSelection({
   copy,
+  onBack,
   onSelect,
   order,
   tipAmount,
 }: {
   copy: PaymentCopy
+  onBack: () => void
   onSelect: (method: "airwallex" | "zelle") => void
   order: PaymentOrder
   tipAmount: number
 }) {
   const totalAmount = getBasePaymentAmount(order) + tipAmount
+  const summaryOrder: PaymentOrder = {
+    ...order,
+    amount: formatPaymentAmount(totalAmount, order.amount),
+    amountValue: totalAmount,
+    tipAmount,
+  }
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
-      <div className="text-base font-semibold text-slate-950 dark:text-white">
-        {copy.choosePaymentMethod}
+    <div className="mx-auto w-full max-w-md rounded-xl p-0 lg:border lg:border-slate-200 lg:bg-slate-50/70 lg:p-4 lg:shadow-sm lg:dark:border-white/10 lg:dark:bg-white/[0.04]">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-slate-950 lg:text-base dark:text-white">
+          {copy.paymentSummaryTitle}
+        </div>
+        <Button
+          className="h-8 px-2 text-xs"
+          onClick={onBack}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <ArrowLeft size={14} />
+          {copy.backToTip}
+        </Button>
       </div>
-      <div className="mt-2 flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
-        <span>{copy.totalAmount}</span>
-        <span className="font-semibold text-slate-950 dark:text-white">
-          {formatPaymentAmount(totalAmount, order.amount)}
-        </span>
+      <PaymentAmountBreakdown copy={copy} order={summaryOrder} />
+      <div className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-white/70 px-3 py-2.5 text-xs dark:border-white/10 dark:bg-white/[0.04]">
+        <MapPin
+          className="mt-0.5 shrink-0 text-slate-500 dark:text-slate-400"
+          size={15}
+          weight="fill"
+        />
+        <div className="min-w-0">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            {copy.fields.serviceAddress}
+          </div>
+          <div className="mt-0.5 leading-5 break-words text-slate-900 dark:text-white">
+            {formatCheckoutAddress(order)}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 text-sm font-semibold text-slate-950 lg:text-base dark:text-white">
+        {copy.choosePaymentMethod}
       </div>
       <div className="mt-4 grid gap-3">
         <PaymentMethodButton
@@ -1355,15 +1440,15 @@ function AirwallexDropInPayment({
 function ZellePaymentPanel({
   copy,
   onBack,
+  onSubmitted,
   onUploaded,
   order,
-  tipAmount,
 }: {
   copy: PaymentCopy
   onBack: () => void
+  onSubmitted: () => void
   onUploaded: (order: CmsPaymentOrder) => void
   order: PaymentOrder
-  tipAmount: number
 }) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [selectedScreenshot, setSelectedScreenshot] = useState<File | null>(
@@ -1371,9 +1456,19 @@ function ZellePaymentPanel({
   )
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState("")
+  const [uploadSuccess, setUploadSuccess] = useState(false)
   const [uploaded, setUploaded] = useState(Boolean(order.zellePaymentProof))
-  const totalAmount = getBasePaymentAmount(order) + tipAmount
   const paymentNote = `${order.orderId}`
+  const selectedPreviewUrl = useMemo(
+    () => (selectedScreenshot ? URL.createObjectURL(selectedScreenshot) : null),
+    [selectedScreenshot]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (selectedPreviewUrl) URL.revokeObjectURL(selectedPreviewUrl)
+    }
+  }, [selectedPreviewUrl])
 
   const copyValue = async (field: string, value: string) => {
     try {
@@ -1388,6 +1483,7 @@ function ZellePaymentPanel({
   const selectScreenshot = (file: File | null) => {
     setSelectedScreenshot(file)
     setUploadError("")
+    setUploadSuccess(false)
   }
 
   const submitScreenshot = async () => {
@@ -1401,6 +1497,8 @@ function ZellePaymentPanel({
       onUploaded(result.order)
       setSelectedScreenshot(null)
       setUploaded(true)
+      setUploadSuccess(true)
+      onSubmitted()
     } catch (error) {
       setUploadError(
         error instanceof Error ? error.message : "付款凭证上传失败。"
@@ -1413,6 +1511,7 @@ function ZellePaymentPanel({
   const removeScreenshot = async () => {
     setIsUploading(true)
     setUploadError("")
+    setUploadSuccess(false)
     try {
       const result = await deleteZellePaymentProof(order.orderId)
       onUploaded(result.order)
@@ -1429,46 +1528,33 @@ function ZellePaymentPanel({
 
   return (
     <div className="mx-auto w-full max-w-md">
-      <Button
-        className="mb-3 h-8 px-2 text-xs"
-        onClick={onBack}
-        size="sm"
-        type="button"
-        variant="ghost"
-      >
-        <ArrowLeft size={14} />
-        {copy.backToPaymentMethods}
-      </Button>
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3.5 dark:border-white/10">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-white p-1 shadow-sm ring-1 ring-slate-200 dark:bg-white/90 dark:ring-white/10">
-              <Image
-                alt="Zelle"
-                className="size-full object-contain"
-                height={36}
-                src="/payment/zelle.svg"
-                width={36}
-              />
-            </span>
-            <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-slate-950 dark:text-white">
-                {copy.zelleTitle}
-              </h2>
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                Zelle
-              </p>
-            </div>
-          </div>
-          <div className="shrink-0 text-right">
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">
-              {copy.totalAmount}
-            </div>
-            <div className="mt-0.5 text-sm font-semibold text-slate-950 tabular-nums dark:text-white">
-              {formatPaymentAmount(totalAmount, order.amount)}
-            </div>
-          </div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <Button
+          className="h-8 px-2 text-xs"
+          onClick={onBack}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <ArrowLeft size={14} />
+          {copy.backToPaymentMethods}
+        </Button>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold text-slate-950 dark:text-white">
+            Zelle
+          </span>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-white p-1 shadow-sm ring-1 ring-slate-200 dark:bg-white/90 dark:ring-white/10">
+            <Image
+              alt="Zelle"
+              className="size-full object-contain"
+              height={32}
+              src="/payment/zelle.svg"
+              width={32}
+            />
+          </span>
         </div>
+      </div>
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
         <div className="divide-y divide-slate-100 dark:divide-white/10">
           <CopyablePaymentValue
             copy={copy}
@@ -1478,13 +1564,6 @@ function ZellePaymentPanel({
               void copyValue("company", "AUNTIE CHEN HOME SERVICES INC")
             }
             value="AUNTIE CHEN HOME SERVICES INC"
-          />
-          <CopyablePaymentValue
-            copy={copy}
-            copied={copiedField === "id"}
-            label={copy.zelleId}
-            onCopy={() => void copyValue("id", "auntiechen")}
-            value="auntiechen"
           />
           <CopyablePaymentValue
             copy={copy}
@@ -1500,18 +1579,6 @@ function ZellePaymentPanel({
             onCopy={() => void copyValue("order", paymentNote)}
             value={paymentNote}
           />
-          <CopyablePaymentValue
-            copy={copy}
-            copied={copiedField === "amount"}
-            label={copy.totalAmount}
-            onCopy={() =>
-              void copyValue(
-                "amount",
-                formatPaymentAmount(totalAmount, order.amount)
-              )
-            }
-            value={formatPaymentAmount(totalAmount, order.amount)}
-          />
         </div>
         <p className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
           <strong className="font-semibold text-slate-950 dark:text-white">
@@ -1519,82 +1586,84 @@ function ZellePaymentPanel({
           </strong>{" "}
           {copy.zellePaymentNoteDescription}
         </p>
-      </div>
-
-      <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-900">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
-            <ImageSquare size={18} weight="fill" />
-            {copy.zelleUploadTitle}
-          </div>
-          <span className="text-[11px] font-medium tracking-wider text-slate-400 uppercase">
-            JPG / PNG
-          </span>
-        </div>
-        <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
-          {copy.zelleUploadDescription}
-        </p>
-        <input
-          accept="image/*"
-          className="sr-only"
-          id={`zelle-screenshot-${normalizeOrderId(order.orderId).toLowerCase()}`}
-          onChange={(event) => {
-            selectScreenshot(event.target.files?.[0] ?? null)
-            event.currentTarget.value = ""
-          }}
-          type="file"
-        />
-        <label
-          className="mt-3 flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-100 dark:border-white/20 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.08]"
-          htmlFor={`zelle-screenshot-${normalizeOrderId(order.orderId).toLowerCase()}`}
-        >
-          <UploadSimple size={17} weight="bold" />
-          {uploaded ? "选择新的付款截图" : copy.zelleUploadButton}
-        </label>
-        {selectedScreenshot ? (
-          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs dark:border-white/10 dark:bg-white/[0.04]">
-            <span className="min-w-0 truncate text-slate-600 dark:text-slate-300">
-              {selectedScreenshot.name}
+        <div className="border-t border-slate-200 px-4 py-4 dark:border-white/10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-950 dark:text-white">
+              <ImageSquare size={18} weight="fill" />
+              {copy.zelleUploadTitle}
+            </div>
+            <span className="text-[11px] font-medium tracking-wider text-slate-400 uppercase">
+              JPG / PNG
             </span>
+          </div>
+          <input
+            accept="image/*"
+            className="sr-only"
+            id={`zelle-screenshot-${normalizeOrderId(order.orderId).toLowerCase()}`}
+            onChange={(event) => {
+              selectScreenshot(event.target.files?.[0] ?? null)
+              event.currentTarget.value = ""
+            }}
+            type="file"
+          />
+          {!uploaded && !selectedScreenshot ? (
+            <label
+              className="mt-3 flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-100 dark:border-white/20 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.08]"
+              htmlFor={`zelle-screenshot-${normalizeOrderId(order.orderId).toLowerCase()}`}
+            >
+              <UploadSimple size={17} weight="bold" />
+              {copy.zelleUploadButton}
+            </label>
+          ) : null}
+          {selectedPreviewUrl ||
+          (!selectedScreenshot && uploaded && order.zellePaymentProof) ? (
+            <div className="relative mt-3 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-white/10 dark:bg-black/20">
+              <img
+                alt={copy.zelleUploadTitle}
+                className="max-h-48 w-full object-contain"
+                src={selectedPreviewUrl ?? order.zellePaymentProof?.dataUrl}
+              />
+              <button
+                aria-label="删除截图"
+                className="absolute top-2 right-2 flex size-8 items-center justify-center rounded-full bg-slate-950/70 text-white shadow-sm transition-colors hover:bg-red-600 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:outline-none"
+                disabled={isUploading}
+                onClick={() => {
+                  if (selectedScreenshot) {
+                    setSelectedScreenshot(null)
+                    return
+                  }
+                  void removeScreenshot()
+                }}
+                type="button"
+              >
+                <Trash size={15} />
+              </button>
+            </div>
+          ) : null}
+          {selectedScreenshot ? (
             <Button
+              className="mt-3 w-full"
               disabled={isUploading}
               onClick={() => void submitScreenshot()}
               size="sm"
               type="button"
             >
+              <UploadSimple size={15} />
               {isUploading ? "正在提交..." : "提交截图"}
             </Button>
-          </div>
-        ) : null}
-        {uploadError ? (
-          <p className="mt-2 text-xs text-red-600 dark:text-red-300">
-            {uploadError}
-          </p>
-        ) : null}
-        {selectedScreenshot ? (
-          <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 dark:border-emerald-400/20 dark:bg-emerald-500/10">
-            <div className="min-w-0 text-xs text-emerald-700 dark:text-emerald-200">
-              <div className="flex items-center gap-1 font-medium">
-                <Check size={14} weight="bold" />
-                {copy.zelleSelectedFile}
-              </div>
-              <div className="mt-0.5 truncate">{selectedScreenshot.name}</div>
-            </div>
-          </div>
-        ) : null}
-        {uploaded && !selectedScreenshot ? (
-          <Button
-            className="mt-3 w-full"
-            disabled={isUploading}
-            onClick={() => void removeScreenshot()}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <Trash size={15} />
-            {isUploading ? "正在处理..." : "删除已上传截图"}
-          </Button>
-        ) : null}
+          ) : null}
+          {uploadError ? (
+            <p className="mt-2 text-xs text-red-600 dark:text-red-300">
+              {uploadError}
+            </p>
+          ) : null}
+          {uploadSuccess ? (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+              <CheckCircle size={15} weight="fill" />
+              {copy.zelleUploadSuccess}
+            </p>
+          ) : null}
+        </div>
       </div>
     </div>
   )
@@ -1619,7 +1688,7 @@ function CopyablePaymentValue({
         <div className="text-[11px] text-slate-500 dark:text-slate-400">
           {label}
         </div>
-        <div className="truncate text-sm font-medium text-slate-950 dark:text-white">
+        <div className="truncate text-sm text-slate-950 dark:text-white">
           {value}
         </div>
       </div>
@@ -1641,13 +1710,21 @@ function CopyablePaymentValue({
   )
 }
 
-function PaymentReviewSummary({ order }: { order: PaymentOrder }) {
+function PaymentReviewSummary({
+  className,
+  order,
+}: {
+  className?: string
+  order: PaymentOrder
+}) {
   const review = order.review
 
   if (!review) return null
 
   return (
-    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-400/20 dark:bg-amber-500/10">
+    <div
+      className={`mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-400/20 dark:bg-amber-500/10 ${className ?? ""}`}
+    >
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-slate-900 dark:text-white">
           订单评价
@@ -1894,62 +1971,56 @@ function PaymentSuccessPanel({
   copy,
   logoImage,
   order,
-  onOpenReceipt,
 }: {
   brandName: string
   copy: PaymentCopy
   logoImage: string
   order: PaymentOrder
-  onOpenReceipt: () => void
 }) {
   return (
     <motion.div
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-500/10"
+      className="overflow-hidden border-b border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-cyan-50/70 p-4 sm:p-5 dark:border-emerald-400/20 dark:from-emerald-500/10 dark:via-slate-900 dark:to-cyan-500/10"
       initial={{ opacity: 0, y: 10 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
     >
-      <CheckoutBrandHeader
-        brandName={brandName}
-        className="mb-4"
-        logoImage={logoImage}
-        subtitle={copy.secureTitle}
-      />
-      <div className="flex items-start gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <CheckoutBrandHeader
+          brandName={brandName}
+          logoImage={logoImage}
+          subtitle={copy.secureTitle}
+        />
         <motion.div
           animate={{ scale: 1, rotate: 0 }}
-          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
-          initial={{ scale: 0.72, rotate: -8 }}
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-medium text-white shadow-sm shadow-emerald-500/25"
+          initial={{ scale: 0.9, rotate: -3 }}
           transition={{ type: "spring", stiffness: 260, damping: 18 }}
         >
-          <CheckCircle size={21} weight="fill" />
+          <CheckCircle size={14} weight="fill" />
+          {copy.successTitle}
         </motion.div>
+      </div>
+      <div className="mt-3 flex items-end justify-between gap-4 border-t border-emerald-200/70 pt-3 dark:border-emerald-400/20">
         <div className="min-w-0">
-          <h2 className="text-lg font-medium text-slate-950 dark:text-white">
-            {copy.successTitle}
-          </h2>
-          <p className="mt-1.5 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            {copy.successDescription}
-          </p>
-          <div className="mt-3 grid gap-2 rounded-lg border border-emerald-200/80 bg-white/55 p-3 text-sm dark:border-emerald-400/20 dark:bg-white/[0.05]">
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-500 dark:text-slate-400">
-                {copy.fields.orderId}
-              </span>
-              <span className="text-right text-slate-900 dark:text-white">
-                {order.orderId}
-              </span>
-            </div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+            {copy.totalAmount}
           </div>
-          <button
-            className="mt-3 text-sm text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-300"
-            onClick={onOpenReceipt}
-            type="button"
-          >
-            {copy.viewReceipt}
-          </button>
+          <div className="mt-0.5 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+            {order.amount}
+          </div>
+        </div>
+        <div className="min-w-0 text-right">
+          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+            {copy.fields.orderId}
+          </div>
+          <div className="mt-0.5 max-w-[12rem] truncate text-xs text-slate-950 dark:text-white">
+            {order.orderId}
+          </div>
         </div>
       </div>
+      <p className="mt-2 truncate text-xs text-slate-500 dark:text-slate-400">
+        {copy.successDescription}
+      </p>
     </motion.div>
   )
 }
@@ -2177,59 +2248,6 @@ function CheckoutBrandHeader({
   )
 }
 
-function MobileCheckoutOrderDetails({
-  copy,
-  order,
-}: {
-  copy: PaymentCopy
-  order: PaymentOrder
-}) {
-  const items = [
-    { label: copy.fields.orderId, value: order.orderId },
-    { label: copy.fields.customerName, value: order.customerName },
-    { label: copy.fields.serviceDate, value: order.serviceDate },
-    {
-      label: copy.fields.serviceAddress,
-      value: formatCheckoutAddress(order),
-    },
-  ].filter((item) => Boolean(String(item.value).trim()))
-
-  return (
-    <Accordion
-      className="lg:hidden"
-      collapsible
-      defaultValue="order-details"
-      type="single"
-    >
-      <AccordionItem
-        className="border-slate-200 dark:border-white/10"
-        value="order-details"
-      >
-        <AccordionTrigger className="py-3 text-sm font-medium">
-          <span>{copy.paymentSummaryTitle}</span>
-        </AccordionTrigger>
-        <AccordionContent className="pb-3">
-          <div className="space-y-2 rounded-lg border border-slate-200 bg-white/75 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-            {items.map((item) => (
-              <div
-                className="flex items-start justify-between gap-4 text-xs"
-                key={item.label}
-              >
-                <span className="shrink-0 text-slate-500 dark:text-slate-400">
-                  {item.label}
-                </span>
-                <span className="text-right leading-5 break-words text-slate-900 dark:text-white">
-                  {item.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
-  )
-}
-
 function CheckoutOrderSummary({
   copy,
   order,
@@ -2298,6 +2316,55 @@ function CheckoutPolicyLinks({ copy }: { copy: PaymentCopy }) {
         ))}
       </div>
     </div>
+  )
+}
+
+function PaymentInfoPopover({
+  copy,
+  showPaymentNotice,
+}: {
+  copy: PaymentCopy
+  showPaymentNotice: boolean
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          aria-label="查看付款说明"
+          className="size-7 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <WarningCircle size={17} weight="fill" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[min(19rem,calc(100vw-2rem))] p-3"
+      >
+        <div className="space-y-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
+          {showPaymentNotice ? (
+            <div>
+              <div className="font-semibold text-slate-900 dark:text-white">
+                {copy.secureTitle}
+              </div>
+              <p className="mt-1">{copy.paymentNotice}</p>
+            </div>
+          ) : null}
+          <div
+            className={
+              showPaymentNotice ? "border-t border-border pt-2" : undefined
+            }
+          >
+            <div className="font-semibold text-slate-900 dark:text-white">
+              {copy.policyLinksLabel}
+            </div>
+            <p className="mt-1">{copy.policyNotice}</p>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 

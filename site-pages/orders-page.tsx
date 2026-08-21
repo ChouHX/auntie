@@ -1,7 +1,14 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
-import { CreditCard, ReceiptText } from "lucide-react"
+import {
+  CalendarDays,
+  CreditCard,
+  MapPin,
+  ReceiptText,
+  UserRound,
+} from "lucide-react"
 
 import {
   type CachedPaymentOrder,
@@ -29,9 +36,8 @@ function OrdersPage() {
       setOrders(
         cachedOrders.filter((order) => !isActiveCachedPaymentOrder(order))
       )
-      void reconcileCachedPaymentOrders(
-        fetchPaymentOrder,
-        (error) => isApiRequestError(error, 404)
+      void reconcileCachedPaymentOrders(fetchPaymentOrder, (error) =>
+        isApiRequestError(error, 404)
       ).then((nextOrders) => {
         if (!cancelled) {
           setOrders(nextOrders)
@@ -51,6 +57,9 @@ function OrdersPage() {
         <h1 className="text-xl font-semibold tracking-normal text-slate-950 dark:text-white">
           {dict.ordersPage.title}
         </h1>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {dict.ordersPage.description} · {dict.ordersPage.localOnly}
+        </p>
 
         {orders.length ? (
           <div className="mt-4 flex flex-col gap-2.5">
@@ -90,15 +99,18 @@ function OrderCard({ order }: { order: CachedPaymentOrder }) {
   const orderHref = `/checkout?order=${encodeURIComponent(order.orderId)}`
 
   return (
-    <Card className="rounded-lg">
-      <CardContent className="p-3">
-        <div className="flex items-center justify-between gap-3">
+    <Card className="overflow-hidden rounded-lg border-border/80 shadow-sm">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5">
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-foreground">
-              {order.serviceType || order.orderId}
+            <div className="truncate text-xs font-semibold text-foreground">
+              {order.orderId}
             </div>
-            <div className="mt-0.5 truncate text-xs text-muted-foreground">
-              {order.serviceDate || order.serviceArea || order.orderId}
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <CalendarDays className="size-3.5 shrink-0" />
+              <span className="truncate">
+                {order.serviceDate || dict.ordersPage.serviceDate}
+              </span>
             </div>
           </div>
           <Badge
@@ -111,26 +123,71 @@ function OrderCard({ order }: { order: CachedPaymentOrder }) {
             {statusLabel}
           </Badge>
         </div>
-        <div className="mt-2 flex items-center justify-between gap-3 border-t border-border/70 pt-2">
-          <span className="truncate text-xs text-muted-foreground">
-            {order.serviceArea || order.orderId}
-          </span>
-          <span className="shrink-0 text-sm font-semibold text-foreground">
-            {order.amount || order.currency || "-"}
-          </span>
+
+        <div className="px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11px] text-muted-foreground">
+              {dict.ordersPage.amount}
+            </span>
+            <span className="text-lg font-semibold tracking-tight text-foreground">
+              {order.amount || order.currency || "-"}
+            </span>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+            <OrderMeta
+              icon={<ReceiptText className="size-3.5" />}
+              label={dict.ordersPage.serviceType}
+              value={order.serviceType || "-"}
+            />
+            <OrderMeta
+              icon={<MapPin className="size-3.5" />}
+              label={dict.ordersPage.serviceArea}
+              value={order.serviceArea || "-"}
+            />
+            <OrderMeta
+              icon={<UserRound className="size-3.5" />}
+              label={dict.ordersPage.customer}
+              value={order.customerName || "-"}
+            />
+          </div>
         </div>
-        <Button
-          asChild
-          className="mt-3 h-9 w-full text-xs"
-          variant={isActive ? "default" : "outline"}
-        >
-          <Link to={orderHref}>
-            <CreditCard data-icon="inline-start" />
-            {actionLabel}
-          </Link>
-        </Button>
+
+        <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/25 px-3 py-2">
+          <Button
+            asChild
+            className="h-8 shrink-0 px-3 text-xs"
+            variant={isActive ? "default" : "outline"}
+          >
+            <Link to={orderHref}>
+              <CreditCard data-icon="inline-start" />
+              {actionLabel}
+            </Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
+  )
+}
+
+function OrderMeta({
+  className,
+  icon,
+  label,
+  value,
+}: {
+  className?: string
+  icon: ReactNode
+  label: string
+  value: string
+}) {
+  return (
+    <div className={cn("flex min-w-0 items-start gap-1.5", className)}>
+      <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-[10px] text-muted-foreground">{label}</span>
+        <span className="mt-0.5 block truncate text-foreground">{value}</span>
+      </span>
+    </div>
   )
 }
 

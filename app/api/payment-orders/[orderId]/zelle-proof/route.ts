@@ -33,8 +33,24 @@ export async function POST(
     )
   }
 
-  const file = (await request.formData()).get("file")
-  if (!(file instanceof File)) {
+  let file: FormDataEntryValue | null
+  try {
+    file = (await request.formData()).get("file")
+  } catch {
+    return Response.json(
+      { error: "invalid_form_data", message: "付款凭证上传数据无效。" },
+      { status: 400 }
+    )
+  }
+
+  // Avoid instanceof File here: dev runtimes can provide a File from a
+  // different realm even though it is a valid multipart upload.
+  if (
+    !file ||
+    typeof file === "string" ||
+    typeof file.arrayBuffer !== "function" ||
+    typeof file.type !== "string"
+  ) {
     return Response.json(
       { error: "missing_file", message: "付款凭证图片不能为空。" },
       { status: 400 }
@@ -42,7 +58,7 @@ export async function POST(
   }
 
   try {
-    const proof = await createPaymentProof(file)
+    const proof = await createPaymentProof(file as File)
     let savedOrder = existing
     await updateCmsContent((current) => {
       const currentOrder = findPaymentOrder(current, normalizedOrderId)

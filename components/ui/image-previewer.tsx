@@ -4,16 +4,11 @@ import {
   CaretRight,
   MagnifyingGlassMinus,
   MagnifyingGlassPlus,
+  Trash,
   X,
 } from "@phosphor-icons/react"
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
-import type { PointerEvent, WheelEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { MouseEvent, PointerEvent, WheelEvent } from "react"
 import { createPortal } from "react-dom"
 
 import { Button } from "@/components/ui/button"
@@ -27,6 +22,8 @@ export type ImagePreviewItem = {
 type ImagePreviewerProps = {
   className?: string
   images: ImagePreviewItem[]
+  deleting?: boolean
+  onDelete?: () => void | Promise<void>
   onOpenChange: (index: number | null) => void
   openIndex: number | null
 }
@@ -44,7 +41,9 @@ const MIN_SCALE = 1
 
 function ImagePreviewer({
   className,
+  deleting = false,
   images,
+  onDelete,
   onOpenChange,
   openIndex,
 }: ImagePreviewerProps) {
@@ -130,21 +129,24 @@ function ImagePreviewer({
     [images.length, onOpenChange, resetView]
   )
 
-  const zoomTo = useCallback((nextScale: number) => {
-    const normalizedScale = Math.min(
-      MAX_SCALE,
-      Math.max(MIN_SCALE, Number(nextScale.toFixed(2)))
-    )
+  const zoomTo = useCallback(
+    (nextScale: number) => {
+      const normalizedScale = Math.min(
+        MAX_SCALE,
+        Math.max(MIN_SCALE, Number(nextScale.toFixed(2)))
+      )
 
-    scaleRef.current = normalizedScale
+      scaleRef.current = normalizedScale
 
-    if (normalizedScale <= MIN_SCALE) {
-      offsetRef.current = { x: 0, y: 0 }
-    }
+      if (normalizedScale <= MIN_SCALE) {
+        offsetRef.current = { x: 0, y: 0 }
+      }
 
-    setScale(normalizedScale)
-    scheduleTransform()
-  }, [scheduleTransform])
+      setScale(normalizedScale)
+      scheduleTransform()
+    },
+    [scheduleTransform]
+  )
 
   useEffect(() => {
     if (!isOpen) {
@@ -153,9 +155,11 @@ function ImagePreviewer({
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
+    document.body.setAttribute("data-image-preview-open", "true")
 
     return () => {
       document.body.style.overflow = previousOverflow
+      document.body.removeAttribute("data-image-preview-open")
     }
   }, [isOpen])
 
@@ -285,32 +289,60 @@ function ImagePreviewer({
     zoomTo(scaleRef.current + (event.deltaY > 0 ? -0.12 : 0.12))
   }
 
+  function handleActionPointerDown(
+    event: PointerEvent<HTMLElement>,
+    action: () => void
+  ) {
+    // The preview is rendered in a portal, so the parent Dialog sees its
+    // pointerdown as outside interaction and may suppress the follow-up click.
+    event.preventDefault()
+    event.stopPropagation()
+    action()
+  }
+
+  function handleKeyboardActionClick(
+    event: MouseEvent<HTMLElement>,
+    action: () => void
+  ) {
+    if (event.detail !== 0) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    action()
+  }
+
   return createPortal(
     <div
       aria-modal="true"
       className={cn(
-        "fixed inset-0 z-[110] flex bg-slate-950/92 text-white",
+        "pointer-events-auto fixed inset-0 z-[110] flex overflow-hidden bg-slate-950/92 text-white",
         isClosing ? "animate-image-preview-out" : "animate-image-preview-in",
         className
       )}
       data-state={isClosing ? "closed" : "open"}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
       role="dialog"
     >
       <button
         aria-label="关闭大图"
         className="absolute inset-0 cursor-zoom-out"
-        onClick={requestClose}
+        onClick={(event) => handleKeyboardActionClick(event, requestClose)}
+        onPointerDown={(event) => handleActionPointerDown(event, requestClose)}
         type="button"
       />
 
-      <div className="pointer-events-none absolute top-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-white/12 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-2xl image-preview-chrome">
+      <div className="image-preview-chrome pointer-events-none absolute top-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-white/12 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-2xl">
         {activeIndex + 1} / {images.length}
       </div>
 
       <Button
         aria-label="关闭大图"
-        className="absolute top-4 right-4 z-20 rounded-full border-white/10 bg-white/10 text-white shadow-2xl hover:bg-white/18 image-preview-chrome"
-        onClick={requestClose}
+        className="image-preview-chrome absolute top-4 right-4 z-20 rounded-full border-white/10 bg-white/10 text-white shadow-2xl hover:bg-white/18"
+        onClick={(event) => handleKeyboardActionClick(event, requestClose)}
+        onPointerDown={(event) => handleActionPointerDown(event, requestClose)}
         size="icon"
         type="button"
         variant="ghost"
@@ -318,12 +350,37 @@ function ImagePreviewer({
         <X size={20} weight="bold" />
       </Button>
 
+      {onDelete ? (
+        <Button
+          aria-label="删除凭证"
+          className="image-preview-chrome absolute top-4 right-16 z-20 rounded-full border-white/10 bg-white/10 text-white shadow-2xl hover:bg-destructive/80"
+          disabled={deleting}
+          onClick={(event) =>
+            handleKeyboardActionClick(event, () => void onDelete())
+          }
+          onPointerDown={(event) =>
+            handleActionPointerDown(event, () => void onDelete())
+          }
+          size="icon"
+          title="删除凭证"
+          type="button"
+          variant="ghost"
+        >
+          <Trash size={20} weight="bold" />
+        </Button>
+      ) : null}
+
       {canNavigate ? (
         <>
           <Button
             aria-label="上一张"
-            className="absolute top-1/2 left-3 z-20 -translate-y-1/2 rounded-full border-white/10 bg-white/10 text-white shadow-2xl hover:bg-white/18 sm:left-5 image-preview-chrome"
-            onClick={() => goTo(activeIndex - 1)}
+            className="image-preview-chrome absolute top-1/2 left-3 z-20 -translate-y-1/2 rounded-full border-white/10 bg-white/10 text-white shadow-2xl hover:bg-white/18 sm:left-5"
+            onClick={(event) =>
+              handleKeyboardActionClick(event, () => goTo(activeIndex - 1))
+            }
+            onPointerDown={(event) =>
+              handleActionPointerDown(event, () => goTo(activeIndex - 1))
+            }
             size="icon-lg"
             type="button"
             variant="ghost"
@@ -332,8 +389,13 @@ function ImagePreviewer({
           </Button>
           <Button
             aria-label="下一张"
-            className="absolute top-1/2 right-3 z-20 -translate-y-1/2 rounded-full border-white/10 bg-white/10 text-white shadow-2xl hover:bg-white/18 sm:right-5 image-preview-chrome"
-            onClick={() => goTo(activeIndex + 1)}
+            className="image-preview-chrome absolute top-1/2 right-3 z-20 -translate-y-1/2 rounded-full border-white/10 bg-white/10 text-white shadow-2xl hover:bg-white/18 sm:right-5"
+            onClick={(event) =>
+              handleKeyboardActionClick(event, () => goTo(activeIndex + 1))
+            }
+            onPointerDown={(event) =>
+              handleActionPointerDown(event, () => goTo(activeIndex + 1))
+            }
             size="icon-lg"
             type="button"
             variant="ghost"
@@ -345,45 +407,51 @@ function ImagePreviewer({
 
       <div
         className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-4 py-20 sm:px-8"
-        onClick={requestClose}
+        onPointerDown={(event) => handleActionPointerDown(event, requestClose)}
       >
-        <div
-          className="image-preview-matte max-h-[calc(100dvh-10rem)] max-w-[calc(100dvw-2rem)] overflow-hidden rounded-2xl border border-white/20 p-2 shadow-[0_28px_90px_rgb(0_0_0/0.48)] sm:max-w-[calc(100dvw-4rem)] sm:p-3"
+        <img
+          key={activeImage.src}
+          ref={imageRef}
+          src={activeImage.src}
+          alt={activeImage.alt}
+          className={cn(
+            "image-preview-image block max-h-[calc(100dvh-10rem)] max-w-[calc(100dvw-2rem)] object-contain select-none sm:max-w-[calc(100dvw-4rem)]",
+            scale > 1 && "cursor-grab active:cursor-grabbing",
+            scale <= 1 && "cursor-zoom-in"
+          )}
+          decoding="async"
+          draggable={false}
           onClick={(event) => event.stopPropagation()}
+          onDoubleClick={() => (scaleRef.current > 1 ? resetView() : zoomTo(2))}
+          onPointerCancel={handlePointerUp}
+          onPointerDown={(event) => {
+            event.stopPropagation()
+            handlePointerDown(event)
+          }}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           onWheel={handleWheel}
-        >
-          <img
-            key={activeImage.src}
-            ref={imageRef}
-            src={activeImage.src}
-            alt={activeImage.alt}
-            className={cn(
-              "image-preview-image block max-h-[calc(100dvh-12rem)] max-w-[calc(100dvw-3rem)] select-none rounded-xl bg-white object-contain sm:max-w-[calc(100dvw-6rem)]",
-              scale > 1 && "cursor-grab active:cursor-grabbing",
-              scale <= 1 && "cursor-zoom-in"
-            )}
-            decoding="async"
-            draggable={false}
-            onDoubleClick={() =>
-              scaleRef.current > 1 ? resetView() : zoomTo(2)
-            }
-            onPointerCancel={handlePointerUp}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            style={{
-              transform:
-                "translate3d(var(--preview-x, 0px), var(--preview-y, 0px), 0) scale(var(--preview-scale, 1))",
-            }}
-          />
-        </div>
+          style={{
+            transform:
+              "translate3d(var(--preview-x, 0px), var(--preview-y, 0px), 0) scale(var(--preview-scale, 1))",
+          }}
+        />
       </div>
 
-      <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/12 bg-white/10 px-2 py-2 text-white shadow-2xl image-preview-chrome">
+      <div className="image-preview-chrome absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/12 bg-white/10 px-2 py-2 text-white shadow-2xl">
         <Button
           aria-label="缩小"
           className="rounded-full text-white hover:bg-white/16"
-          onClick={() => zoomTo(scaleRef.current - 0.25)}
+          onClick={(event) =>
+            handleKeyboardActionClick(event, () =>
+              zoomTo(scaleRef.current - 0.25)
+            )
+          }
+          onPointerDown={(event) =>
+            handleActionPointerDown(event, () =>
+              zoomTo(scaleRef.current - 0.25)
+            )
+          }
           size="icon"
           type="button"
           variant="ghost"
@@ -393,7 +461,8 @@ function ImagePreviewer({
         <Button
           aria-label="重置缩放"
           className="h-10 rounded-full px-3 text-white hover:bg-white/16"
-          onClick={resetView}
+          onClick={(event) => handleKeyboardActionClick(event, resetView)}
+          onPointerDown={(event) => handleActionPointerDown(event, resetView)}
           type="button"
           variant="ghost"
         >
@@ -403,7 +472,16 @@ function ImagePreviewer({
         <Button
           aria-label="放大"
           className="rounded-full text-white hover:bg-white/16"
-          onClick={() => zoomTo(scaleRef.current + 0.25)}
+          onClick={(event) =>
+            handleKeyboardActionClick(event, () =>
+              zoomTo(scaleRef.current + 0.25)
+            )
+          }
+          onPointerDown={(event) =>
+            handleActionPointerDown(event, () =>
+              zoomTo(scaleRef.current + 0.25)
+            )
+          }
           size="icon"
           type="button"
           variant="ghost"

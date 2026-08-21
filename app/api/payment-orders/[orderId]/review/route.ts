@@ -20,20 +20,14 @@ export async function POST(
   try {
     body = await request.json()
   } catch {
-    return Response.json(
-      { message: "Invalid request body" },
-      { status: 400 }
-    )
+    return Response.json({ message: "Invalid request body" }, { status: 400 })
   }
 
   const rating = Number(body.rating)
   const comment = String(body.comment ?? "").trim()
 
   if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-    return Response.json(
-      { message: "评分必须在 1-5 之间" },
-      { status: 400 }
-    )
+    return Response.json({ message: "评分必须在 1-5 之间" }, { status: 400 })
   }
 
   if (comment.length > 500) {
@@ -53,7 +47,7 @@ export async function POST(
       return content
     }
 
-    if (order.status !== "paid") {
+    if (order.status !== "paid" && !order.zellePaymentProof) {
       return content
     }
 
@@ -90,10 +84,7 @@ export async function POST(
   })
 
   if (!savedOrder) {
-    return Response.json(
-      { message: "订单不存在或未付款" },
-      { status: 404 }
-    )
+    return Response.json({ message: "订单不存在或未付款" }, { status: 404 })
   }
 
   if (alreadyReviewed) {

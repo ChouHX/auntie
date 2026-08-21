@@ -153,6 +153,10 @@ function DialogContent({
 }
 
 function shouldPreventDialogDismiss(event: Event) {
+  if (document.body.hasAttribute("data-image-preview-open")) {
+    return true
+  }
+
   if (isSelectContentOpen()) {
     return true
   }

@@ -1324,15 +1324,67 @@ function FinanceDialog({
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [isUploadingProof, setIsUploadingProof] = useState(false)
   const [proofError, setProofError] = useState("")
-  const [selectedSupportProof, setSelectedSupportProof] = useState<File | null>(
-    null
-  )
+  function handleDialogOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      // Clear the preview before the dialog exit animation starts. The image
+      // preview is force-mounted through a portal and would otherwise reopen
+      // with the previous image when this dialog is opened again.
+      setPreviewIndex(null)
+    }
+    onOpenChange(nextOpen)
+  }
+
   const update = (patch: Partial<SalesDashboardRow>) =>
     onRowChange(row ? { ...row, ...patch } : row)
+
+  async function handleSupportProofSelect(file: File) {
+    if (!row) return
+
+    setIsUploadingProof(true)
+    setProofError("")
+    try {
+      const result = await uploadSupportPaymentProof(token, row.orderId, file)
+      update({ supportPaymentProof: result.order.supportPaymentProof })
+    } catch (error) {
+      setProofError(error instanceof Error ? error.message : "凭证上传失败。")
+    } finally {
+      setIsUploadingProof(false)
+    }
+  }
+
+  async function handleSupportProofDelete() {
+    if (!row) return false
+
+    setIsUploadingProof(true)
+    setProofError("")
+    try {
+      const result = await deleteSupportPaymentProof(token, row.orderId)
+      update({ supportPaymentProof: result.order.supportPaymentProof })
+      return true
+    } catch (error) {
+      setProofError(error instanceof Error ? error.message : "凭证删除失败。")
+      return false
+    } finally {
+      setIsUploadingProof(false)
+    }
+  }
+
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-xl gap-3">
-        <DialogHeader>
+    <Dialog onOpenChange={handleDialogOpenChange} open={open}>
+      <DialogContent
+        className="max-h-[min(90vh,760px)] max-w-2xl gap-3 overflow-hidden p-4 sm:p-5"
+        onInteractOutside={(event) => {
+          if (previewIndex !== null) {
+            event.preventDefault()
+          }
+        }}
+        onPointerDownOutside={(event) => {
+          if (previewIndex !== null) {
+            event.preventDefault()
+          }
+        }}
+      >
+        <DialogHeader className="shrink-0 border-b border-border/70 pr-8 pb-3">
           <DialogTitle>订单经营数据</DialogTitle>
           <DialogDescription>
             {row?.orderId ?? "订单"} ·
@@ -1340,96 +1392,110 @@ function FinanceDialog({
           </DialogDescription>
         </DialogHeader>
         {row ? (
-          <>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField className="space-y-1.5" label="所属学员">
-                <Select
-                  onValueChange={(salesMemberId) => {
-                    const member = salesMembers.find(
-                      (item) => item.id === salesMemberId
-                    )
-                    update({
-                      salesMemberId:
-                        salesMemberId === "unassigned" ? "" : salesMemberId,
-                      salesOwner: member?.name ?? "",
-                    })
-                  }}
-                  value={row.salesMemberId || "unassigned"}
+          <div className="min-h-0 overflow-y-auto pr-1">
+            <section>
+              <div className="mb-2 text-xs font-semibold text-foreground">
+                财务录入
+              </div>
+              <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/15 p-3 sm:grid-cols-2">
+                <FormField className="space-y-1.5" label="所属学员">
+                  <Select
+                    onValueChange={(salesMemberId) => {
+                      const member = salesMembers.find(
+                        (item) => item.id === salesMemberId
+                      )
+                      update({
+                        salesMemberId:
+                          salesMemberId === "unassigned" ? "" : salesMemberId,
+                        salesOwner: member?.name ?? "",
+                      })
+                    }}
+                    value={row.salesMemberId || "unassigned"}
+                  >
+                    <SelectTrigger className="h-8 px-2.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">未归属</SelectItem>
+                      {salesMembers.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                <FormField
+                  className="space-y-1.5"
+                  label={`订单金额（${row.currency}）`}
                 >
-                  <SelectTrigger className="h-8 px-2.5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">未归属</SelectItem>
-                    {salesMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
-              <FormField
-                className="space-y-1.5"
-                label={`订单金额（${row.currency}）`}
-              >
-                <NumberInput
-                  className="h-8 px-2.5 text-sm"
-                  min="0"
-                  onValueChange={(paymentAmount) =>
-                    update({ paymentAmount, receivedAmount: paymentAmount })
-                  }
-                  step="0.01"
-                  value={row.paymentAmount}
-                />
-              </FormField>
-              <FormField
-                className="space-y-1.5"
-                description={
-                  row.orderStatus === "paid"
-                    ? row.paymentProvider === "offline"
-                      ? "该订单已确认为公司账户收款。"
-                      : "该订单已通过线上支付完成。"
-                    : "填写订单金额后仍需明确确认，系统才会将订单标记为已付款。"
-                }
-                label="公司账户收款"
-              >
-                <label className="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-sm">
-                  <Checkbox
-                    checked={
-                      row.paymentProvider === "offline" || confirmOfflinePayment
+                  <NumberInput
+                    className="h-8 px-2.5 text-sm"
+                    min="0"
+                    onValueChange={(paymentAmount) =>
+                      update({ paymentAmount, receivedAmount: paymentAmount })
                     }
-                    disabled={row.orderStatus === "paid"}
-                    onCheckedChange={(checked) =>
-                      setConfirmOfflinePayment(checked === true)
-                    }
+                    step="0.01"
+                    value={row.paymentAmount}
                   />
-                  <span>确认已通过公司账户收款</span>
-                </label>
-              </FormField>
-              <FormField
-                className="space-y-1.5"
-                label={`其他成本（${row.currency}）`}
-              >
-                <NumberInput
-                  className="h-8 px-2.5 text-sm"
-                  min="0"
-                  onValueChange={(otherCost) => update({ otherCost })}
-                  step="0.01"
-                  value={row.otherCost}
-                />
-              </FormField>
-              <FormField className="space-y-1.5 sm:col-span-2" label="经营备注">
-                <Textarea
-                  className="min-h-16 px-2.5 py-2 text-sm"
-                  onChange={(event) =>
-                    update({ financeNote: event.target.value })
+                </FormField>
+                <FormField
+                  className="space-y-1.5"
+                  description={
+                    row.orderStatus === "paid"
+                      ? row.paymentProvider === "offline"
+                        ? "该订单已确认为公司账户收款。"
+                        : "该订单已通过线上支付完成。"
+                      : "填写订单金额后仍需明确确认，系统才会将订单标记为已付款。"
                   }
-                  placeholder="例如：给阿姨报销邮费 20"
-                  value={row.financeNote}
-                />
-              </FormField>
-              <div className="grid grid-cols-3 gap-2 rounded-lg border border-border bg-muted/30 p-2.5 text-xs sm:col-span-2">
+                  label="公司账户收款"
+                >
+                  <label className="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-sm">
+                    <Checkbox
+                      checked={
+                        row.paymentProvider === "offline" ||
+                        confirmOfflinePayment
+                      }
+                      disabled={row.orderStatus === "paid"}
+                      onCheckedChange={(checked) =>
+                        setConfirmOfflinePayment(checked === true)
+                      }
+                    />
+                    <span>确认已通过公司账户收款</span>
+                  </label>
+                </FormField>
+                <FormField
+                  className="space-y-1.5"
+                  label={`其他成本（${row.currency}）`}
+                >
+                  <NumberInput
+                    className="h-8 px-2.5 text-sm"
+                    min="0"
+                    onValueChange={(otherCost) => update({ otherCost })}
+                    step="0.01"
+                    value={row.otherCost}
+                  />
+                </FormField>
+                <FormField
+                  className="space-y-1.5 sm:col-span-2"
+                  label="经营备注"
+                >
+                  <Textarea
+                    className="min-h-16 px-2.5 py-2 text-sm"
+                    onChange={(event) =>
+                      update({ financeNote: event.target.value })
+                    }
+                    placeholder="例如：给阿姨报销邮费 20"
+                    value={row.financeNote}
+                  />
+                </FormField>
+              </div>
+            </section>
+            <section className="mt-3">
+              <div className="mb-2 text-xs font-semibold text-foreground">
+                计算结果
+              </div>
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/70 bg-muted/30 p-3 text-xs sm:grid-cols-4">
                 <div>
                   <span className="text-muted-foreground">阿姨薪资</span>
                   <strong className="mt-1 block">
@@ -1443,141 +1509,79 @@ function FinanceDialog({
                   </strong>
                 </div>
                 <div>
+                  <span className="text-muted-foreground">用户小费</span>
+                  <strong className="mt-1 block">
+                    {formatMoney(row.currency, row.tipAmount)}
+                  </strong>
+                </div>
+                <div>
                   <span className="text-muted-foreground">公司利润</span>
                   <strong className="mt-1 block">
                     <CompanyProfitValue row={row} />
                   </strong>
                 </div>
               </div>
-            </div>
-            <div className="grid gap-3 rounded-lg border border-border p-3 sm:col-span-2 sm:grid-cols-2">
-              <div>
-                <div className="text-xs text-muted-foreground">用户小费</div>
-                <div className="mt-1 text-sm font-semibold">
-                  {formatMoney(row.currency, row.tipAmount)}
-                </div>
+            </section>
+            <section className="mt-3">
+              <div className="mb-2 text-xs font-semibold text-foreground">
+                付款与凭证
               </div>
-              <ProofPanel
-                label="用户支付凭证"
-                proof={row.zellePaymentProof}
-                onPreview={() => setPreviewIndex(0)}
-              />
-              <div className="sm:col-span-2">
-                <div className="mb-1.5 text-xs font-medium text-foreground">
-                  客服确认凭证
-                </div>
-                <input
-                  accept="image/*"
-                  className="sr-only"
-                  id={`support-proof-${row.orderId}`}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    event.currentTarget.value = ""
-                    if (!file) return
-                    setSelectedSupportProof(file)
-                    setProofError("")
-                  }}
-                  type="file"
+              <div className="grid gap-3 rounded-xl border border-border/70 p-3 sm:grid-cols-2">
+                <ProofPanel
+                  label="用户支付凭证"
+                  proof={row.zellePaymentProof}
+                  onPreview={() => setPreviewIndex(0)}
                 />
-                <label
-                  className="flex min-h-9 cursor-pointer items-center justify-center rounded-md border border-dashed border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50"
-                  htmlFor={`support-proof-${row.orderId}`}
-                >
-                  {row.supportPaymentProof
-                    ? "选择新的客服凭证"
-                    : "选择客服确认凭证"}
-                </label>
-                {selectedSupportProof ? (
-                  <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs">
-                    <span className="min-w-0 truncate">
-                      {selectedSupportProof.name}
-                    </span>
-                    <Button
-                      disabled={isUploadingProof}
-                      onClick={async () => {
-                        setIsUploadingProof(true)
-                        setProofError("")
-                        try {
-                          const result = await uploadSupportPaymentProof(
-                            token,
-                            row.orderId,
-                            selectedSupportProof
-                          )
-                          update({
-                            supportPaymentProof:
-                              result.order.supportPaymentProof,
-                          })
-                          setSelectedSupportProof(null)
-                        } catch (error) {
-                          setProofError(
-                            error instanceof Error
-                              ? error.message
-                              : "凭证上传失败。"
-                          )
-                        } finally {
-                          setIsUploadingProof(false)
-                        }
-                      }}
-                      size="sm"
-                      type="button"
-                    >
-                      {isUploadingProof ? "提交中..." : "提交"}
-                    </Button>
+                <div className="min-w-0">
+                  <div className="text-xs text-muted-foreground">
+                    客服确认凭证
                   </div>
-                ) : null}
-                {row.supportPaymentProof ? (
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border px-2.5 py-2 text-left text-xs hover:bg-muted"
-                      onClick={() =>
-                        setPreviewIndex(row.zellePaymentProof ? 1 : 0)
-                      }
-                      type="button"
+                  <input
+                    accept="image/*"
+                    className="sr-only"
+                    id={`support-proof-${row.orderId}`}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      event.currentTarget.value = ""
+                      if (!file) return
+                      void handleSupportProofSelect(file)
+                    }}
+                    disabled={isUploadingProof}
+                    type="file"
+                  />
+                  {row.supportPaymentProof ? (
+                    <div className="flex items-end gap-2">
+                      <div className="min-w-0 flex-1">
+                        <ProofPanel
+                          label="客服确认凭证"
+                          proof={row.supportPaymentProof}
+                          onPreview={() =>
+                            setPreviewIndex(row.zellePaymentProof ? 1 : 0)
+                          }
+                          onDelete={async () => {
+                            await handleSupportProofDelete()
+                          }}
+                          deleting={isUploadingProof}
+                          showLabel={false}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <label
+                      className="mt-1 flex min-h-9 cursor-pointer items-center justify-center rounded-md border border-dashed border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50"
+                      htmlFor={`support-proof-${row.orderId}`}
                     >
-                      <span className="truncate">
-                        {row.supportPaymentProof.fileName}
-                      </span>
-                      <span className="shrink-0 text-muted-foreground">
-                        查看大图
-                      </span>
-                    </button>
-                    <Button
-                      disabled={isUploadingProof}
-                      onClick={async () => {
-                        setIsUploadingProof(true)
-                        setProofError("")
-                        try {
-                          const result = await deleteSupportPaymentProof(
-                            token,
-                            row.orderId
-                          )
-                          update({
-                            supportPaymentProof:
-                              result.order.supportPaymentProof,
-                          })
-                        } catch (error) {
-                          setProofError(
-                            error instanceof Error
-                              ? error.message
-                              : "凭证删除失败。"
-                          )
-                        } finally {
-                          setIsUploadingProof(false)
-                        }
-                      }}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      删除
-                    </Button>
-                  </div>
-                ) : null}
-                {proofError ? (
-                  <p className="mt-1 text-xs text-destructive">{proofError}</p>
-                ) : null}
+                      {isUploadingProof ? "上传中..." : "选择客服确认凭证"}
+                    </label>
+                  )}
+                  {proofError ? (
+                    <p className="mt-1 text-xs text-destructive">
+                      {proofError}
+                    </p>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            </section>
             <ImagePreviewer
               images={[
                 ...(row.zellePaymentProof
@@ -1597,67 +1601,111 @@ function FinanceDialog({
                     ]
                   : []),
               ]}
+              deleting={isUploadingProof}
+              onDelete={
+                row.supportPaymentProof &&
+                previewIndex === (row.zellePaymentProof ? 1 : 0)
+                  ? async () => {
+                      if (await handleSupportProofDelete()) {
+                        setPreviewIndex(null)
+                      }
+                    }
+                  : undefined
+              }
               onOpenChange={setPreviewIndex}
               openIndex={previewIndex}
             />
-            <DialogFooter>
-              <Button
-                className="h-8"
-                onClick={() => onOpenChange(false)}
-                size="sm"
-                variant="outline"
-              >
-                取消
-              </Button>
-              <Button
-                className="h-8"
-                onClick={() =>
-                  onSave({
-                    financeNote: row.financeNote,
-                    markAsOfflinePaid: confirmOfflinePayment,
-                    orderId: row.orderId,
-                    otherCost: row.otherCost,
-                    paymentAmount: row.paymentAmount,
-                    salesMemberId: row.salesMemberId,
-                    salesOwner: row.salesOwner,
-                    salesOwnerSource: row.salesMemberId ? "manual" : undefined,
-                  })
-                }
-                disabled={confirmOfflinePayment && row.paymentAmount <= 0}
-                size="sm"
-              >
-                <FloppyDisk size={15} />
-                保存
-              </Button>
-            </DialogFooter>
-          </>
+          </div>
         ) : null}
+        <DialogFooter className="shrink-0 border-t border-border/70 pt-3">
+          <Button
+            className="h-8"
+            onClick={() => onOpenChange(false)}
+            size="sm"
+            variant="outline"
+          >
+            取消
+          </Button>
+          <Button
+            className="h-8"
+            onClick={() =>
+              onSave({
+                financeNote: row?.financeNote ?? "",
+                markAsOfflinePaid: confirmOfflinePayment,
+                orderId: row?.orderId ?? "",
+                otherCost: row?.otherCost ?? 0,
+                paymentAmount: row?.paymentAmount ?? 0,
+                salesMemberId: row?.salesMemberId ?? "",
+                salesOwner: row?.salesOwner ?? "",
+                salesOwnerSource: row?.salesMemberId ? "manual" : undefined,
+              })
+            }
+            disabled={!row || (confirmOfflinePayment && row.paymentAmount <= 0)}
+            size="sm"
+          >
+            <FloppyDisk size={15} />
+            保存
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
 
 function ProofPanel({
+  deleting = false,
   label,
+  onDelete,
   onPreview,
   proof,
+  showLabel = true,
 }: {
+  deleting?: boolean
   label: string
+  onDelete?: () => void | Promise<void>
   onPreview: () => void
   proof?: SalesDashboardRow["zellePaymentProof"]
+  showLabel?: boolean
 }) {
   return (
     <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+      {showLabel ? (
+        <div className="text-xs text-muted-foreground">{label}</div>
+      ) : null}
       {proof ? (
-        <button
-          className="mt-1 flex w-full items-center justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-left text-xs hover:bg-muted"
-          onClick={onPreview}
-          type="button"
-        >
-          <span className="truncate">{proof.fileName}</span>
-          <span className="shrink-0 text-muted-foreground">查看大图</span>
-        </button>
+        <div className="relative mt-1">
+          <button
+            className="flex w-full items-center gap-2 rounded-md border border-border p-1.5 pr-10 text-left text-xs hover:bg-muted"
+            onClick={onPreview}
+            type="button"
+          >
+            <img
+              alt={`${label}预览`}
+              className="size-14 shrink-0 rounded-sm bg-muted object-cover"
+              src={proof.dataUrl}
+            />
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{label}</span>
+              <span className="mt-0.5 block truncate text-muted-foreground">
+                点击查看大图
+              </span>
+            </span>
+          </button>
+          {onDelete ? (
+            <Button
+              aria-label={`删除${label}`}
+              className="absolute top-1/2 right-1 -translate-y-1/2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={deleting}
+              onClick={() => void onDelete()}
+              size="icon-sm"
+              title={`删除${label}`}
+              type="button"
+              variant="ghost"
+            >
+              <Trash size={18} weight="bold" />
+            </Button>
+          ) : null}
+        </div>
       ) : (
         <div className="mt-1 text-sm text-muted-foreground">尚未上传</div>
       )}

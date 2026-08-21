@@ -238,9 +238,6 @@
   .review-image-placeholder {
     @apply animate-pulse bg-muted;
   }
-  .image-preview-matte {
-    background-color: rgb(15 23 42 / 0.72);
-  }
   .image-preview-image {
     touch-action: none;
     transform-origin: center;
