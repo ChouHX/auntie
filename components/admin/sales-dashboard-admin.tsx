@@ -7,6 +7,7 @@ import {
   CaretRight,
   ClipboardText,
   CurrencyDollar,
+  DotsThree,
   Eye,
   FloppyDisk,
   Funnel,
@@ -34,6 +35,13 @@ import {
 import { FormField } from "@/components/ui/form-field"
 import { Input } from "@/components/ui/input"
 import { NumberInput } from "@/components/ui/number-input"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Popover,
   PopoverContent,
@@ -65,7 +73,10 @@ import {
   fetchSalesDashboard,
   saveSalesFormulaTemplates,
   updateSalesOrderFinance,
+  deleteSupportPaymentProof,
+  uploadSupportPaymentProof,
 } from "@/lib/cms-api"
+import { ImagePreviewer } from "@/components/ui/image-previewer"
 import {
   formatFormulaTokens,
   formulaFieldLabels,
@@ -692,7 +703,7 @@ export function SalesOrderDataPanel({
         <Table className="min-w-[2180px] text-xs [&_td]:px-2 [&_th]:px-2">
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 z-20 bg-card">
+              <TableHead className="lg:sticky lg:left-0 lg:z-20 lg:bg-card">
                 订单号
               </TableHead>
               <TableHead>客户</TableHead>
@@ -709,7 +720,7 @@ export function SalesOrderDataPanel({
               <TableHead>公司利润</TableHead>
               <TableHead>付款链接</TableHead>
               <TableHead>备注</TableHead>
-              <TableHead className="sticky right-0 z-20 min-w-40 border-l border-border bg-card text-right">
+              <TableHead className="sticky right-0 z-20 w-12 min-w-12 border-l border-border bg-card text-center lg:min-w-40 lg:text-right">
                 操作
               </TableHead>
             </TableRow>
@@ -721,7 +732,7 @@ export function SalesOrderDataPanel({
                   className="group"
                   key={`${row.customerKey}-${row.orderId || "customer"}`}
                 >
-                  <TableCell className="sticky left-0 z-10 bg-card whitespace-nowrap group-hover:bg-muted">
+                  <TableCell className="whitespace-nowrap group-hover:bg-muted lg:sticky lg:left-0 lg:z-10 lg:bg-card">
                     <div className="font-semibold">{row.orderId}</div>
                     <div className="mt-0.5 text-[11px] text-muted-foreground">
                       {formatDateTime(row.addTime)}
@@ -778,56 +789,113 @@ export function SalesOrderDataPanel({
                     {[row.note, row.financeNote].filter(Boolean).join("；") ||
                       "-"}
                   </TableCell>
-                  <TableCell className="sticky right-0 z-10 border-l border-border bg-card text-right group-hover:bg-muted">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        aria-label="复制预约信息"
-                        className="size-8"
-                        onClick={() => void onCopyOrder(row.orderId)}
-                        size="icon-sm"
-                        variant="navIcon"
-                      >
-                        <ClipboardText size={14} />
-                      </Button>
-                      <Button
-                        aria-label={
-                          isCompletedSalesOrder(row) ? "查看订单" : "编辑订单"
-                        }
-                        className="size-8"
-                        onClick={() => void onOpenOrder(row.orderId)}
-                        size="icon-sm"
-                        variant="navIcon"
-                      >
-                        {isCompletedSalesOrder(row) ? (
-                          <Eye size={14} />
-                        ) : (
-                          <PencilSimple size={14} />
-                        )}
-                      </Button>
-                      <Button
-                        aria-label="编辑经营数据"
-                        className="size-8"
-                        onClick={() => {
-                          setEditingRow(row)
-                          setFinanceOpen(true)
-                        }}
-                        size="icon-sm"
-                        variant="navIcon"
-                      >
-                        <Calculator size={14} />
-                      </Button>
-                      {!isCompletedSalesOrder(row) ? (
+                  <TableCell className="sticky right-0 z-10 border-l border-border bg-card text-center group-hover:bg-muted lg:min-w-40 lg:text-right">
+                    <div className="flex justify-center gap-1 lg:justify-end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            aria-label="打开订单操作菜单"
+                            className="size-8 rounded-full lg:hidden"
+                            size="icon-sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <DotsThree size={18} weight="bold" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-lg">
+                          <DropdownMenuItem
+                            onClick={() => void onCopyOrder(row.orderId)}
+                          >
+                            <ClipboardText size={15} />
+                            复制预约信息
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => void onOpenOrder(row.orderId)}
+                          >
+                            {isCompletedSalesOrder(row) ? (
+                              <Eye size={15} />
+                            ) : (
+                              <PencilSimple size={15} />
+                            )}
+                            {isCompletedSalesOrder(row)
+                              ? "查看订单"
+                              : "编辑订单"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEditingRow(row)
+                              setFinanceOpen(true)
+                            }}
+                          >
+                            <Calculator size={15} />
+                            编辑经营数据
+                          </DropdownMenuItem>
+                          {!isCompletedSalesOrder(row) ? (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                disabled={isSaving}
+                                onClick={() => void onDeleteOrder(row.orderId)}
+                                variant="destructive"
+                              >
+                                <Trash size={15} />
+                                删除订单
+                              </DropdownMenuItem>
+                            </>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <div className="hidden gap-1 lg:flex">
                         <Button
-                          aria-label="删除订单"
+                          aria-label="复制预约信息"
                           className="size-8"
-                          disabled={isSaving}
-                          onClick={() => void onDeleteOrder(row.orderId)}
+                          onClick={() => void onCopyOrder(row.orderId)}
                           size="icon-sm"
-                          variant="destructive"
+                          variant="navIcon"
                         >
-                          <Trash size={14} />
+                          <ClipboardText size={14} />
                         </Button>
-                      ) : null}
+                        <Button
+                          aria-label={
+                            isCompletedSalesOrder(row) ? "查看订单" : "编辑订单"
+                          }
+                          className="size-8"
+                          onClick={() => void onOpenOrder(row.orderId)}
+                          size="icon-sm"
+                          variant="navIcon"
+                        >
+                          {isCompletedSalesOrder(row) ? (
+                            <Eye size={14} />
+                          ) : (
+                            <PencilSimple size={14} />
+                          )}
+                        </Button>
+                        <Button
+                          aria-label="编辑经营数据"
+                          className="size-8"
+                          onClick={() => {
+                            setEditingRow(row)
+                            setFinanceOpen(true)
+                          }}
+                          size="icon-sm"
+                          variant="navIcon"
+                        >
+                          <Calculator size={14} />
+                        </Button>
+                        {!isCompletedSalesOrder(row) ? (
+                          <Button
+                            aria-label="删除订单"
+                            className="size-8"
+                            disabled={isSaving}
+                            onClick={() => void onDeleteOrder(row.orderId)}
+                            size="icon-sm"
+                            variant="destructive"
+                          >
+                            <Trash size={14} />
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -901,8 +969,8 @@ export function SalesOrderDataPanel({
       </Card>
 
       <FinanceDialog
-        key={`${editingRow?.orderId ?? "none"}-${financeOpen ? "open" : "closed"}`}
         salesMembers={data?.salesMembers ?? []}
+        token={token}
         onOpenChange={setFinanceOpen}
         onRowChange={setEditingRow}
         onSave={saveFinance}
@@ -1242,6 +1310,7 @@ function FinanceDialog({
   open,
   row,
   salesMembers,
+  token,
 }: {
   onOpenChange: (open: boolean) => void
   onRowChange: (row: SalesDashboardRow | null) => void
@@ -1249,8 +1318,15 @@ function FinanceDialog({
   open: boolean
   row: SalesDashboardRow | null
   salesMembers: Array<{ id: string; name: string }>
+  token: string
 }) {
   const [confirmOfflinePayment, setConfirmOfflinePayment] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const [isUploadingProof, setIsUploadingProof] = useState(false)
+  const [proofError, setProofError] = useState("")
+  const [selectedSupportProof, setSelectedSupportProof] = useState<File | null>(
+    null
+  )
   const update = (patch: Partial<SalesDashboardRow>) =>
     onRowChange(row ? { ...row, ...patch } : row)
   return (
@@ -1374,6 +1450,156 @@ function FinanceDialog({
                 </div>
               </div>
             </div>
+            <div className="grid gap-3 rounded-lg border border-border p-3 sm:col-span-2 sm:grid-cols-2">
+              <div>
+                <div className="text-xs text-muted-foreground">用户小费</div>
+                <div className="mt-1 text-sm font-semibold">
+                  {formatMoney(row.currency, row.tipAmount)}
+                </div>
+              </div>
+              <ProofPanel
+                label="用户支付凭证"
+                proof={row.zellePaymentProof}
+                onPreview={() => setPreviewIndex(0)}
+              />
+              <div className="sm:col-span-2">
+                <div className="mb-1.5 text-xs font-medium text-foreground">
+                  客服确认凭证
+                </div>
+                <input
+                  accept="image/*"
+                  className="sr-only"
+                  id={`support-proof-${row.orderId}`}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    event.currentTarget.value = ""
+                    if (!file) return
+                    setSelectedSupportProof(file)
+                    setProofError("")
+                  }}
+                  type="file"
+                />
+                <label
+                  className="flex min-h-9 cursor-pointer items-center justify-center rounded-md border border-dashed border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50"
+                  htmlFor={`support-proof-${row.orderId}`}
+                >
+                  {row.supportPaymentProof
+                    ? "选择新的客服凭证"
+                    : "选择客服确认凭证"}
+                </label>
+                {selectedSupportProof ? (
+                  <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs">
+                    <span className="min-w-0 truncate">
+                      {selectedSupportProof.name}
+                    </span>
+                    <Button
+                      disabled={isUploadingProof}
+                      onClick={async () => {
+                        setIsUploadingProof(true)
+                        setProofError("")
+                        try {
+                          const result = await uploadSupportPaymentProof(
+                            token,
+                            row.orderId,
+                            selectedSupportProof
+                          )
+                          update({
+                            supportPaymentProof:
+                              result.order.supportPaymentProof,
+                          })
+                          setSelectedSupportProof(null)
+                        } catch (error) {
+                          setProofError(
+                            error instanceof Error
+                              ? error.message
+                              : "凭证上传失败。"
+                          )
+                        } finally {
+                          setIsUploadingProof(false)
+                        }
+                      }}
+                      size="sm"
+                      type="button"
+                    >
+                      {isUploadingProof ? "提交中..." : "提交"}
+                    </Button>
+                  </div>
+                ) : null}
+                {row.supportPaymentProof ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border px-2.5 py-2 text-left text-xs hover:bg-muted"
+                      onClick={() =>
+                        setPreviewIndex(row.zellePaymentProof ? 1 : 0)
+                      }
+                      type="button"
+                    >
+                      <span className="truncate">
+                        {row.supportPaymentProof.fileName}
+                      </span>
+                      <span className="shrink-0 text-muted-foreground">
+                        查看大图
+                      </span>
+                    </button>
+                    <Button
+                      disabled={isUploadingProof}
+                      onClick={async () => {
+                        setIsUploadingProof(true)
+                        setProofError("")
+                        try {
+                          const result = await deleteSupportPaymentProof(
+                            token,
+                            row.orderId
+                          )
+                          update({
+                            supportPaymentProof:
+                              result.order.supportPaymentProof,
+                          })
+                        } catch (error) {
+                          setProofError(
+                            error instanceof Error
+                              ? error.message
+                              : "凭证删除失败。"
+                          )
+                        } finally {
+                          setIsUploadingProof(false)
+                        }
+                      }}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      删除
+                    </Button>
+                  </div>
+                ) : null}
+                {proofError ? (
+                  <p className="mt-1 text-xs text-destructive">{proofError}</p>
+                ) : null}
+              </div>
+            </div>
+            <ImagePreviewer
+              images={[
+                ...(row.zellePaymentProof
+                  ? [
+                      {
+                        alt: "用户支付凭证",
+                        src: row.zellePaymentProof.dataUrl,
+                      },
+                    ]
+                  : []),
+                ...(row.supportPaymentProof
+                  ? [
+                      {
+                        alt: "客服确认凭证",
+                        src: row.supportPaymentProof.dataUrl,
+                      },
+                    ]
+                  : []),
+              ]}
+              onOpenChange={setPreviewIndex}
+              openIndex={previewIndex}
+            />
             <DialogFooter>
               <Button
                 className="h-8"
@@ -1408,6 +1634,34 @@ function FinanceDialog({
         ) : null}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function ProofPanel({
+  label,
+  onPreview,
+  proof,
+}: {
+  label: string
+  onPreview: () => void
+  proof?: SalesDashboardRow["zellePaymentProof"]
+}) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      {proof ? (
+        <button
+          className="mt-1 flex w-full items-center justify-between gap-2 rounded-md border border-border px-2.5 py-2 text-left text-xs hover:bg-muted"
+          onClick={onPreview}
+          type="button"
+        >
+          <span className="truncate">{proof.fileName}</span>
+          <span className="shrink-0 text-muted-foreground">查看大图</span>
+        </button>
+      ) : (
+        <div className="mt-1 text-sm text-muted-foreground">尚未上传</div>
+      )}
+    </div>
   )
 }
 

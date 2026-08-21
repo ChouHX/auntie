@@ -294,6 +294,46 @@ async function updateSalesOrderFinance(
   })
 }
 
+async function uploadZellePaymentProof(orderId: string, file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return uploadRequest<{ order: CmsPaymentOrder }>(
+    `/api/payment-orders/${encodeURIComponent(orderId)}/zelle-proof`,
+    { body: formData, method: "POST" }
+  )
+}
+
+async function deleteZellePaymentProof(orderId: string) {
+  return request<{ order: CmsPaymentOrder }>(
+    `/api/payment-orders/${encodeURIComponent(orderId)}/zelle-proof`,
+    { method: "DELETE" }
+  )
+}
+
+async function uploadSupportPaymentProof(
+  token: string,
+  orderId: string,
+  file: File
+) {
+  const formData = new FormData()
+  formData.append("file", file)
+  return uploadRequest<{ order: CmsPaymentOrder }>(
+    `/api/admin/payment-orders/${encodeURIComponent(orderId)}/proof`,
+    {
+      body: formData,
+      headers: createAuthHeaders(token),
+      method: "POST",
+    }
+  )
+}
+
+async function deleteSupportPaymentProof(token: string, orderId: string) {
+  return request<{ order: CmsPaymentOrder }>(
+    `/api/admin/payment-orders/${encodeURIComponent(orderId)}/proof`,
+    { headers: createAuthHeaders(token), method: "DELETE" }
+  )
+}
+
 async function saveSalesFormulaTemplates(
   token: string,
   templates: CmsFormulaTemplate[]
@@ -751,6 +791,10 @@ export {
   syncAdminWecomCustomers,
   updateAdminWecomSyncSettings,
   updateSalesOrderFinance,
+  uploadSupportPaymentProof,
+  uploadZellePaymentProof,
+  deleteSupportPaymentProof,
+  deleteZellePaymentProof,
   submitPublicForm,
   upsertAdminPaymentOrder,
   uploadAdminImage,

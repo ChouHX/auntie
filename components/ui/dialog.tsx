@@ -6,6 +6,10 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import {
+  getModalMotion,
+  getModalOverlayTransition,
+} from "@/components/ui/modal-motion"
 
 const DialogMotionContext = React.createContext({ open: false })
 
@@ -51,19 +55,14 @@ function DialogOverlay({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   const prefersReducedMotion = useReducedMotion()
-  const transition = prefersReducedMotion
-    ? ({ duration: 0.12, ease: "easeOut" } as const)
-    : ({ duration: 0.22, ease: [0.22, 1, 0.36, 1] } as const)
+  const transition = getModalOverlayTransition(prefersReducedMotion)
 
   return (
     <DialogPrimitive.Overlay asChild forceMount {...props}>
       <motion.div
         data-slot="dialog-overlay"
         animate={{ opacity: 1 }}
-        className={cn(
-          "fixed inset-0 z-50 bg-black/45",
-          className
-        )}
+        className={cn("fixed inset-0 z-50 bg-black/45", className)}
         exit={{ opacity: 0 }}
         initial={{ opacity: 0 }}
         transition={transition}
@@ -86,33 +85,8 @@ function DialogContent({
 }) {
   const { open } = React.useContext(DialogMotionContext)
   const prefersReducedMotion = useReducedMotion()
-  const initialState = prefersReducedMotion
-    ? { opacity: 0, x: "-50%", y: "-50%" }
-    : {
-        opacity: 0,
-        scale: 0.92,
-        x: "-50%",
-        y: "-44%",
-      }
-  const animateState = prefersReducedMotion
-    ? { opacity: 1, x: "-50%", y: "-50%" }
-    : {
-        opacity: 1,
-        scale: 1,
-        x: "-50%",
-        y: "-50%",
-      }
-  const exitState = prefersReducedMotion
-    ? { opacity: 0, x: "-50%", y: "-50%" }
-    : {
-        opacity: 0,
-        scale: 0.94,
-        x: "-50%",
-        y: "-46%",
-      }
-  const transition = prefersReducedMotion
-    ? ({ duration: 0.12, ease: "easeOut" } as const)
-    : ({ damping: 28, mass: 0.8, stiffness: 340, type: "spring" } as const)
+  const { initial, animate, exit, transition } =
+    getModalMotion(prefersReducedMotion)
 
   return (
     <DialogPortal forceMount>
@@ -153,13 +127,13 @@ function DialogContent({
           >
             <motion.div
               data-slot="dialog-content"
-              animate={animateState}
+              animate={animate}
               className={cn(
-                "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-xl border bg-background p-5 shadow-2xl will-change-[opacity,transform] sm:p-6",
+                "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg gap-4 overflow-y-auto rounded-xl border bg-background p-5 shadow-2xl sm:p-6",
                 className
               )}
-              exit={exitState}
-              initial={initialState}
+              exit={exit}
+              initial={initial}
               style={style}
               transition={transition}
             >

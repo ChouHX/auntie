@@ -7,6 +7,7 @@ import {
   CaretRight,
   ChatsCircle,
   CircleNotch,
+  DotsThree,
   FloppyDisk,
   PencilSimple,
   Plus,
@@ -39,6 +40,13 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { NumberInput } from "@/components/ui/number-input"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -479,7 +487,7 @@ export function AuntieAdmin({
                   <TableHead>状态</TableHead>
                   <TableHead>评分</TableHead>
                   <TableHead>完成单数</TableHead>
-                  <TableHead className="relative sticky right-0 z-20 w-28 min-w-28 border-l-0 bg-card text-right before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
+                  <TableHead className="relative sticky right-0 z-20 w-12 min-w-12 border-l border-border bg-card text-center lg:w-28 lg:min-w-28 lg:border-l-0 lg:text-right lg:before:pointer-events-none lg:before:absolute lg:before:inset-y-0 lg:before:left-0 lg:before:w-px lg:before:bg-border lg:before:content-['']">
                     操作
                   </TableHead>
                 </TableRow>
@@ -573,39 +581,80 @@ export function AuntieAdmin({
                       <TableCell className="text-sm font-medium">
                         {stats.completedCount}
                       </TableCell>
-                      <TableCell className="relative sticky right-0 z-10 border-l-0 bg-card group-hover:bg-muted before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-border before:content-['']">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            aria-label="编辑阿姨"
-                            className="size-8 rounded-md"
-                            onClick={() => startEditAuntie(auntie)}
-                            size="icon-sm"
-                            type="button"
-                            variant="navIcon"
-                          >
-                            <PencilSimple size={14} weight="bold" />
-                          </Button>
-                          <Button
-                            aria-label="查看评价"
-                            className="size-8 rounded-md"
-                            onClick={() => startViewReviews(auntie)}
-                            size="icon-sm"
-                            type="button"
-                            variant="navIcon"
-                          >
-                            <ChatsCircle size={14} weight="bold" />
-                          </Button>
-                          <Button
-                            aria-label="删除阿姨"
-                            className="size-8 rounded-md"
-                            disabled={isSaving}
-                            onClick={() => deleteAuntie(auntie.id)}
-                            size="icon-sm"
-                            type="button"
-                            variant="destructive"
-                          >
-                            <Trash size={14} weight="bold" />
-                          </Button>
+                      <TableCell className="relative sticky right-0 z-10 border-l border-border bg-card text-center group-hover:bg-muted lg:border-l-0 lg:text-right lg:before:pointer-events-none lg:before:absolute lg:before:inset-y-0 lg:before:left-0 lg:before:w-px lg:before:bg-border lg:before:content-['']">
+                        <div className="flex justify-center gap-1 lg:justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                aria-label="打开阿姨操作菜单"
+                                className="size-8 rounded-full lg:hidden"
+                                size="icon-sm"
+                                type="button"
+                                variant="ghost"
+                              >
+                                <DotsThree size={18} weight="bold" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="rounded-lg"
+                            >
+                              <DropdownMenuItem
+                                onClick={() => startEditAuntie(auntie)}
+                              >
+                                <PencilSimple size={15} />
+                                编辑阿姨
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => startViewReviews(auntie)}
+                              >
+                                <ChatsCircle size={15} />
+                                查看评价
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                disabled={isSaving}
+                                onClick={() => deleteAuntie(auntie.id)}
+                                variant="destructive"
+                              >
+                                <Trash size={15} />
+                                删除阿姨
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <div className="hidden gap-1 lg:flex">
+                            <Button
+                              aria-label="编辑阿姨"
+                              className="size-8 rounded-md"
+                              onClick={() => startEditAuntie(auntie)}
+                              size="icon-sm"
+                              type="button"
+                              variant="navIcon"
+                            >
+                              <PencilSimple size={14} weight="bold" />
+                            </Button>
+                            <Button
+                              aria-label="查看评价"
+                              className="size-8 rounded-md"
+                              onClick={() => startViewReviews(auntie)}
+                              size="icon-sm"
+                              type="button"
+                              variant="navIcon"
+                            >
+                              <ChatsCircle size={14} weight="bold" />
+                            </Button>
+                            <Button
+                              aria-label="删除阿姨"
+                              className="size-8 rounded-md"
+                              disabled={isSaving}
+                              onClick={() => deleteAuntie(auntie.id)}
+                              size="icon-sm"
+                              type="button"
+                              variant="destructive"
+                            >
+                              <Trash size={14} weight="bold" />
+                            </Button>
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>

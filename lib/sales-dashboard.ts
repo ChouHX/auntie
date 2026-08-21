@@ -145,6 +145,9 @@ function createOrderRow(
     salesMemberId: tagSalesMember?.id || storedSalesMember?.id || "",
     salesOwner: tagSalesOwner || storedSalesOwner || "",
     serviceDate: order.serviceDate || "",
+    tipAmount: normalizeNumber(order.tipAmount),
+    zellePaymentProof: order.zellePaymentProof,
+    supportPaymentProof: order.supportPaymentProof,
   }
 }
 
@@ -185,6 +188,9 @@ function createCustomerRow(
       findSalesMemberForStudentTags(customer.studentType, salesMembers)?.name ??
       "",
     serviceDate: "",
+    tipAmount: 0,
+    zellePaymentProof: undefined,
+    supportPaymentProof: undefined,
   }
 }
 

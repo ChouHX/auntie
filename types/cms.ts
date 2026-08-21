@@ -106,6 +106,13 @@ type CmsPaymentOrderAmountItem = {
   label: string
 }
 
+type CmsPaymentProof = {
+  dataUrl: string
+  fileName: string
+  mimeType: string
+  uploadedAt: string
+}
+
 type CmsBookingQuantityPrice = {
   amount: number
   quantity: number
@@ -234,6 +241,8 @@ type CmsPaymentOrder = {
   status: CmsPaymentOrderStatus
   studio?: boolean
   tipAmount?: number
+  zellePaymentProof?: CmsPaymentProof
+  supportPaymentProof?: CmsPaymentProof
   updatedAt: string
   webhookEventIds?: string[]
 }
@@ -399,6 +408,7 @@ export type {
   CmsOrderReview,
   CmsPaymentOrder,
   CmsPaymentOrderAmountItem,
+  CmsPaymentProof,
   CmsPaymentOrderStatus,
   CmsPaymentSettings,
   CmsServiceLocation,

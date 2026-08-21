@@ -6,6 +6,10 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 
 import { buttonVariants } from "@/components/ui/button-variants"
 import { cn } from "@/lib/utils"
+import {
+  getModalMotion,
+  getModalOverlayTransition,
+} from "@/components/ui/modal-motion"
 
 const AlertDialogMotionContext = React.createContext({ open: false })
 
@@ -50,9 +54,7 @@ function AlertDialogOverlay({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Overlay>) {
   const prefersReducedMotion = useReducedMotion()
-  const transition = prefersReducedMotion
-    ? ({ duration: 0.12, ease: "easeOut" } as const)
-    : ({ duration: 0.22, ease: [0.22, 1, 0.36, 1] } as const)
+  const transition = getModalOverlayTransition(prefersReducedMotion)
 
   return (
     <AlertDialogPrimitive.Overlay asChild forceMount {...props}>
@@ -76,33 +78,8 @@ function AlertDialogContent({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
   const { open } = React.useContext(AlertDialogMotionContext)
   const prefersReducedMotion = useReducedMotion()
-  const initialState = prefersReducedMotion
-    ? { opacity: 0, x: "-50%", y: "-50%" }
-    : {
-        opacity: 0,
-        scale: 0.92,
-        x: "-50%",
-        y: "-44%",
-      }
-  const animateState = prefersReducedMotion
-    ? { opacity: 1, x: "-50%", y: "-50%" }
-    : {
-        opacity: 1,
-        scale: 1,
-        x: "-50%",
-        y: "-50%",
-      }
-  const exitState = prefersReducedMotion
-    ? { opacity: 0, x: "-50%", y: "-50%" }
-    : {
-        opacity: 0,
-        scale: 0.94,
-        x: "-50%",
-        y: "-46%",
-      }
-  const transition = prefersReducedMotion
-    ? ({ duration: 0.12, ease: "easeOut" } as const)
-    : ({ damping: 28, mass: 0.8, stiffness: 340, type: "spring" } as const)
+  const { initial, animate, exit, transition } =
+    getModalMotion(prefersReducedMotion)
 
   return (
     <AlertDialogPortal forceMount>
@@ -119,13 +96,13 @@ function AlertDialogContent({
           >
             <motion.div
               data-slot="alert-dialog-content"
-              animate={animateState}
+              animate={animate}
               className={cn(
-                "fixed top-1/2 left-1/2 z-[61] grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md gap-4 overflow-y-auto rounded-xl border bg-background p-5 shadow-2xl will-change-[opacity,transform] sm:p-6",
+                "fixed top-1/2 left-1/2 z-[61] grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md gap-4 overflow-y-auto rounded-xl border bg-background p-5 shadow-2xl sm:p-6",
                 className
               )}
-              exit={exitState}
-              initial={initialState}
+              exit={exit}
+              initial={initial}
               style={style}
               transition={transition}
             >

@@ -1,4 +1,8 @@
-import type { CmsFormulaTemplate, CmsPaymentOrder } from "@/types/cms"
+import type {
+  CmsFormulaTemplate,
+  CmsPaymentOrder,
+  CmsPaymentProof,
+} from "@/types/cms"
 
 type SalesFilterField =
   | "addTime"
@@ -76,6 +80,9 @@ type SalesDashboardRow = {
   salesMemberId: string
   salesOwner: string
   serviceDate: string
+  tipAmount: number
+  zellePaymentProof?: CmsPaymentProof
+  supportPaymentProof?: CmsPaymentProof
 }
 
 type SalesDashboardCurrencySummary = {
