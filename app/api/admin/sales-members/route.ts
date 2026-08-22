@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto"
 
 import { isAdminToken, readCmsContent, updateCmsContent } from "@/lib/cms-store"
 import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
+import { captureOrderSalesCommission } from "@/lib/sales-commission"
 import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
 import { hashSalesPassword } from "@/lib/sales-auth"
 import {
@@ -70,7 +71,9 @@ export async function PUT(request: NextRequest) {
         accountUsername &&
         !/^[a-z0-9][a-z0-9._-]{2,39}$/.test(accountUsername)
       ) {
-        throw new Error("登录账号需为 3-40 位小写字母、数字、点、下划线或连字符。")
+        throw new Error(
+          "登录账号需为 3-40 位小写字母、数字、点、下划线或连字符。"
+        )
       }
       if (accountUsername && usernames.has(accountUsername))
         throw new Error("销售登录账号不能重复。")
@@ -81,7 +84,8 @@ export async function PUT(request: NextRequest) {
       ids.add(id)
       tags.add(studentTag)
       if (accountUsername) usernames.add(accountUsername)
-      const accountChanged = accountUsername !== (existing?.accountUsername ?? "")
+      const accountChanged =
+        accountUsername !== (existing?.accountUsername ?? "")
       const authVersion =
         (existing?.authVersion ?? 1) + (password || accountChanged ? 1 : 0)
       return {
@@ -115,6 +119,17 @@ export async function PUT(request: NextRequest) {
       return {
         ...nextContent,
         paymentOrders: content.paymentOrders.map((order) => {
+          const orderWithSnapshot = captureOrderSalesCommission(
+            order,
+            content.salesMembers,
+            now
+          )
+          if (orderWithSnapshot.salesMemberId || orderWithSnapshot.salesOwner) {
+            return orderWithSnapshot.status === "paid"
+              ? calculateOrderFinancialsSafely(orderWithSnapshot, nextContent)
+              : orderWithSnapshot
+          }
+
           const customer = order.customerRelationId
             ? customerMap.get(order.customerRelationId)
             : undefined
@@ -123,21 +138,17 @@ export async function PUT(request: NextRequest) {
             salesMembers
           )
           const attributedOrder = salesMember
-            ? {
-                ...order,
-                salesMemberId: salesMember.id,
-                salesOwner: salesMember.name,
-                salesOwnerSource: "wecom_tag" as const,
-              }
-            : order.salesOwnerSource === "wecom_member" ||
-                order.salesOwnerSource === "wecom_tag"
-              ? {
+            ? captureOrderSalesCommission(
+                {
                   ...order,
-                  salesMemberId: undefined,
-                  salesOwner: "",
-                  salesOwnerSource: undefined,
-                }
-              : order
+                  salesMemberId: salesMember.id,
+                  salesOwner: salesMember.name,
+                  salesOwnerSource: "wecom_tag" as const,
+                },
+                salesMembers,
+                now
+              )
+            : orderWithSnapshot
           return attributedOrder.status === "paid"
             ? calculateOrderFinancialsSafely(attributedOrder, nextContent)
             : attributedOrder

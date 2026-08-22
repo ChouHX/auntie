@@ -6,6 +6,8 @@ import type {
   CmsContent,
   CmsPaymentOrder,
 } from "@/types/cms"
+// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+import * as salesCommissionRules from "./sales-commission.ts"
 
 const formulaFieldLabels: Record<CmsFormulaField, string> = {
   auntieSalary: "阿姨薪资",
@@ -174,11 +176,20 @@ function calculateOrderFinancials(
   const auntie = content.teamMembers.find(
     (member) => member.id === order.assignedAuntieId
   )
-  const salesMember = content.salesMembers.find(
-    (member) =>
-      member.status === "active" &&
-      (member.id === order.salesMemberId || member.name === order.salesOwner)
+  const salesMember = salesCommissionRules.findOrderSalesMember(
+    order,
+    content.salesMembers
   )
+  const storedCommissionSnapshot = salesCommissionRules.isSnapshotForOrder(
+    order,
+    order.salesCommissionSnapshot
+  )
+    ? order.salesCommissionSnapshot
+    : undefined
+  const salesCommissionSnapshot = salesMember
+    ? (storedCommissionSnapshot ??
+      salesCommissionRules.createSalesCommissionSnapshot(salesMember))
+    : storedCommissionSnapshot
   const salaryPercentage = normalizePercentage(auntie?.salaryPercentage)
   const salaryHourlyRate = normalizeNumber(auntie?.salaryHourlyRate)
   const serviceDurationHours = normalizeNumber(order.serviceDurationHours)
@@ -186,10 +197,10 @@ function calculateOrderFinancials(
     auntie?.salaryAdjustment ?? -normalizeNumber(auntie?.salaryDeduction)
   )
   const commissionPercentage = normalizePercentage(
-    salesMember?.commissionPercentage
+    salesCommissionSnapshot?.commissionPercentage
   )
   const commissionAdjustment = normalizeSignedNumber(
-    salesMember?.commissionAdjustment
+    salesCommissionSnapshot?.commissionAdjustment
   )
   const auntieSalary =
     auntie?.salaryMode === "hourly" && serviceDurationHours <= 0
@@ -251,6 +262,7 @@ function calculateOrderFinancials(
       ? roundMoney(orderProfit * exchangeRateToCny)
       : order.orderProfitCny,
     salesCommission,
+    salesCommissionSnapshot,
     salesMemberId: salesMember?.id ?? order.salesMemberId,
   }
 }

@@ -4,9 +4,11 @@ import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 import {
   CalendarDays,
+  Clock3,
   CreditCard,
   MapPin,
   ReceiptText,
+  Star,
   UserRound,
 } from "lucide-react"
 
@@ -30,24 +32,40 @@ function OrdersPage() {
 
   useEffect(() => {
     let cancelled = false
-    const timeoutId = window.setTimeout(() => {
+    let isRefreshing = false
+
+    async function refreshOrders() {
+      if (cancelled || isRefreshing || document.hidden) return
+      isRefreshing = true
       const cachedOrders = readCachedPaymentOrders()
 
       setOrders(
         cachedOrders.filter((order) => !isActiveCachedPaymentOrder(order))
       )
-      void reconcileCachedPaymentOrders(fetchPaymentOrder, (error) =>
-        isApiRequestError(error, 404)
-      ).then((nextOrders) => {
+      try {
+        const nextOrders = await reconcileCachedPaymentOrders(
+          fetchPaymentOrder,
+          (error) => isApiRequestError(error, 404)
+        )
         if (!cancelled) {
           setOrders(nextOrders)
         }
-      })
-    }, 0)
+      } finally {
+        isRefreshing = false
+      }
+    }
+
+    const refreshWhenVisible = () => void refreshOrders()
+    void refreshOrders()
+    const intervalId = window.setInterval(refreshWhenVisible, 5000)
+    window.addEventListener("focus", refreshWhenVisible)
+    document.addEventListener("visibilitychange", refreshWhenVisible)
 
     return () => {
       cancelled = true
-      window.clearTimeout(timeoutId)
+      window.clearInterval(intervalId)
+      window.removeEventListener("focus", refreshWhenVisible)
+      document.removeEventListener("visibilitychange", refreshWhenVisible)
     }
   }, [])
 
@@ -92,11 +110,23 @@ function OrdersPage() {
 function OrderCard({ order }: { order: CachedPaymentOrder }) {
   const { dict } = useI18n()
   const isActive = isActiveCachedPaymentOrder(order)
-  const statusLabel = dict.ordersPage.status[order.status]
-  const actionLabel = isActive
-    ? dict.ordersPage.payNow
-    : dict.ordersPage.viewOrder
-  const orderHref = `/checkout?order=${encodeURIComponent(order.orderId)}`
+  const isZelleReviewPending =
+    order.hasZellePaymentProof && order.status !== "paid"
+  const canReviewZelleOrder =
+    order.hasZellePaymentProof && order.status === "paid"
+  const statusLabel = isZelleReviewPending
+    ? dict.ordersPage.reviewPending
+    : dict.ordersPage.status[order.status]
+  const actionLabel = isZelleReviewPending
+    ? dict.ordersPage.viewReviewProgress
+    : canReviewZelleOrder
+      ? dict.ordersPage.reviewOrder
+      : isActive
+        ? dict.ordersPage.payNow
+        : dict.ordersPage.viewOrder
+  const orderHref = canReviewZelleOrder
+    ? `/review?order=${encodeURIComponent(order.orderId)}`
+    : `/checkout?order=${encodeURIComponent(order.orderId)}`
 
   return (
     <Card className="overflow-hidden rounded-lg border-border/80 shadow-sm">
@@ -116,9 +146,11 @@ function OrderCard({ order }: { order: CachedPaymentOrder }) {
           <Badge
             className={cn(
               "shrink-0 px-2 py-1 text-[11px]",
-              isActive && "border-transparent bg-amber-100 text-amber-700"
+              isZelleReviewPending
+                ? "border-transparent bg-violet-100 text-violet-700 dark:bg-violet-400/10 dark:text-violet-200"
+                : isActive && "border-transparent bg-amber-100 text-amber-700"
             )}
-            variant={isActive ? "amber" : "secondary"}
+            variant={isActive && !isZelleReviewPending ? "amber" : "secondary"}
           >
             {statusLabel}
           </Badge>
@@ -159,7 +191,13 @@ function OrderCard({ order }: { order: CachedPaymentOrder }) {
             variant={isActive ? "default" : "outline"}
           >
             <Link to={orderHref}>
-              <CreditCard data-icon="inline-start" />
+              {isZelleReviewPending ? (
+                <Clock3 data-icon="inline-start" />
+              ) : canReviewZelleOrder ? (
+                <Star data-icon="inline-start" />
+              ) : (
+                <CreditCard data-icon="inline-start" />
+              )}
               {actionLabel}
             </Link>
           </Button>

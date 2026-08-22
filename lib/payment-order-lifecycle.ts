@@ -1,4 +1,6 @@
 import type { CmsPaymentOrder } from "@/types/cms"
+// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+import { isZellePaymentAwaitingReview } from "./zelle-payment-status.ts"
 
 // Airwallex client secrets are valid for 60 minutes. Keep a small buffer so
 // the browser does not start a payment with a secret that is about to expire.
@@ -10,6 +12,10 @@ function createPaymentOrderExpiry(now = Date.now()) {
 }
 
 function isPaymentOrderExpired(order: CmsPaymentOrder, now = Date.now()) {
+  if (isZellePaymentAwaitingReview(order)) {
+    return false
+  }
+
   if (!["pending", "unpaid"].includes(order.status) || !order.createdAt) {
     return false
   }
@@ -18,6 +24,7 @@ function isPaymentOrderExpired(order: CmsPaymentOrder, now = Date.now()) {
 }
 
 function isPaymentSessionExpired(order: CmsPaymentOrder, now = Date.now()) {
+  if (isZellePaymentAwaitingReview(order)) return false
   if (order.status !== "pending" || !order.paymentExpiresAt) return false
   const expiresAt = new Date(order.paymentExpiresAt).getTime()
   return Number.isFinite(expiresAt) && expiresAt <= now

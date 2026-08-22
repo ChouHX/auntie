@@ -47,7 +47,7 @@ export async function POST(
       return content
     }
 
-    if (order.status !== "paid" && !order.zellePaymentProof) {
+    if (order.status !== "paid") {
       return content
     }
 

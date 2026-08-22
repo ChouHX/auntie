@@ -35,6 +35,11 @@ import {
 import { cn } from "@/lib/utils"
 import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
 import {
+  deletePaymentOrderFromCollection,
+  findPaymentOrderById,
+  upsertPaymentOrderInCollection,
+} from "@/lib/payment-order-collection"
+import {
   createConfiguredOrderAmountBreakdown,
   createOrderAddOnSnapshot,
   formatBookingRequest,
@@ -318,8 +323,9 @@ export function OrderAdmin({
   void remotePagination
   const { confirmAction, noticeDialog } = useAdminNoticeDialog()
   const existingEditingOrder = editingOrder
-    ? ((content.paymentOrders ?? []).find(
-        (order) => order.orderId === editingOrder.orderId
+    ? (findPaymentOrderById(
+        content.paymentOrders ?? [],
+        editingOrder.orderId
       ) ?? (editingOrder.orderId ? editingOrder : null))
     : null
   const isEditingCompletedOrder = Boolean(
@@ -559,8 +565,9 @@ export function OrderAdmin({
 
   async function saveOrderWithFullContent(orderToSave: CmsPaymentOrder) {
     const existingOrders = content.paymentOrders ?? []
-    const currentOrder = existingOrders.find(
-      (order) => order.orderId === orderToSave.orderId
+    const currentOrder = findPaymentOrderById(
+      existingOrders,
+      orderToSave.orderId
     )
 
     if (currentOrder && isPaymentOrderCompleted(currentOrder)) {
@@ -568,14 +575,10 @@ export function OrderAdmin({
       return null
     }
 
-    const exists = existingOrders.some(
-      (order) => order.orderId === orderToSave.orderId
+    const nextOrders = upsertPaymentOrderInCollection(
+      existingOrders,
+      orderToSave
     )
-    const nextOrders = exists
-      ? existingOrders.map((order) =>
-          order.orderId === orderToSave.orderId ? orderToSave : order
-        )
-      : [orderToSave, ...existingOrders]
 
     return onCommit(
       (current) => ({
@@ -587,8 +590,9 @@ export function OrderAdmin({
   }
 
   async function deleteOrder(orderId: string) {
-    const currentOrder = (content.paymentOrders ?? []).find(
-      (order) => order.orderId === orderId
+    const currentOrder = findPaymentOrderById(
+      content.paymentOrders ?? [],
+      orderId
     )
 
     if (currentOrder && isPaymentOrderCompleted(currentOrder)) {
@@ -615,8 +619,9 @@ export function OrderAdmin({
   }
 
   async function deleteOrderWithFullContent(orderId: string) {
-    const currentOrder = (content.paymentOrders ?? []).find(
-      (order) => order.orderId === orderId
+    const currentOrder = findPaymentOrderById(
+      content.paymentOrders ?? [],
+      orderId
     )
 
     if (currentOrder && isPaymentOrderCompleted(currentOrder)) {
@@ -624,8 +629,9 @@ export function OrderAdmin({
       return null
     }
 
-    const nextOrders = (content.paymentOrders ?? []).filter(
-      (order) => order.orderId !== orderId
+    const nextOrders = deletePaymentOrderFromCollection(
+      content.paymentOrders ?? [],
+      orderId
     )
 
     return onCommit(

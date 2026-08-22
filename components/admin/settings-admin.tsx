@@ -1,14 +1,17 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   ClipboardText,
   Code,
   CreditCard,
+  Database,
+  DownloadSimple,
   Eye,
   FloppyDisk,
   LinkSimple,
   ListChecks,
+  UploadSimple,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 
@@ -17,6 +20,7 @@ import {
   RecordsPanel,
   UploadButton,
   createId,
+  useAdminNoticeDialog,
 } from "@/components/admin/admin-shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -36,6 +40,8 @@ import {
 import { defaultAfterSalesPage, defaultContactPage } from "@/data/cms-defaults"
 import {
   fetchAdminPaymentRuntimeConfig,
+  downloadAdminBackup,
+  importAdminBackup,
   setStoredAdminToken,
   updateAdminPassword,
   uploadAdminImage,
@@ -525,6 +531,10 @@ export function SiteSettingsAdmin({
   const [isLogoUploading, setIsLogoUploading] = useState(false)
   const [qrPreviewIndex, setQrPreviewIndex] = useState<number | null>(null)
   const [isLogoPreviewOpen, setIsLogoPreviewOpen] = useState(false)
+  const [isBackupExporting, setIsBackupExporting] = useState(false)
+  const [isBackupImporting, setIsBackupImporting] = useState(false)
+  const backupInputRef = useRef<HTMLInputElement>(null)
+  const { confirmAction, noticeDialog } = useAdminNoticeDialog()
   const qrPreviewImages = useMemo(
     () => [
       {
@@ -631,6 +641,49 @@ export function SiteSettingsAdmin({
     )
   }
 
+  async function exportDatabaseBackup() {
+    setIsBackupExporting(true)
+    try {
+      const blob = await downloadAdminBackup(token)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `auntie-chen-backup-${new Date().toISOString().slice(0, 10)}.sqlite`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      toast.success("数据库备份已导出")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "数据库备份导出失败")
+    } finally {
+      setIsBackupExporting(false)
+    }
+  }
+
+  async function importDatabaseBackup(file: File) {
+    const confirmed = await confirmAction({
+      confirmLabel: "导入并覆盖",
+      description:
+        "导入会覆盖当前站点的 SQLite 数据，包括订单、支付凭证、站点内容和企业微信缓存。此操作不可撤销，请确认已导出当前备份。",
+      title: "确认导入数据库备份？",
+      variant: "destructive",
+    })
+    if (!confirmed) return
+
+    setIsBackupImporting(true)
+    try {
+      await importAdminBackup(token, file)
+      toast.success("数据库备份已导入，正在刷新后台")
+      window.setTimeout(() => window.location.reload(), 500)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "数据库备份导入失败")
+    } finally {
+      setIsBackupImporting(false)
+      if (backupInputRef.current) backupInputRef.current.value = ""
+    }
+  }
+
   return (
     <RecordsPanel
       action={
@@ -640,7 +693,9 @@ export function SiteSettingsAdmin({
             isSaving ||
             isContactUploading ||
             isAfterSalesUploading ||
-            isLogoUploading
+            isLogoUploading ||
+            isBackupExporting ||
+            isBackupImporting
           }
           onClick={saveSiteSettings}
           size="sm"
@@ -867,8 +922,67 @@ export function SiteSettingsAdmin({
               </FormField>
             </div>
           </section>
+
+          <section className="rounded-lg border border-border bg-card p-2.5 p-3 xl:col-span-2">
+            <div className="mb-3 flex items-start gap-2 [&_h2]:text-sm [&_h2]:font-semibold [&_p]:mt-0.5 [&_p]:text-xs [&_p]:text-muted-foreground [&_svg]:mt-0.5 [&_svg]:shrink-0 [&_svg]:text-primary">
+              <Database size={17} weight="bold" />
+              <div>
+                <h2>数据库备份</h2>
+                <p>
+                  导出或恢复整个 SQLite
+                  数据库，包含订单、凭证、站点内容、上传图片和企业微信缓存。
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <div className="leading-5">
+                <div className="font-medium text-foreground">
+                  导入会覆盖当前数据
+                </div>
+                <div>
+                  后台上传的图片会自动写入
+                  SQLite；项目内置静态图片无需单独恢复。
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button
+                  className="h-8 rounded-md"
+                  disabled={isBackupExporting || isBackupImporting}
+                  onClick={exportDatabaseBackup}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <DownloadSimple size={15} weight="bold" />
+                  {isBackupExporting ? "导出中..." : "导出备份"}
+                </Button>
+                <Button
+                  className="h-8 rounded-md"
+                  disabled={isBackupExporting || isBackupImporting}
+                  onClick={() => backupInputRef.current?.click()}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <UploadSimple size={15} weight="bold" />
+                  {isBackupImporting ? "导入中..." : "导入备份"}
+                </Button>
+                <input
+                  accept=".sqlite,.db,application/vnd.sqlite3,application/octet-stream"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) void importDatabaseBackup(file)
+                  }}
+                  ref={backupInputRef}
+                  type="file"
+                />
+              </div>
+            </div>
+          </section>
         </div>
       </Card>
+      {noticeDialog}
       <ImagePreviewer
         images={qrPreviewImages}
         onOpenChange={setQrPreviewIndex}

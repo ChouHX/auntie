@@ -341,7 +341,11 @@ export function SalesAdmin({ token }: { token: string }) {
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label="订单分成比例（%）" required>
+              <FormField
+                description="保存后仅适用于之后新归属的订单，历史订单仍使用原比例。"
+                label="订单分成比例（%）"
+                required
+              >
                 <NumberInput
                   className="h-8"
                   max="100"
@@ -357,7 +361,7 @@ export function SalesAdmin({ token }: { token: string }) {
                 />
               </FormField>
               <FormField
-                description="正数增加，负数扣减；比例填 0 时即为纯固定分成。"
+                description="正数增加，负数扣减；比例填 0 时为纯固定分成。修改同样仅影响后续订单。"
                 label="固定调整（订单币种）"
               >
                 <NumberInput

@@ -7,6 +7,8 @@ import {
   readCmsContent,
   updateCmsContent,
 } from "@/lib/cms-store"
+import { parsePaymentAmountValue } from "@/lib/airwallex"
+import { ZELLE_PROOF_PENDING } from "@/lib/zelle-payment-status"
 import type { CmsPaymentOrder } from "@/types/cms"
 
 export const runtime = "nodejs"
@@ -32,13 +34,32 @@ export async function POST(
       { status: 409 }
     )
   }
+  if (existing.status === "paid") {
+    return Response.json(
+      { error: "order_already_paid", message: "该订单已完成付款。" },
+      { status: 409 }
+    )
+  }
 
   let file: FormDataEntryValue | null
+  let tipAmount: number | null
   try {
-    file = (await request.formData()).get("file")
+    const formData = await request.formData()
+    file = formData.get("file")
+    tipAmount = parseTipAmount(formData.get("tipAmount"))
   } catch {
     return Response.json(
       { error: "invalid_form_data", message: "付款凭证上传数据无效。" },
+      { status: 400 }
+    )
+  }
+
+  if (tipAmount === null) {
+    return Response.json(
+      {
+        error: "invalid_tip_amount",
+        message: "小费金额必须在 0 到 1000 之间。",
+      },
       { status: 400 }
     )
   }
@@ -63,8 +84,26 @@ export async function POST(
     await updateCmsContent((current) => {
       const currentOrder = findPaymentOrder(current, normalizedOrderId)
       if (!currentOrder) return current
+      const baseAmountValue = getBaseAmountValue(currentOrder)
+      const amountValue = Number((baseAmountValue + tipAmount!).toFixed(2))
       savedOrder = {
         ...currentOrder,
+        airwallexPaymentIntentClientSecret: undefined,
+        airwallexPaymentIntentId: undefined,
+        airwallexPaymentLinkId: undefined,
+        airwallexPaymentUrl: undefined,
+        amount: formatPaymentAmount(amountValue, currentOrder.amount),
+        amountValue,
+        baseAmountValue,
+        dealStatus: "unconverted",
+        failureReason: undefined,
+        gatewayStatus: ZELLE_PROOF_PENDING,
+        paidAt: undefined,
+        paymentExpiresAt: undefined,
+        provider: "offline",
+        receivedAmount: 0,
+        status: "pending",
+        tipAmount: tipAmount!,
         zellePaymentProof: proof,
         updatedAt: new Date().toISOString(),
       }
@@ -98,11 +137,19 @@ export async function DELETE(
   const { orderId } = await context.params
   const normalizedOrderId = normalizePaymentOrderId(orderId)
   let savedOrder: CmsPaymentOrder | null = null
+  let isPaidOrder = false
   await updateCmsContent((current) => {
     const currentOrder = findPaymentOrder(current, normalizedOrderId)
     if (!currentOrder) return current
+    if (currentOrder.status === "paid") {
+      isPaidOrder = true
+      return current
+    }
     savedOrder = {
       ...currentOrder,
+      gatewayStatus: "",
+      provider: "airwallex",
+      status: "unpaid",
       zellePaymentProof: undefined,
       updatedAt: new Date().toISOString(),
     }
@@ -115,10 +162,52 @@ export async function DELETE(
       ),
     }
   })
+  if (isPaidOrder) {
+    return Response.json(
+      {
+        error: "order_already_paid",
+        message: "已确认付款的订单不能删除用户凭证。",
+      },
+      { status: 409 }
+    )
+  }
   if (!savedOrder)
     return Response.json({ error: "order_not_found" }, { status: 404 })
   const orderToReturn = savedOrder as CmsPaymentOrder
   const publicOrder = { ...orderToReturn }
   delete publicOrder.airwallexPaymentIntentClientSecret
   return Response.json({ order: publicOrder })
+}
+
+function parseTipAmount(value: FormDataEntryValue | null) {
+  const amount = Number(value ?? 0)
+
+  if (!Number.isFinite(amount) || amount < 0 || amount > 1000) {
+    return null
+  }
+
+  return Number(amount.toFixed(2))
+}
+
+function getBaseAmountValue(order: CmsPaymentOrder) {
+  const baseAmount = Number(order.baseAmountValue)
+
+  if (Number.isFinite(baseAmount) && baseAmount >= 0) {
+    return baseAmount
+  }
+
+  const amountValue = parsePaymentAmountValue(order.amountValue, order.amount)
+  const tipAmount = Number(order.tipAmount)
+
+  return Number(
+    Math.max(
+      0,
+      amountValue - (Number.isFinite(tipAmount) ? tipAmount : 0)
+    ).toFixed(2)
+  )
+}
+
+function formatPaymentAmount(value: number, previousAmount: string) {
+  const prefix = previousAmount.trim().match(/[^\d.,\s-]+/)?.[0] ?? "$"
+  return `${prefix}${value.toFixed(2)}`
 }

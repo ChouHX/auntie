@@ -186,6 +186,13 @@ type CmsOrderCalculationSnapshot = {
   }
 }
 
+type CmsSalesCommissionSnapshot = {
+  capturedAt: string
+  commissionAdjustment: number
+  commissionPercentage: number
+  salesMemberId: string
+}
+
 type CmsPaymentOrder = {
   airwallexPaymentIntentClientSecret?: string
   airwallexPaymentIntentId?: string
@@ -229,6 +236,7 @@ type CmsPaymentOrder = {
   receivedAmount?: number
   review?: CmsOrderReview
   salesCommission?: number
+  salesCommissionSnapshot?: CmsSalesCommissionSnapshot
   salesMemberId?: string
   salesOwner?: string
   salesOwnerSource?: "manual" | "wecom_member" | "wecom_tag"
@@ -414,6 +422,7 @@ export type {
   CmsServiceLocation,
   CmsServiceRegion,
   CmsSalesMember,
+  CmsSalesCommissionSnapshot,
   CmsSalesMemberStatus,
   CmsSiteSettings,
   CmsStatus,

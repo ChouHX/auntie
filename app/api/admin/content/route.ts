@@ -7,8 +7,12 @@ import {
   writeCmsContent,
 } from "@/lib/cms-store"
 import { createAuntieStatsMap } from "@/lib/admin-analytics"
-import { isPaymentOrderCompleted } from "@/lib/auntie-assignment"
+import {
+  deletePaymentOrderFromCollection,
+  upsertPaymentOrderInCollection,
+} from "@/lib/payment-order-collection"
 import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
+import { captureOrderSalesCommission } from "@/lib/sales-commission"
 import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
 import { getWecomCustomerByRelationId } from "@/lib/wecom-store"
 import type { CmsContent, CmsPaymentOrder } from "@/types/cms"
@@ -232,18 +236,22 @@ function applyWecomSalesAttribution(
       ? {
           ...order,
           salesMemberId: undefined,
+          salesCommissionSnapshot: undefined,
           salesOwner: "",
           salesOwnerSource: undefined,
         }
       : order
   }
 
-  return {
-    ...order,
-    salesMemberId: salesMember.id,
-    salesOwner: salesMember.name,
-    salesOwnerSource: "wecom_tag" as const,
-  }
+  return captureOrderSalesCommission(
+    {
+      ...order,
+      salesMemberId: salesMember.id,
+      salesOwner: salesMember.name,
+      salesOwnerSource: "wecom_tag" as const,
+    },
+    salesMembers
+  )
 }
 
 function getRequestedSection(searchParams: URLSearchParams) {
@@ -600,37 +608,18 @@ function getOrderTimestamp(order: CmsPaymentOrder) {
 }
 
 function upsertPaymentOrder(content: CmsContent, order: CmsPaymentOrder) {
-  const currentOrder = content.paymentOrders.find(
-    (item) => item.orderId === order.orderId
-  )
-
-  if (currentOrder && isPaymentOrderCompleted(currentOrder)) {
-    throw new Error("已完成订单只能查看详情，不能再编辑。")
-  }
-
   return {
     ...content,
-    paymentOrders: currentOrder
-      ? content.paymentOrders.map((item) =>
-          item.orderId === order.orderId ? order : item
-        )
-      : [order, ...content.paymentOrders],
+    paymentOrders: upsertPaymentOrderInCollection(content.paymentOrders, order),
   }
 }
 
 function deletePaymentOrder(content: CmsContent, orderId: string) {
-  const currentOrder = content.paymentOrders.find(
-    (order) => order.orderId === orderId
-  )
-
-  if (currentOrder && isPaymentOrderCompleted(currentOrder)) {
-    throw new Error("已完成订单只能查看详情，不能删除。")
-  }
-
   return {
     ...content,
-    paymentOrders: content.paymentOrders.filter(
-      (order) => order.orderId !== orderId
+    paymentOrders: deletePaymentOrderFromCollection(
+      content.paymentOrders,
+      orderId
     ),
   }
 }

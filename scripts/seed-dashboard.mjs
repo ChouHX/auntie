@@ -370,7 +370,7 @@ function generateOrders(count) {
       isCompleted = true
     }
 
-    const orderId = `AC-2506-${String(100 - i).padStart(4, "0")}`
+    const orderId = `AC2506${String(100 - i).padStart(4, "0")}`
     const customerName = randomItem(customerNames)
     const finalServiceDate = isCompleted
       ? new Date(now - Math.random() * 5 * 86400000).toISOString().split("T")[0]

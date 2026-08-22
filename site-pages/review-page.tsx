@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import {
   ChatCircleText,
   CheckCircle,
+  CircleNotch,
+  ClockCountdown,
   HouseLine,
   Receipt,
   Star,
@@ -31,6 +33,7 @@ import {
   submitOrderReview,
 } from "@/lib/cms-api"
 import { cn } from "@/lib/utils"
+import { isZellePaymentAwaitingReview } from "@/lib/zelle-payment-status"
 import type { CmsPaymentOrder, CmsTeamMember } from "@/types/cms"
 
 type ReviewState =
@@ -38,6 +41,7 @@ type ReviewState =
   | "load_error"
   | "not_found"
   | "not_paid"
+  | "payment_review"
   | "already_reviewed"
   | "form"
   | "submitting"
@@ -89,8 +93,12 @@ function ReviewPage() {
           setAssignedAuntie(null)
         }
 
-        if (orderData.status !== "paid" && !orderData.zellePaymentProof) {
-          setState("not_paid")
+        if (orderData.status !== "paid") {
+          setState(
+            isZellePaymentAwaitingReview(orderData)
+              ? "payment_review"
+              : "not_paid"
+          )
         } else if (orderData.review) {
           setState("already_reviewed")
         } else {
@@ -109,6 +117,48 @@ function ReviewPage() {
       isMounted = false
     }
   }, [loadAttempt, rawOrderId])
+
+  useEffect(() => {
+    if (!rawOrderId || state !== "payment_review") {
+      return
+    }
+
+    let isMounted = true
+    let isRefreshing = false
+
+    async function refreshOrder() {
+      if (!isMounted || isRefreshing || document.hidden) return
+      isRefreshing = true
+
+      try {
+        const nextOrder = await fetchPaymentOrder(rawOrderId)
+        if (!isMounted) return
+        setOrder(nextOrder)
+
+        if (nextOrder.status === "paid") {
+          setState(nextOrder.review ? "already_reviewed" : "form")
+        } else if (!isZellePaymentAwaitingReview(nextOrder)) {
+          setState("not_paid")
+        }
+      } catch {
+        // Keep the current review state during transient polling failures.
+      } finally {
+        isRefreshing = false
+      }
+    }
+
+    const intervalId = window.setInterval(() => void refreshOrder(), 5000)
+    const refreshWhenVisible = () => void refreshOrder()
+    window.addEventListener("focus", refreshWhenVisible)
+    document.addEventListener("visibilitychange", refreshWhenVisible)
+
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+      window.removeEventListener("focus", refreshWhenVisible)
+      document.removeEventListener("visibilitychange", refreshWhenVisible)
+    }
+  }, [rawOrderId, state])
 
   async function handleSubmit() {
     if (rating < 1) {
@@ -150,6 +200,8 @@ function ReviewPage() {
           <ReviewNotFoundCard />
         ) : displayState === "not_paid" ? (
           <ReviewNotPaidCard order={order ?? null} />
+        ) : displayState === "payment_review" ? (
+          <ReviewPaymentPendingCard order={order ?? null} />
         ) : displayState === "already_reviewed" ? (
           <ReviewAlreadyReviewedCard
             order={order ?? null}
@@ -244,6 +296,85 @@ function ReviewNotPaidCard({ order }: { order: CmsPaymentOrder | null }) {
           </Link>
         </Button>
       ) : null}
+    </Card>
+  )
+}
+
+function ReviewPaymentPendingCard({
+  order,
+}: {
+  order: CmsPaymentOrder | null
+}) {
+  return (
+    <Card className="overflow-hidden border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
+      <div
+        className="px-5 py-8 text-center sm:px-8 sm:py-10"
+        aria-live="polite"
+      >
+        <div className="relative mx-auto flex size-14 items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-200">
+          <CircleNotch
+            className="absolute inset-0 size-14 motion-safe:animate-spin"
+            size={56}
+          />
+          <ClockCountdown size={24} weight="fill" />
+        </div>
+        <h2 className="mt-4 text-lg font-semibold text-slate-950 dark:text-white">
+          付款凭证审核中
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
+          客服正在核对订单 {order?.orderId ?? ""}{" "}
+          的付款信息。审核通过后，本页面会自动显示评价表单。
+        </p>
+
+        <div className="mx-auto mt-6 grid max-w-sm grid-cols-3 text-[11px] leading-4">
+          {[
+            ["凭证已提交", true],
+            ["客服核对中", true],
+            ["填写服务评价", false],
+          ].map(([label, active], index) => (
+            <div
+              className="relative flex flex-col items-center"
+              key={String(label)}
+            >
+              {index > 0 ? (
+                <span
+                  className={`absolute top-3 right-1/2 h-0.5 w-full ${
+                    active ? "bg-violet-500" : "bg-slate-200 dark:bg-white/10"
+                  }`}
+                />
+              ) : null}
+              <span
+                className={`relative z-10 flex size-6 items-center justify-center rounded-full ${
+                  active
+                    ? "bg-violet-600 text-white"
+                    : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                }`}
+              >
+                {index === 0 ? (
+                  <CheckCircle size={14} weight="fill" />
+                ) : (
+                  index + 1
+                )}
+              </span>
+              <span className="mt-2 px-1 text-slate-500 dark:text-slate-400">
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-6 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          页面会自动更新，请勿重复付款或再次提交截图。
+        </p>
+        <div className="mt-5 flex justify-center gap-3">
+          <Button asChild variant="outline">
+            <Link to="/orders">查看订单</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/after-sales">联系客服</Link>
+          </Button>
+        </div>
+      </div>
     </Card>
   )
 }

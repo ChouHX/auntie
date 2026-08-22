@@ -10,7 +10,9 @@ import {
   ArrowLeft,
   CheckCircle,
   Check,
+  CircleNotch,
   ClipboardText,
+  ClockCountdown,
   CreditCard,
   ImageSquare,
   LockKey,
@@ -52,6 +54,7 @@ import { useCmsContent } from "@/hooks/use-cms-content"
 import { useI18n, type Language } from "@/lib/i18n"
 import { saveLocalPaymentOrder } from "@/lib/local-orders"
 import { getSiteLogo } from "@/lib/site-settings"
+import { isZellePaymentAwaitingReview } from "@/lib/zelle-payment-status"
 import type {
   CmsPaymentOrder,
   CmsPaymentOrderAmountItem,
@@ -153,13 +156,19 @@ type PaymentCopy = {
   zelleUploadTitle: string
   zelleUploadDescription: string
   zelleUploadButton: string
-  zelleUploadSuccess: string
+  zelleReviewTitle: string
+  zelleReviewDescription: string
+  zelleReviewSubmitted: string
+  zelleReviewChecking: string
+  zelleReviewReady: string
+  zelleReviewAutoRefresh: string
   zelleSelectedFile: string
   copyValue: string
   copiedValue: string
   successDescription: string
   successTitle: string
   viewReceipt: string
+  viewOrders: string
 }
 
 const paymentCopy: Record<Language, PaymentCopy> = {
@@ -238,7 +247,13 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     zelleUploadDescription:
       "请从手机相册选择刚刚保存的付款截图。点击后将打开系统图片选择器。",
     zelleUploadButton: "上传付款截图",
-    zelleUploadSuccess: "付款凭证已提交，正在进入订单评价。",
+    zelleReviewTitle: "付款凭证审核中",
+    zelleReviewDescription:
+      "我们已收到您的 Zelle 付款凭证。客服正在核对订单与到账信息，审核通过后将自动进入评价页面。",
+    zelleReviewSubmitted: "凭证已提交",
+    zelleReviewChecking: "客服核对中",
+    zelleReviewReady: "审核通过后评价",
+    zelleReviewAutoRefresh: "页面会自动更新，无需重复付款或再次提交截图。",
     zelleSelectedFile: "已选择",
     copyValue: "复制",
     copiedValue: "已复制",
@@ -246,6 +261,7 @@ const paymentCopy: Record<Language, PaymentCopy> = {
       "感谢您的付款。我们已收到您的服务款项。后续如有服务反馈或售后问题，可以通过客服联系我们。",
     successTitle: "支付成功",
     viewReceipt: "查看账单",
+    viewOrders: "查看订单",
   },
   en: {
     baseAmount: "Service total",
@@ -326,7 +342,14 @@ const paymentCopy: Record<Language, PaymentCopy> = {
     zelleUploadDescription:
       "Choose the payment screenshot from your phone’s photo library. Tapping the button opens the system image picker.",
     zelleUploadButton: "Upload payment screenshot",
-    zelleUploadSuccess: "Payment proof submitted. Opening your review.",
+    zelleReviewTitle: "Payment proof under review",
+    zelleReviewDescription:
+      "We received your Zelle payment proof. Support is matching it with your order and the incoming payment. Your review will open automatically after approval.",
+    zelleReviewSubmitted: "Proof submitted",
+    zelleReviewChecking: "Support review",
+    zelleReviewReady: "Review order",
+    zelleReviewAutoRefresh:
+      "This page updates automatically. Do not pay again or resubmit the screenshot.",
     zelleSelectedFile: "Selected",
     copyValue: "Copy",
     copiedValue: "Copied",
@@ -334,6 +357,7 @@ const paymentCopy: Record<Language, PaymentCopy> = {
       "Thank you for your payment. We have received your service payment. For service feedback or after-service questions, contact support.",
     successTitle: "Payment Successful",
     viewReceipt: "View receipt",
+    viewOrders: "View orders",
   },
 }
 
@@ -487,12 +511,18 @@ function PaymentPage() {
       activeRemoteOrder?.airwallexPaymentIntentId ||
       activeRemoteOrder?.airwallexPaymentUrl
     )
-    const shouldPoll =
+    const shouldPollAirwallex =
       hasCheckoutSession &&
+      !activeRemoteOrder?.zellePaymentProof &&
       activeRemoteOrder?.status !== "paid" &&
       activeRemoteOrder?.status !== "failed" &&
       activeRemoteOrder?.status !== "cancelled"
-    const shouldSync = shouldSyncOrder || shouldPoll
+    const shouldPollZelle = Boolean(
+      activeRemoteOrder?.zellePaymentProof &&
+      (activeRemoteOrder.status === "pending" ||
+        activeRemoteOrder.status === "unpaid")
+    )
+    const shouldSync = shouldSyncOrder || shouldPollAirwallex || shouldPollZelle
     let isSyncing = false
     let intervalId: number | undefined
 
@@ -509,14 +539,16 @@ function PaymentPage() {
 
       isSyncing = true
       try {
-        const result = await syncPaymentOrder(orderId)
+        const nextOrder = shouldPollZelle
+          ? await fetchPaymentOrder(orderId)
+          : (await syncPaymentOrder(orderId)).order
 
-        if (!isMounted || !result.order) {
+        if (!isMounted || !nextOrder) {
           return
         }
 
-        saveLocalPaymentOrder(result.order)
-        setRemoteOrder(toPaymentOrder(result.order, copy.paymentType))
+        saveLocalPaymentOrder(nextOrder)
+        setRemoteOrder(toPaymentOrder(nextOrder, copy.paymentType))
       } catch {
         // The checkout page should keep polling; transient sync failures should not
         // return the customer to an empty payment form.
@@ -535,7 +567,10 @@ function PaymentPage() {
 
     syncWhenVisible()
 
-    if (shouldPoll && typeof window !== "undefined") {
+    if (
+      (shouldPollAirwallex || shouldPollZelle) &&
+      typeof window !== "undefined"
+    ) {
       intervalId = window.setInterval(
         syncWhenVisible,
         paymentOrderSyncIntervalMs
@@ -556,6 +591,7 @@ function PaymentPage() {
     activeRemoteOrder?.airwallexPaymentIntentId,
     activeRemoteOrder?.airwallexPaymentUrl,
     activeRemoteOrder?.status,
+    activeRemoteOrder?.zellePaymentProof,
     copy.paymentType,
     orderId,
     shouldSyncOrder,
@@ -570,7 +606,10 @@ function PaymentPage() {
   }, [activeRemoteOrder?.status])
 
   useEffect(() => {
-    if (activeRemoteOrder?.status !== "paid" || !shouldSyncOrder) {
+    if (
+      activeRemoteOrder?.status !== "paid" ||
+      (!shouldSyncOrder && !activeRemoteOrder.zellePaymentProof)
+    ) {
       return
     }
 
@@ -607,14 +646,6 @@ function PaymentPage() {
               language={language}
               logoImage={logoImage}
               onOrderUpdate={handleOrderUpdate}
-              onZelleSubmitted={(submittedOrderId) => {
-                window.setTimeout(() => {
-                  navigate(
-                    `/review?order=${encodeURIComponent(submittedOrderId)}`,
-                    { replace: true }
-                  )
-                }, 900)
-              }}
               order={exclusiveOrder}
             />
           ) : (
@@ -643,7 +674,6 @@ function ExclusiveOrderCard({
   language,
   logoImage,
   onOrderUpdate,
-  onZelleSubmitted,
   order,
 }: {
   brandName: string
@@ -651,7 +681,6 @@ function ExclusiveOrderCard({
   language: Language
   logoImage: string
   onOrderUpdate: (order: CmsPaymentOrder) => void
-  onZelleSubmitted: (orderId: string) => void
   order: PaymentOrder
 }) {
   const [isReceiptOpen, setIsReceiptOpen] = useState(false)
@@ -704,6 +733,17 @@ function ExclusiveOrderCard({
       </DialogContent>
     </Dialog>
   )
+
+  if (isZellePaymentAwaitingReview(order)) {
+    return (
+      <ZelleReviewPendingPanel
+        brandName={brandName}
+        copy={copy}
+        logoImage={logoImage}
+        order={order}
+      />
+    )
+  }
 
   if (isPaid) {
     return (
@@ -841,8 +881,15 @@ function ExclusiveOrderCard({
                 copy={copy}
                 onBack={() => setPaymentMethod(null)}
                 onUploaded={(nextOrder) => onOrderUpdate(nextOrder)}
-                onSubmitted={() => onZelleSubmitted(order.orderId)}
-                order={order}
+                order={{
+                  ...order,
+                  amount: formatPaymentAmount(
+                    getBasePaymentAmount(order) + confirmedTipAmount,
+                    order.amount
+                  ),
+                  amountValue: getBasePaymentAmount(order) + confirmedTipAmount,
+                  tipAmount: confirmedTipAmount,
+                }}
               />
             ) : paymentMethod === "airwallex" ? (
               <AirwallexDropInPayment
@@ -870,6 +917,134 @@ function ExclusiveOrderCard({
       </div>
 
       {receiptDialog}
+    </div>
+  )
+}
+
+function ZelleReviewPendingPanel({
+  brandName,
+  copy,
+  logoImage,
+  order,
+}: {
+  brandName: string
+  copy: PaymentCopy
+  logoImage: string
+  order: PaymentOrder
+}) {
+  const steps = [
+    { label: copy.zelleReviewSubmitted, state: "complete" as const },
+    { label: copy.zelleReviewChecking, state: "active" as const },
+    { label: copy.zelleReviewReady, state: "pending" as const },
+  ]
+
+  return (
+    <div className="w-full max-w-2xl overflow-hidden bg-white md:rounded-2xl md:border md:border-slate-200 md:shadow-xl md:shadow-slate-300/25 dark:bg-slate-900 md:dark:border-white/10 md:dark:shadow-black/30">
+      <header className="flex items-center justify-between border-b border-slate-100 px-4 py-4 sm:px-6 dark:border-white/10">
+        <CheckoutBrandHeader
+          brandName={brandName}
+          logoImage={logoImage}
+          subtitle={copy.secureTitle}
+        />
+        <div className="flex size-9 items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-200">
+          <ClockCountdown size={19} weight="bold" />
+        </div>
+      </header>
+
+      <div className="px-4 py-7 sm:px-8 sm:py-9" aria-live="polite">
+        <div className="mx-auto max-w-lg text-center">
+          <div className="relative mx-auto flex size-14 items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-200">
+            <CircleNotch
+              className="absolute inset-0 size-14 motion-safe:animate-spin"
+              size={56}
+              weight="regular"
+            />
+            <ShieldCheck size={24} weight="fill" />
+          </div>
+          <h1 className="mt-4 text-xl font-semibold text-slate-950 dark:text-white">
+            {copy.zelleReviewTitle}
+          </h1>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600 dark:text-slate-300">
+            {copy.zelleReviewDescription}
+          </p>
+        </div>
+
+        <div className="mx-auto mt-6 max-w-lg">
+          <div className="grid grid-cols-3">
+            {steps.map((step, index) => (
+              <div
+                className="relative flex flex-col items-center"
+                key={step.label}
+              >
+                {index > 0 ? (
+                  <span
+                    className={`absolute top-3 right-1/2 h-0.5 w-full ${
+                      step.state === "pending"
+                        ? "bg-slate-200 dark:bg-white/10"
+                        : "bg-violet-500"
+                    }`}
+                  />
+                ) : null}
+                <span
+                  className={`relative z-10 flex size-6 items-center justify-center rounded-full text-xs ${
+                    step.state === "complete"
+                      ? "bg-emerald-500 text-white"
+                      : step.state === "active"
+                        ? "bg-violet-600 text-white ring-4 ring-violet-100 dark:ring-violet-400/15"
+                        : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  {step.state === "complete" ? (
+                    <Check size={13} weight="bold" />
+                  ) : (
+                    index + 1
+                  )}
+                </span>
+                <span
+                  className={`mt-2 px-1 text-center text-[11px] leading-4 ${
+                    step.state === "active"
+                      ? "font-medium text-violet-700 dark:text-violet-200"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 divide-y divide-slate-100 border-y border-slate-100 text-sm dark:divide-white/10 dark:border-white/10">
+            <div className="flex items-center justify-between gap-4 py-3">
+              <span className="text-slate-500 dark:text-slate-400">
+                {copy.fields.orderId}
+              </span>
+              <span className="font-medium text-slate-950 dark:text-white">
+                {order.orderId}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-3">
+              <span className="text-slate-500 dark:text-slate-400">
+                {copy.totalAmount}
+              </span>
+              <span className="font-semibold text-slate-950 dark:text-white">
+                {order.amount}
+              </span>
+            </div>
+          </div>
+
+          <p className="mt-4 text-center text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {copy.zelleReviewAutoRefresh}
+          </p>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <Button asChild className="h-10 rounded-lg" variant="outline">
+              <Link to="/orders">{copy.viewOrders}</Link>
+            </Button>
+            <Button asChild className="h-10 rounded-lg" variant="outline">
+              <Link to="/after-sales">{copy.contactSupport}</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1440,13 +1615,11 @@ function AirwallexDropInPayment({
 function ZellePaymentPanel({
   copy,
   onBack,
-  onSubmitted,
   onUploaded,
   order,
 }: {
   copy: PaymentCopy
   onBack: () => void
-  onSubmitted: () => void
   onUploaded: (order: CmsPaymentOrder) => void
   order: PaymentOrder
 }) {
@@ -1456,7 +1629,6 @@ function ZellePaymentPanel({
   )
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState("")
-  const [uploadSuccess, setUploadSuccess] = useState(false)
   const [uploaded, setUploaded] = useState(Boolean(order.zellePaymentProof))
   const paymentNote = `${order.orderId}`
   const selectedPreviewUrl = useMemo(
@@ -1483,7 +1655,6 @@ function ZellePaymentPanel({
   const selectScreenshot = (file: File | null) => {
     setSelectedScreenshot(file)
     setUploadError("")
-    setUploadSuccess(false)
   }
 
   const submitScreenshot = async () => {
@@ -1492,13 +1663,12 @@ function ZellePaymentPanel({
     try {
       const result = await uploadZellePaymentProof(
         order.orderId,
-        selectedScreenshot
+        selectedScreenshot,
+        order.tipAmount
       )
       onUploaded(result.order)
       setSelectedScreenshot(null)
       setUploaded(true)
-      setUploadSuccess(true)
-      onSubmitted()
     } catch (error) {
       setUploadError(
         error instanceof Error ? error.message : "付款凭证上传失败。"
@@ -1511,7 +1681,6 @@ function ZellePaymentPanel({
   const removeScreenshot = async () => {
     setIsUploading(true)
     setUploadError("")
-    setUploadSuccess(false)
     try {
       const result = await deleteZellePaymentProof(order.orderId)
       onUploaded(result.order)
@@ -1655,12 +1824,6 @@ function ZellePaymentPanel({
           {uploadError ? (
             <p className="mt-2 text-xs text-red-600 dark:text-red-300">
               {uploadError}
-            </p>
-          ) : null}
-          {uploadSuccess ? (
-            <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300">
-              <CheckCircle size={15} weight="fill" />
-              {copy.zelleUploadSuccess}
             </p>
           ) : null}
         </div>

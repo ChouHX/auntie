@@ -81,6 +81,25 @@ test("does not expire a paid order", () => {
   assert.equal(expirePaymentOrder(order, new Date(now)), order)
 })
 
+test("does not expire a Zelle order while its proof is under review", () => {
+  const order = createOrder({
+    createdAt: new Date(now - 48 * 60 * 60 * 1000).toISOString(),
+    gatewayStatus: "ZELLE_PROOF_PENDING",
+    paymentExpiresAt: new Date(now - 60 * 60 * 1000).toISOString(),
+    status: "pending",
+    zellePaymentProof: {
+      dataUrl: "data:image/png;base64,dGVzdA==",
+      fileName: "proof.png",
+      mimeType: "image/png",
+      uploadedAt: new Date(now - 60 * 60 * 1000).toISOString(),
+    },
+  })
+
+  assert.equal(isPaymentOrderExpired(order, now), false)
+  assert.equal(isPaymentSessionExpired(order, now), false)
+  assert.equal(expirePaymentOrder(order, new Date(now)), order)
+})
+
 function createOrder(
   overrides: Partial<CmsPaymentOrder> = {}
 ): CmsPaymentOrder {

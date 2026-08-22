@@ -7,12 +7,13 @@ import {
 } from "@/lib/sales-formula"
 import { createSalesDashboardResult } from "@/lib/sales-dashboard"
 import { persistOrderProfitCnyIfNeeded } from "@/lib/order-profit-exchange-store"
+import { captureOrderSalesCommission } from "@/lib/sales-commission"
 import type {
   SalesDashboardQuery,
   SalesOrderFinancePatch,
 } from "@/lib/sales-dashboard-types"
 import { listAllWecomCustomersForAnalytics } from "@/lib/wecom-store"
-import type { CmsFormulaTemplate } from "@/types/cms"
+import type { CmsFormulaTemplate, CmsPaymentOrder } from "@/types/cms"
 
 export const runtime = "nodejs"
 
@@ -85,49 +86,55 @@ export async function PATCH(request: NextRequest) {
               (member) => member.id === patch.salesMemberId
             )
           : null
-      const next = calculateOrderFinancials(
-        {
-          ...current,
-          amount: formatOrderAmount(paymentAmount, current.currency || "USD"),
-          amountBreakdown,
-          amountValue: paymentAmount,
-          baseAmountValue: Math.max(
-            0,
-            paymentAmount - Number(current.tipAmount || 0)
-          ),
-          customerRelationId:
-            patch.customerRelationId ?? current.customerRelationId,
-          customerType: patch.customerType ?? current.customerType,
-          dealStatus:
-            offlinePaid || current.status === "paid"
-              ? "converted"
-              : "unconverted",
-          financeNote: patch.financeNote ?? current.financeNote,
-          formulaTemplateIds: {
-            ...current.formulaTemplateIds,
-            ...patch.formulaTemplateIds,
-          },
-          otherCost: normalizeAmount(patch.otherCost, current.otherCost),
-          gatewayStatus: offlinePaid ? "OFFLINE_PAID" : current.gatewayStatus,
-          paidAt: offlinePaid
-            ? current.paidAt || new Date().toISOString()
-            : current.paidAt,
-          provider: offlinePaid ? "offline" : current.provider,
-          receivedAmount: paymentAmount,
-          salesMemberId: shouldUpdateSalesMember
-            ? (selectedSalesMember?.id ?? "")
-            : current.salesMemberId,
-          salesOwner: shouldUpdateSalesMember
-            ? (selectedSalesMember?.name ?? "")
-            : current.salesOwner,
-          salesOwnerSource: shouldUpdateSalesMember
-            ? selectedSalesMember
-              ? "manual"
-              : undefined
-            : current.salesOwnerSource,
-          status: offlinePaid ? "paid" : current.status,
-          updatedAt: new Date().toISOString(),
+      const orderForCalculation: CmsPaymentOrder = {
+        ...current,
+        amount: formatOrderAmount(paymentAmount, current.currency || "USD"),
+        amountBreakdown,
+        amountValue: paymentAmount,
+        baseAmountValue: Math.max(
+          0,
+          paymentAmount - Number(current.tipAmount || 0)
+        ),
+        customerRelationId:
+          patch.customerRelationId ?? current.customerRelationId,
+        customerType: patch.customerType ?? current.customerType,
+        dealStatus:
+          offlinePaid || current.status === "paid"
+            ? "converted"
+            : "unconverted",
+        financeNote: patch.financeNote ?? current.financeNote,
+        formulaTemplateIds: {
+          ...current.formulaTemplateIds,
+          ...patch.formulaTemplateIds,
         },
+        otherCost: normalizeAmount(patch.otherCost, current.otherCost),
+        gatewayStatus: offlinePaid ? "OFFLINE_PAID" : current.gatewayStatus,
+        paidAt: offlinePaid
+          ? current.paidAt || new Date().toISOString()
+          : current.paidAt,
+        provider: offlinePaid ? "offline" : current.provider,
+        receivedAmount: paymentAmount,
+        salesMemberId: shouldUpdateSalesMember
+          ? (selectedSalesMember?.id ?? "")
+          : current.salesMemberId,
+        salesOwner: shouldUpdateSalesMember
+          ? (selectedSalesMember?.name ?? "")
+          : current.salesOwner,
+        salesOwnerSource: shouldUpdateSalesMember
+          ? selectedSalesMember
+            ? "manual"
+            : undefined
+          : current.salesOwnerSource,
+        salesCommissionSnapshot:
+          shouldUpdateSalesMember &&
+          selectedSalesMember?.id !== current.salesMemberId
+            ? undefined
+            : current.salesCommissionSnapshot,
+        status: offlinePaid ? "paid" : current.status,
+        updatedAt: new Date().toISOString(),
+      }
+      const next = calculateOrderFinancials(
+        captureOrderSalesCommission(orderForCalculation, content.salesMembers),
         content
       )
       savedOrder = next

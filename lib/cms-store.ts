@@ -11,6 +11,10 @@ import { defaultCmsContent } from "@/data/cms-defaults"
 import { normalizeNotificationSettings } from "@/lib/form-notifications"
 import { logServerEvent } from "@/lib/server-log"
 import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
+import {
+  dedupePaymentOrdersById,
+  normalizePaymentOrderId,
+} from "@/lib/payment-order-collection"
 import type {
   CmsContent,
   CmsPaymentOrder,
@@ -23,20 +27,42 @@ type CmsDatabase = {
   close: () => void
   exec: (sql: string) => unknown
   prepare: (sql: string) => {
+    all: (...params: unknown[]) => unknown[]
     get: (...params: unknown[]) => unknown
     run: (...params: unknown[]) => unknown
   }
+}
+
+type CmsUploadCollection = "blog" | "gallery" | "pages" | "reviews"
+
+type CmsUploadRow = {
+  collection: CmsUploadCollection
+  data: Uint8Array
+  filename: string
+  mime_type: string
 }
 
 type CmsContentRow = {
   content_json: string
 }
 
-type DatabaseSyncConstructor = new (filename: string) => CmsDatabase
+type DatabaseSyncConstructor = new (
+  filename: string,
+  options?: { readOnly?: boolean }
+) => CmsDatabase
 
 const cmsSqliteFile =
   process.env.CMS_SQLITE_FILE ??
   path.join(/* turbopackIgnore: true */ process.cwd(), "data", "cms.sqlite")
+
+const cmsBackupMaxBytes = 100 * 1024 * 1024
+const cmsUploadCollections: CmsUploadCollection[] = [
+  "blog",
+  "gallery",
+  "pages",
+  "reviews",
+]
+const cmsUploadExtensions = new Set([".gif", ".jpg", ".jpeg", ".png", ".webp"])
 const adminToken = process.env.ADMIN_SESSION_TOKEN ?? "local-admin-token"
 const defaultAdminPassword = "admin123"
 const defaultAdminPasswordSalt = "auntie-chen-default-admin-v1"
@@ -44,6 +70,9 @@ const legacyDefaultRecipientEmail = "autiechen@gmail.com"
 
 let writeQueue: Promise<unknown> = Promise.resolve()
 let databaseSyncPromise: Promise<DatabaseSyncConstructor> | null = null
+let sqliteBackupPromise: Promise<
+  (source: CmsDatabase, filename: string) => Promise<number>
+> | null = null
 
 function withRuntimeDefaults(content: CmsContent): CmsContent {
   const contactPage = content.contactPage ?? defaultCmsContent.contactPage
@@ -72,7 +101,8 @@ function withRuntimeDefaults(content: CmsContent): CmsContent {
     ...member,
     accountUsername: member.accountUsername?.trim().toLocaleLowerCase() ?? "",
     authVersion:
-      Number.isInteger(Number(member.authVersion)) && Number(member.authVersion) > 0
+      Number.isInteger(Number(member.authVersion)) &&
+      Number(member.authVersion) > 0
         ? Number(member.authVersion)
         : 1,
     commissionAdjustment: normalizeSignedFinanceAmount(
@@ -104,12 +134,14 @@ function withRuntimeDefaults(content: CmsContent): CmsContent {
     }
   })
   const financialContent = { formulaTemplates, salesMembers, teamMembers }
-  const paymentOrders = (content.paymentOrders ?? []).map((order) => {
-    const normalized = normalizePaymentOrder(order, paymentSettings)
-    return normalized.status === "paid" && !normalized.calculationSnapshot
-      ? calculateOrderFinancialsSafely(normalized, financialContent)
-      : normalized
-  })
+  const paymentOrders = dedupePaymentOrdersById(
+    (content.paymentOrders ?? []).map((order) => {
+      const normalized = normalizePaymentOrder(order, paymentSettings)
+      return normalized.status === "paid" && !normalized.calculationSnapshot
+        ? calculateOrderFinancialsSafely(normalized, financialContent)
+        : normalized
+    })
+  )
 
   return {
     ...content,
@@ -211,6 +243,18 @@ function normalizePaymentOrder(
         : normalizeExchangeRate(order.profitExchangeRateToCny),
     receivedAmount,
     salesCommission: normalizeFinanceAmount(order.salesCommission),
+    salesCommissionSnapshot: order.salesCommissionSnapshot
+      ? {
+          capturedAt: order.salesCommissionSnapshot.capturedAt ?? "",
+          commissionAdjustment: normalizeSignedFinanceAmount(
+            order.salesCommissionSnapshot.commissionAdjustment
+          ),
+          commissionPercentage: normalizePercentage(
+            order.salesCommissionSnapshot.commissionPercentage
+          ),
+          salesMemberId: order.salesCommissionSnapshot.salesMemberId ?? "",
+        }
+      : undefined,
     salesMemberId: order.salesMemberId ?? "",
     salesOwner: order.salesOwner ?? "",
     serviceAddress: order.serviceAddress ?? "",
@@ -446,9 +490,259 @@ async function openCmsDatabase() {
       content_json TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
+    `)
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS cms_uploads (
+      collection TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      data BLOB NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (collection, filename)
+    )
   `)
 
   return database
+}
+
+async function saveCmsUploadAsset(
+  collection: CmsUploadCollection,
+  filename: string,
+  mimeType: string,
+  data: Uint8Array
+) {
+  return enqueueCmsWrite(async () => {
+    const database = await openCmsDatabase()
+    try {
+      database
+        .prepare(
+          `
+            INSERT INTO cms_uploads (collection, filename, mime_type, data, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(collection, filename) DO UPDATE SET
+              mime_type = excluded.mime_type,
+              data = excluded.data
+          `
+        )
+        .run(
+          collection,
+          filename,
+          mimeType,
+          Buffer.from(data),
+          new Date().toISOString()
+        )
+    } finally {
+      database.close()
+    }
+  })
+}
+
+async function syncUploadDirectoryToDatabase() {
+  return enqueueCmsWrite(async () => {
+    const database = await openCmsDatabase()
+    try {
+      const insert = database.prepare(
+        `
+          INSERT INTO cms_uploads (collection, filename, mime_type, data, created_at)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(collection, filename) DO UPDATE SET
+            mime_type = excluded.mime_type,
+            data = excluded.data
+        `
+      )
+
+      for (const collection of cmsUploadCollections) {
+        const uploadDir = path.join(
+          process.cwd(),
+          "public",
+          "uploads",
+          collection
+        )
+        if (!fs.existsSync(uploadDir)) continue
+
+        for (const entry of fs.readdirSync(uploadDir, {
+          withFileTypes: true,
+        })) {
+          if (!entry.isFile()) continue
+          const extension = path.extname(entry.name).toLowerCase()
+          if (!cmsUploadExtensions.has(extension)) continue
+          const filePath = path.join(uploadDir, entry.name)
+          const data = fs.readFileSync(filePath)
+          insert.run(
+            collection,
+            entry.name,
+            getUploadMimeType(extension),
+            data,
+            new Date().toISOString()
+          )
+        }
+      }
+    } finally {
+      database.close()
+    }
+  })
+}
+
+async function restoreUploadsFromDatabase() {
+  const database = await openCmsDatabase()
+  try {
+    const rows = database
+      .prepare("SELECT collection, filename, mime_type, data FROM cms_uploads")
+      .all() as CmsUploadRow[]
+
+    for (const collection of cmsUploadCollections) {
+      const uploadDir = path.join(
+        process.cwd(),
+        "public",
+        "uploads",
+        collection
+      )
+      fs.rmSync(uploadDir, { force: true, recursive: true })
+      fs.mkdirSync(uploadDir, { recursive: true })
+    }
+
+    for (const row of rows) {
+      if (!cmsUploadCollections.includes(row.collection)) continue
+      const filename = path.basename(row.filename)
+      if (filename !== row.filename) continue
+      const uploadDir = path.join(
+        process.cwd(),
+        "public",
+        "uploads",
+        row.collection
+      )
+      fs.writeFileSync(path.join(uploadDir, filename), Buffer.from(row.data))
+    }
+  } finally {
+    database.close()
+  }
+}
+
+function getUploadMimeType(extension: string) {
+  return extension === ".gif"
+    ? "image/gif"
+    : extension === ".png"
+      ? "image/png"
+      : extension === ".webp"
+        ? "image/webp"
+        : "image/jpeg"
+}
+
+async function backupCmsDatabase() {
+  await writeQueue.catch(() => null)
+  await syncUploadDirectoryToDatabase()
+  const database = await openCmsDatabase()
+  const tempFile = `${cmsSqliteFile}.backup-${randomBytes(12).toString("hex")}`
+
+  try {
+    const backup = await loadSqliteBackup()
+
+    await backup(database, tempFile)
+    const backupData = fs.readFileSync(tempFile)
+    if (backupData.byteLength > cmsBackupMaxBytes) {
+      throw new Error("数据库备份文件超过大小限制。")
+    }
+
+    return backupData
+  } finally {
+    database.close()
+    fs.rmSync(tempFile, { force: true })
+  }
+}
+
+async function restoreCmsDatabase(backupData: Uint8Array) {
+  if (
+    backupData.byteLength === 0 ||
+    backupData.byteLength > cmsBackupMaxBytes
+  ) {
+    throw new Error("备份文件为空或超过大小限制。")
+  }
+
+  await writeQueue.catch(() => null)
+  await validateCmsBackup(backupData)
+
+  const databaseDirectory = path.dirname(cmsSqliteFile)
+  fs.mkdirSync(databaseDirectory, { recursive: true })
+  const tempFile = `${cmsSqliteFile}.restore-${randomBytes(12).toString("hex")}`
+
+  try {
+    fs.writeFileSync(tempFile, backupData, { flag: "wx" })
+    await validateCmsBackup(fs.readFileSync(tempFile))
+    fs.rmSync(`${cmsSqliteFile}-wal`, { force: true })
+    fs.rmSync(`${cmsSqliteFile}-shm`, { force: true })
+    fs.renameSync(tempFile, cmsSqliteFile)
+    await restoreUploadsFromDatabase()
+  } finally {
+    fs.rmSync(tempFile, { force: true })
+  }
+}
+
+async function validateCmsBackup(backupData: Uint8Array) {
+  const sqliteHeader = Buffer.from(backupData.subarray(0, 16)).toString("ascii")
+  if (sqliteHeader !== "SQLite format 3\u0000") {
+    throw new Error("备份文件不是有效的 SQLite 数据库。")
+  }
+
+  const tempFile = `${cmsSqliteFile}.validate-${randomBytes(12).toString("hex")}`
+  fs.writeFileSync(tempFile, backupData, { flag: "wx" })
+
+  try {
+    const DatabaseSync = await loadDatabaseSync()
+    const database = new DatabaseSync(tempFile, { readOnly: true })
+    try {
+      const integrity = database.prepare("PRAGMA integrity_check").get() as {
+        integrity_check?: unknown
+      }
+      if (integrity.integrity_check !== "ok") {
+        throw new Error("备份文件完整性校验失败。")
+      }
+
+      const tables = database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+        )
+        .all() as Array<{ name: string }>
+      const allowedTables = new Set([
+        "cms_content",
+        "cms_uploads",
+        "wecom_customers",
+        "wecom_sync_settings",
+        "wecom_tag_colors",
+      ])
+      if (tables.some((table) => !allowedTables.has(table.name))) {
+        throw new Error("备份文件包含不支持的数据表。")
+      }
+
+      const row = database
+        .prepare("SELECT content_json FROM cms_content WHERE id = 1")
+        .get() as { content_json?: unknown } | undefined
+      if (typeof row?.content_json !== "string") {
+        throw new Error("备份文件缺少 CMS 主数据。")
+      }
+
+      const content = JSON.parse(row.content_json) as {
+        paymentOrders?: unknown
+      }
+      if (!content || typeof content !== "object") {
+        throw new Error("备份文件中的 CMS 数据格式无效。")
+      }
+      if (
+        content.paymentOrders !== undefined &&
+        !Array.isArray(content.paymentOrders)
+      ) {
+        throw new Error("备份文件中的订单数据格式无效。")
+      }
+    } finally {
+      database.close()
+    }
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error("备份文件中的 CMS 数据不是有效 JSON。")
+    }
+    throw error
+  } finally {
+    fs.rmSync(tempFile, { force: true })
+  }
 }
 
 async function loadDatabaseSync() {
@@ -463,9 +757,22 @@ function loadNodeSqlite() {
   const runtimeImport = new Function(
     "specifier",
     "return import(specifier)"
-  ) as (specifier: string) => Promise<{ DatabaseSync: unknown }>
+  ) as (specifier: string) => Promise<{
+    DatabaseSync: unknown
+    backup: (source: CmsDatabase, filename: string) => Promise<number>
+  }>
 
   return runtimeImport("node:sqlite")
+}
+
+async function loadSqliteBackup() {
+  sqliteBackupPromise ??= loadNodeSqlite().then((module) => {
+    if (typeof module.backup !== "function") {
+      throw new Error("当前 Node.js 运行时不支持 SQLite 在线备份。")
+    }
+    return module.backup
+  })
+  return sqliteBackupPromise
 }
 
 function toPublicContent(content: CmsContent): CmsContent {
@@ -542,13 +849,6 @@ function computeTeamMemberRatings(
       completedCount: assignedOrders.length,
     }
   })
-}
-
-function normalizePaymentOrderId(value: string) {
-  return value
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
 }
 
 function findPaymentOrder(content: CmsContent, orderId: string) {
@@ -675,11 +975,16 @@ function sortByOrder(
 
 export {
   changeAdminPassword,
+  backupCmsDatabase,
   createAdminToken,
   findPaymentOrder,
   isAdminToken,
   normalizePaymentOrderId,
   readCmsContent,
+  restoreCmsDatabase,
+  restoreUploadsFromDatabase,
+  saveCmsUploadAsset,
+  syncUploadDirectoryToDatabase,
   toPublicContent,
   verifyAdminCredentials,
   updateCmsContent,

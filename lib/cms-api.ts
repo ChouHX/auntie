@@ -294,9 +294,14 @@ async function updateSalesOrderFinance(
   })
 }
 
-async function uploadZellePaymentProof(orderId: string, file: File) {
+async function uploadZellePaymentProof(
+  orderId: string,
+  file: File,
+  tipAmount = 0
+) {
   const formData = new FormData()
   formData.append("file", file)
+  formData.append("tipAmount", String(tipAmount))
   return uploadRequest<{ order: CmsPaymentOrder }>(
     `/api/payment-orders/${encodeURIComponent(orderId)}/zelle-proof`,
     { body: formData, method: "POST" }
@@ -353,6 +358,25 @@ async function saveAdminContent(token: string, content: CmsContent) {
     body: JSON.stringify(content),
     headers: createAuthHeaders(token),
     method: "PUT",
+  })
+}
+
+async function downloadAdminBackup(token: string) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/backup`, {
+    headers: createAuthHeaders(token),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw createApiRequestError(data, response.status, "Backup export failed")
+  }
+  return response.blob()
+}
+
+async function importAdminBackup(token: string, file: Blob) {
+  return uploadRequest<{ ok: boolean }>("/api/admin/backup", {
+    body: file,
+    headers: createAuthHeaders(token),
+    method: "POST",
   })
 }
 
@@ -763,6 +787,7 @@ export {
   deleteAdminAuntie,
   deleteAdminBlogPosts,
   deleteAdminPaymentOrder,
+  downloadAdminBackup,
   fetchAdminContent,
   fetchAdminPaymentRuntimeConfig,
   fetchAdminSectionContent,
@@ -779,6 +804,7 @@ export {
   fetchSalesDashboard,
   getStoredAdminToken,
   isApiRequestError,
+  importAdminBackup,
   loginAdmin,
   saveAdminContent,
   saveAdminContentSection,

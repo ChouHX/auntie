@@ -98,12 +98,120 @@ test("计算阿姨薪资、学员提成和公司利润", () => {
   )
   assert.equal(order.auntieSalary, 140)
   assert.equal(order.salesCommission, 13)
+  assert.deepEqual(
+    {
+      commissionAdjustment: order.salesCommissionSnapshot?.commissionAdjustment,
+      commissionPercentage: order.salesCommissionSnapshot?.commissionPercentage,
+      salesMemberId: order.salesCommissionSnapshot?.salesMemberId,
+    },
+    {
+      commissionAdjustment: 5,
+      commissionPercentage: 4,
+      salesMemberId: "sales-1",
+    }
+  )
   assert.equal(order.orderProfit, 27)
   assert.equal(
     order.calculationSnapshot?.formulaVersions.orderProfit?.version,
     1
   )
 })
+
+test("销售比例变化后历史订单仍使用原有分成快照", () => {
+  const now = new Date().toISOString()
+  const original = calculateOrderFinancials(
+    createSalesOrder(now),
+    createSalesContent(now, 4, 5)
+  )
+  const recalculated = calculateOrderFinancials(
+    original,
+    createSalesContent(now, 8, 10)
+  )
+
+  assert.equal(original.salesCommission, 13)
+  assert.equal(recalculated.salesCommission, 13)
+  assert.equal(recalculated.salesCommissionSnapshot?.commissionPercentage, 4)
+  assert.equal(recalculated.salesCommissionSnapshot?.commissionAdjustment, 5)
+})
+
+test("更换订单所属销售后采用新销售的当前分成规则", () => {
+  const now = new Date().toISOString()
+  const original = calculateOrderFinancials(
+    createSalesOrder(now),
+    createSalesContent(now, 4, 5)
+  )
+  const reassigned = calculateOrderFinancials(
+    {
+      ...original,
+      salesMemberId: "sales-2",
+      salesOwner: "销售 B",
+    },
+    {
+      ...createSalesContent(now, 4, 5),
+      salesMembers: [
+        ...createSalesContent(now, 4, 5).salesMembers,
+        {
+          commissionAdjustment: 2,
+          commissionPercentage: 10,
+          createdAt: now,
+          id: "sales-2",
+          name: "销售 B",
+          status: "active",
+          studentTag: "学员 B",
+          updatedAt: now,
+        },
+      ],
+    }
+  )
+
+  assert.equal(reassigned.salesCommission, 22)
+  assert.equal(reassigned.salesCommissionSnapshot?.salesMemberId, "sales-2")
+  assert.equal(reassigned.salesCommissionSnapshot?.commissionPercentage, 10)
+})
+
+function createSalesOrder(now: string) {
+  return {
+    amount: "$200",
+    amountValue: 200,
+    contact: "1234567",
+    createdAt: now,
+    customerName: "客户",
+    note: "",
+    orderId: "ORD-SALES-SNAPSHOT",
+    receivedAmount: 200,
+    salesMemberId: "sales-1",
+    salesOwner: "销售 A",
+    serviceAddress: "地址",
+    serviceArea: "城市",
+    serviceDate: "2026-08-23",
+    serviceType: "日常清洁",
+    status: "paid" as const,
+    updatedAt: now,
+  } satisfies CmsPaymentOrder
+}
+
+function createSalesContent(
+  now: string,
+  commissionPercentage: number,
+  commissionAdjustment: number
+) {
+  return {
+    formulaTemplates: [],
+    salesMembers: [
+      {
+        commissionAdjustment,
+        commissionPercentage,
+        createdAt: now,
+        id: "sales-1",
+        name: "销售 A",
+        status: "active" as const,
+        studentTag: "学员 A",
+        updatedAt: now,
+      },
+    ],
+    teamMembers: [],
+  }
+}
 
 test("按服务时长和时薪计算阿姨薪资并保留固定调整", () => {
   const now = new Date().toISOString()

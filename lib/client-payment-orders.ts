@@ -8,6 +8,7 @@ type CachedPaymentOrder = {
   createdAt: string
   currency?: string
   customerName: string
+  hasZellePaymentProof: boolean
   orderId: string
   serviceArea: string
   serviceDate: string
@@ -116,6 +117,10 @@ function toCachedPaymentOrder(
     createdAt: order.createdAt || now,
     currency: order.currency,
     customerName: order.customerName ?? "",
+    hasZellePaymentProof:
+      "zellePaymentProof" in order
+        ? Boolean(order.zellePaymentProof)
+        : (order as CachedPaymentOrder).hasZellePaymentProof,
     orderId: order.orderId,
     serviceArea: order.serviceArea ?? "",
     serviceDate: order.serviceDate ?? "",
@@ -153,6 +158,7 @@ function normalizeCachedPaymentOrder(
     createdAt: String(candidate.createdAt ?? ""),
     currency: candidate.currency,
     customerName: String(candidate.customerName ?? ""),
+    hasZellePaymentProof: candidate.hasZellePaymentProof === true,
     orderId: String(candidate.orderId),
     serviceArea: String(candidate.serviceArea ?? ""),
     serviceDate: String(candidate.serviceDate ?? ""),

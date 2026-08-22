@@ -4,7 +4,7 @@ import path from "node:path"
 
 import type { NextRequest } from "next/server"
 
-import { isAdminToken } from "@/lib/cms-store"
+import { isAdminToken, saveCmsUploadAsset } from "@/lib/cms-store"
 
 const allowedCollections = new Set(["blog", "gallery", "pages", "reviews"])
 const allowedExtensions = new Set([".gif", ".jpeg", ".jpg", ".png", ".webp"])
@@ -90,10 +90,23 @@ export async function POST(
       .webp({ quality: 80 })
       .toFile(thumbPath)
     thumbSrc = `/uploads/${collection}/${thumbFilename}`
+    await saveCmsUploadAsset(
+      collection as "blog" | "gallery" | "pages" | "reviews",
+      thumbFilename,
+      "image/webp",
+      await fs.readFile(thumbPath)
+    )
   } catch (err) {
     // Sharp not available or resize failed — continue without thumbnail
     console.warn("[uploads] thumbnail generation failed:", err)
   }
+
+  await saveCmsUploadAsset(
+    collection as "blog" | "gallery" | "pages" | "reviews",
+    filename,
+    file.type,
+    data
+  )
 
   return Response.json(
     {
