@@ -28,6 +28,7 @@ import { defaultCmsContent } from "@/data/cms-defaults"
 import { resetCmsContentCache, useCmsContent } from "@/hooks/use-cms-content"
 import { getSiteLogo } from "@/lib/site-settings"
 import { cn } from "@/lib/utils"
+import { isPaymentOrderCompleted } from "@/lib/auntie-assignment"
 import type { CmsContent, CmsPaymentOrder } from "@/types/cms"
 
 import {
@@ -291,6 +292,15 @@ function AdminPage() {
 
   async function deleteOrder(orderId: string) {
     if (!token) {
+      return null
+    }
+
+    const currentOrder = (content?.paymentOrders ?? []).find(
+      (order) => order.orderId === orderId
+    )
+
+    if (currentOrder && isPaymentOrderCompleted(currentOrder)) {
+      toast.error("已完成订单只能查看详情，不能删除。")
       return null
     }
 

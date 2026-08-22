@@ -1372,7 +1372,7 @@ function FinanceDialog({
   return (
     <Dialog onOpenChange={handleDialogOpenChange} open={open}>
       <DialogContent
-        className="max-h-[min(90vh,760px)] max-w-2xl gap-3 overflow-hidden p-4 sm:p-5"
+        className="h-[calc(100dvh-1rem)] max-h-[760px] max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden p-4 sm:h-[min(90dvh,760px)] sm:p-5"
         onInteractOutside={(event) => {
           if (previewIndex !== null) {
             event.preventDefault()
@@ -1392,7 +1392,7 @@ function FinanceDialog({
           </DialogDescription>
         </DialogHeader>
         {row ? (
-          <div className="min-h-0 overflow-y-auto pr-1">
+          <div className="min-h-0 touch-pan-y overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
             <section>
               <div className="mb-2 text-xs font-semibold text-foreground">
                 财务录入

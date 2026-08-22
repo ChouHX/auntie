@@ -587,6 +587,15 @@ export function OrderAdmin({
   }
 
   async function deleteOrder(orderId: string) {
+    const currentOrder = (content.paymentOrders ?? []).find(
+      (order) => order.orderId === orderId
+    )
+
+    if (currentOrder && isPaymentOrderCompleted(currentOrder)) {
+      toast.error("已完成订单只能查看详情，不能删除。")
+      return
+    }
+
     if (
       !(await confirmAction({
         confirmLabel: "删除",
