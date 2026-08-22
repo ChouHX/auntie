@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     return new Response(backup, {
       headers: {
         "cache-control": "no-store",
-        "content-disposition": `attachment; filename="auntie-chen-backup-${date}.sqlite"`,
+        "content-disposition": `attachment; filename="auntie-chen-backup-${date}.db"`,
         "content-length": String(backup.byteLength),
         "content-type": "application/vnd.sqlite3",
       },

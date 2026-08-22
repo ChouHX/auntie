@@ -648,7 +648,7 @@ export function SiteSettingsAdmin({
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
-      link.download = `auntie-chen-backup-${new Date().toISOString().slice(0, 10)}.sqlite`
+      link.download = `auntie-chen-backup-${new Date().toISOString().slice(0, 10)}.db`
       document.body.appendChild(link)
       link.click()
       link.remove()
