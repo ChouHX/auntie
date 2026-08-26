@@ -183,6 +183,7 @@ function formatBookingRequest(order: CmsPaymentOrder) {
     `服务地区：${order.serviceArea || "无"}`,
     `清洁类型：${order.serviceType || "无"}`,
     `房屋情况：${home}`,
+    `房屋面积：${formatOptionalArea(order.homeArea)}`,
     `是否有宠物：${order.hasPets ? "是" : "否"}`,
     `期望服务日期：${order.serviceDate || "无"}`,
     `详细地址：${order.serviceAddress || "无"}`,
@@ -193,6 +194,10 @@ function formatBookingRequest(order: CmsPaymentOrder) {
     `联系电话：${order.contact || "无"}`,
     "请客服协助确认服务安排。",
   ].join("\n")
+}
+
+function formatOptionalArea(value: string | undefined) {
+  return String(value ?? "").trim() || "无"
 }
 
 function formatBookingEstimate(order: CmsPaymentOrder) {

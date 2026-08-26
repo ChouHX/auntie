@@ -87,6 +87,7 @@ test("formats the copied request with duration and estimated pricing", () => {
     estimatedAmountValue: 438,
     estimatedCurrency: "USD",
     hasPets: true,
+    homeArea: "920 sq ft",
     note: "请提前联系",
     orderId: "ORD20260803TEST",
     serviceAddress: "123 Main St",
@@ -100,6 +101,7 @@ test("formats the copied request with duration and estimated pricing", () => {
   })
 
   assert.match(text, /房屋情况：Studio（开间）\/ 1 卫/)
+  assert.match(text, /房屋面积：920 sq ft/)
   assert.match(text, /附加项目：烤箱内部清洁/)
   assert.match(text, /预估价格: 4小时-\$438/)
 })

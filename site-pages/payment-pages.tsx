@@ -607,6 +607,19 @@ function PaymentPage() {
 
   useEffect(() => {
     if (
+      !activeRemoteOrder ||
+      !isZellePaymentAwaitingReview(activeRemoteOrder)
+    ) {
+      return
+    }
+
+    navigate(`/review?order=${encodeURIComponent(activeRemoteOrder.orderId)}`, {
+      replace: true,
+    })
+  }, [activeRemoteOrder, navigate])
+
+  useEffect(() => {
+    if (
       activeRemoteOrder?.status !== "paid" ||
       (!shouldSyncOrder && !activeRemoteOrder.zellePaymentProof)
     ) {
@@ -621,9 +634,9 @@ function PaymentPage() {
   return (
     <section
       data-scroll-reveal="false"
-      className="min-h-screen bg-slate-100 py-0 transition-colors duration-300 md:py-6 dark:bg-slate-950"
+      className="min-h-screen bg-transparent pt-[60px] md:pt-[72px]"
     >
-      <div className="mx-auto flex min-h-screen max-w-6xl items-start justify-center px-0 md:min-h-[calc(100vh-3rem)] md:items-center md:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-[calc(100svh-60px)] max-w-6xl items-start justify-center px-0 md:min-h-[calc(100svh-72px)] md:items-center md:px-6 md:py-6 lg:px-8">
         {orderId ? (
           isLoadingOrder && !exclusiveOrder ? (
             <PaymentProcessingState
@@ -719,6 +732,7 @@ function ExclusiveOrderCard({
         </DialogHeader>
         {paidOrder ? (
           <OrderSummary
+            animateItems={false}
             className="max-w-none border-0 shadow-none"
             copy={copy}
             includeIdentity
@@ -946,14 +960,14 @@ function ZelleReviewPendingPanel({
           logoImage={logoImage}
           subtitle={copy.secureTitle}
         />
-        <div className="flex size-9 items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-200">
+        <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
           <ClockCountdown size={19} weight="bold" />
         </div>
       </header>
 
       <div className="px-4 py-7 sm:px-8 sm:py-9" aria-live="polite">
         <div className="mx-auto max-w-lg text-center">
-          <div className="relative mx-auto flex size-14 items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-200">
+          <div className="relative mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
             <CircleNotch
               className="absolute inset-0 size-14 motion-safe:animate-spin"
               size={56}
@@ -981,7 +995,7 @@ function ZelleReviewPendingPanel({
                     className={`absolute top-3 right-1/2 h-0.5 w-full ${
                       step.state === "pending"
                         ? "bg-slate-200 dark:bg-white/10"
-                        : "bg-violet-500"
+                        : "bg-primary"
                     }`}
                   />
                 ) : null}
@@ -990,7 +1004,7 @@ function ZelleReviewPendingPanel({
                     step.state === "complete"
                       ? "bg-emerald-500 text-white"
                       : step.state === "active"
-                        ? "bg-violet-600 text-white ring-4 ring-violet-100 dark:ring-violet-400/15"
+                        ? "bg-primary text-primary-foreground ring-4 ring-primary/15"
                         : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
                   }`}
                 >
@@ -1003,7 +1017,7 @@ function ZelleReviewPendingPanel({
                 <span
                   className={`mt-2 px-1 text-center text-[11px] leading-4 ${
                     step.state === "active"
-                      ? "font-medium text-violet-700 dark:text-violet-200"
+                      ? "font-medium text-primary"
                       : "text-slate-500 dark:text-slate-400"
                   }`}
                 >
@@ -2539,12 +2553,14 @@ function formatCheckoutAddress(order: PaymentOrder) {
 }
 
 function OrderSummary({
+  animateItems = true,
   className,
   copy,
   includeIdentity = false,
   order,
   variant = "default",
 }: {
+  animateItems?: boolean
   className?: string
   copy: PaymentCopy
   includeIdentity?: boolean
@@ -2578,6 +2594,7 @@ function OrderSummary({
 
   return (
     <PaymentSummary
+      animateItems={animateItems}
       className={className}
       methodLabel={copy.paymentMethodLabel}
       paymentMethod={{
@@ -2598,6 +2615,7 @@ function OrderSummary({
 }
 
 type PaymentSummaryProps = {
+  animateItems?: boolean
   className?: string
   items: {
     label: string
@@ -2614,6 +2632,7 @@ type PaymentSummaryProps = {
 }
 
 function PaymentSummary({
+  animateItems = true,
   className,
   items,
   methodLabel,
@@ -2661,14 +2680,14 @@ function PaymentSummary({
       </div>
       <div className="p-4">
         <motion.div
-          animate="visible"
+          animate={animateItems ? "visible" : undefined}
           className="space-y-3"
-          initial="hidden"
-          variants={containerVariants}
+          initial={animateItems ? "hidden" : false}
+          variants={animateItems ? containerVariants : undefined}
         >
           <motion.div
             className="flex items-center justify-between gap-4"
-            variants={itemVariants}
+            variants={animateItems ? itemVariants : undefined}
           >
             <span className={labelClasses}>{methodLabel}</span>
             <div className="flex min-w-0 items-center gap-2">
@@ -2681,7 +2700,7 @@ function PaymentSummary({
             <motion.div
               className="flex items-start justify-between gap-4"
               key={item.label}
-              variants={itemVariants}
+              variants={animateItems ? itemVariants : undefined}
             >
               <span className={labelClasses}>{item.label}</span>
               <span className={`${valueClasses} ${item.valueClassName ?? ""}`}>

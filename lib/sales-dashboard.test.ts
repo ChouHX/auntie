@@ -131,6 +131,44 @@ test("joins customers, filters rows and keeps currency summaries separate", () =
   assert.ok(ordersOnly.rows.every((row: { orderId: string }) => row.orderId))
 })
 
+test("sorts linked customer orders by order creation time", () => {
+  const olderCustomer = {
+    ...customer,
+    addTime: "2025-01-01T00:00:00.000Z",
+  }
+  const content = {
+    formulaTemplates: [],
+    paymentOrders: [
+      order({
+        createdAt: "2026-08-20T08:00:00.000Z",
+        customerRelationId: olderCustomer.relationId,
+        orderId: "NEW-ORDER",
+      }),
+      order({
+        createdAt: "2026-08-10T08:00:00.000Z",
+        customerName: "另一位客户",
+        orderId: "OLD-ORDER",
+      }),
+    ],
+    salesMembers: [],
+    teamMembers: [],
+  } as unknown as CmsContent
+
+  const result = createSalesDashboardResult(content, [olderCustomer], {
+    filters: [],
+    logic: "all",
+    ordersOnly: true,
+    page: 1,
+    pageSize: 20,
+  })
+
+  assert.deepEqual(
+    result.rows.map((row: { orderId: string }) => row.orderId),
+    ["NEW-ORDER", "OLD-ORDER"]
+  )
+  assert.equal(result.rows[0].addTime, "2026-08-20T08:00:00.000Z")
+})
+
 test("does not treat the WeCom follow user as a sales owner", () => {
   const content = {
     formulaTemplates: [],

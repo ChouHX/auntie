@@ -229,6 +229,7 @@ function normalizePaymentOrder(
       : {},
     gatewayStatus: order.gatewayStatus ?? "",
     hasPets: order.hasPets === true,
+    homeArea: String(order.homeArea ?? "").trim() || undefined,
     orderProfit: normalizeFinanceAmount(order.orderProfit),
     orderProfitCny:
       order.orderProfitCny === undefined

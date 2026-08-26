@@ -111,7 +111,7 @@ function createOrderRow(
       ? ""
       : order.salesOwner
   return {
-    addTime: customer?.addTime || order.createdAt,
+    addTime: order.createdAt || customer?.addTime || "",
     auntieId: order.assignedAuntieId || "",
     auntieName:
       auntieMap.get(order.assignedAuntieId || "") || customer?.auntie || "",

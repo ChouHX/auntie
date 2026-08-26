@@ -220,6 +220,7 @@ type CmsPaymentOrder = {
   failureReason?: string
   gatewayStatus?: string
   hasPets?: boolean
+  homeArea?: string
   financeNote?: string
   formulaTemplateIds?: Partial<Record<CmsFormulaTarget, string>>
   calculationSnapshot?: CmsOrderCalculationSnapshot

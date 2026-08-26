@@ -131,12 +131,12 @@ function OrderCard({ order }: { order: CachedPaymentOrder }) {
   return (
     <Card className="overflow-hidden rounded-lg border-border/80 shadow-sm">
       <CardContent className="p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5">
-          <div className="min-w-0">
+        <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2 sm:py-2.5">
+          <div className="flex min-w-0 items-center gap-2 sm:block">
             <div className="truncate text-xs font-semibold text-foreground">
               {order.orderId}
             </div>
-            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <div className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground sm:mt-0.5 sm:gap-1.5 sm:text-[11px]">
               <CalendarDays className="size-3.5 shrink-0" />
               <span className="truncate">
                 {order.serviceDate || dict.ordersPage.serviceDate}
@@ -156,16 +156,26 @@ function OrderCard({ order }: { order: CachedPaymentOrder }) {
           </Badge>
         </div>
 
-        <div className="px-3 py-2.5">
+        <div className="px-3 py-2 sm:py-2.5">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[11px] text-muted-foreground">
-              {dict.ordersPage.amount}
-            </span>
-            <span className="text-lg font-semibold tracking-tight text-foreground">
-              {order.amount || order.currency || "-"}
-            </span>
+            <div className="flex min-w-0 items-baseline gap-2 sm:flex-1 sm:justify-between">
+              <span className="shrink-0 text-[10px] text-muted-foreground sm:text-[11px]">
+                {dict.ordersPage.amount}
+              </span>
+              <span className="truncate text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                {order.amount || order.currency || "-"}
+              </span>
+            </div>
+            <OrderAction
+              actionLabel={actionLabel}
+              canReviewZelleOrder={canReviewZelleOrder}
+              className="sm:hidden"
+              isActive={isActive}
+              isZelleReviewPending={isZelleReviewPending}
+              orderHref={orderHref}
+            />
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+          <div className="mt-1.5 grid grid-cols-3 gap-x-2 text-[11px] sm:mt-2 sm:grid-cols-2 sm:gap-x-3 sm:gap-y-2 sm:text-xs">
             <OrderMeta
               icon={<ReceiptText className="size-3.5" />}
               label={dict.ordersPage.serviceType}
@@ -184,26 +194,52 @@ function OrderCard({ order }: { order: CachedPaymentOrder }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/25 px-3 py-2">
-          <Button
-            asChild
-            className="h-8 shrink-0 px-3 text-xs"
-            variant={isActive ? "default" : "outline"}
-          >
-            <Link to={orderHref}>
-              {isZelleReviewPending ? (
-                <Clock3 data-icon="inline-start" />
-              ) : canReviewZelleOrder ? (
-                <Star data-icon="inline-start" />
-              ) : (
-                <CreditCard data-icon="inline-start" />
-              )}
-              {actionLabel}
-            </Link>
-          </Button>
+        <div className="hidden items-center justify-end gap-3 border-t border-border/70 bg-muted/25 px-3 py-2 sm:flex">
+          <OrderAction
+            actionLabel={actionLabel}
+            canReviewZelleOrder={canReviewZelleOrder}
+            isActive={isActive}
+            isZelleReviewPending={isZelleReviewPending}
+            orderHref={orderHref}
+          />
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function OrderAction({
+  actionLabel,
+  canReviewZelleOrder,
+  className,
+  isActive,
+  isZelleReviewPending,
+  orderHref,
+}: {
+  actionLabel: string
+  canReviewZelleOrder: boolean
+  className?: string
+  isActive: boolean
+  isZelleReviewPending: boolean
+  orderHref: string
+}) {
+  return (
+    <Button
+      asChild
+      className={cn("h-9 shrink-0 px-2.5 text-xs sm:h-8 sm:px-3", className)}
+      variant={isActive ? "default" : "outline"}
+    >
+      <Link to={orderHref}>
+        {isZelleReviewPending ? (
+          <Clock3 data-icon="inline-start" />
+        ) : canReviewZelleOrder ? (
+          <Star data-icon="inline-start" />
+        ) : (
+          <CreditCard data-icon="inline-start" />
+        )}
+        {actionLabel}
+      </Link>
+    </Button>
   )
 }
 

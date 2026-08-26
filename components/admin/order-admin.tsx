@@ -136,6 +136,7 @@ function createPaymentOrderDraft(defaultCurrency = "USD"): CmsPaymentOrder {
     customerName: "",
     gatewayStatus: "",
     hasPets: false,
+    homeArea: undefined,
     note: "",
     orderId: "",
     provider: "airwallex",
@@ -171,6 +172,7 @@ function normalizePaymentOrderDraft(order: CmsPaymentOrder): CmsPaymentOrder {
     currency: normalizeAdminPaymentCurrency(order.currency),
     customerName: order.customerName.trim(),
     gatewayStatus: order.gatewayStatus?.trim() ?? "",
+    homeArea: String(order.homeArea ?? "").trim() || undefined,
     note: order.note.trim(),
     orderId:
       order.orderId
@@ -197,6 +199,11 @@ function parsePaymentAmount(value: string) {
   )
 
   return Number.isFinite(amount) ? amount : 0
+}
+
+function isPositiveNumber(value: unknown) {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0
 }
 
 function getOrderBaseAmount(order: CmsPaymentOrder) {
@@ -507,50 +514,60 @@ export function OrderAdmin({
       (member) => member.id === normalized.assignedAuntieId
     )
 
-    if (
-      assignedAuntie?.salaryMode === "hourly" &&
-      Number(normalized.serviceDurationHours) <= 0
-    ) {
-      setOrderError("所选阿姨按时薪计算，请填写大于 0 的服务时长。")
-      return
-    }
+    const invalidFields: string[] = []
+    const hasPositiveDuration = isPositiveNumber(
+      normalized.serviceDurationHours
+    )
 
-    if (
-      selectedService &&
-      !selectedService.quoteRequired &&
-      Number(selectedService.basePrice) > 0 &&
-      Number(normalized.serviceDurationHours) <= 0
-    ) {
-      setOrderError("该服务按小时计费，请填写大于 0 的服务时长。")
-      return
+    if (!normalized.customerName) invalidFields.push("客户姓名不能为空")
+    if (!isValidBookingPhone(normalized.contact, editingCountryCode)) {
+      invalidFields.push("联系电话格式不正确")
     }
-
-    if (
-      !normalized.orderId ||
-      !normalized.customerName ||
-      !normalized.serviceArea ||
-      !normalized.serviceAddress ||
-      !normalized.serviceType ||
-      !normalized.serviceDate ||
-      (isCreatingBooking && normalized.serviceDate < getLocalDateKey()) ||
-      !isValidBookingPhone(normalized.contact, editingCountryCode) ||
-      (!normalized.studio && Number(normalized.bedrooms) < 1) ||
-      Number(normalized.bathrooms) < 1 ||
-      (normalized.status !== "awaiting_confirmation" &&
-        (!normalized.amount || Number(normalized.amountValue) <= 0))
+    if (!normalized.serviceArea) invalidFields.push("请选择服务城市 / 区域")
+    if (!normalized.serviceAddress) invalidFields.push("详细地址不能为空")
+    if (!normalized.serviceType) invalidFields.push("请选择清洁需求")
+    if (!normalized.serviceDate) {
+      invalidFields.push("请选择服务日期")
+    } else if (
+      isCreatingBooking &&
+      normalized.serviceDate < getLocalDateKey()
     ) {
-      setOrderError(
-        "请填写客户姓名、当地联系电话、服务城市、房型、详细地址、清洁需求和服务日期。待客服确认的预约单无需填写金额。"
-      )
-      return
+      invalidFields.push("服务日期不能早于今天")
     }
-
+    if (!normalized.studio && !isPositiveNumber(normalized.bedrooms)) {
+      invalidFields.push("卧室数量必须大于 0")
+    }
+    if (!isPositiveNumber(normalized.bathrooms)) {
+      invalidFields.push("卫生间数量必须大于 0")
+    }
+    if (
+      (assignedAuntie?.salaryMode === "hourly" ||
+        (selectedService &&
+          !selectedService.quoteRequired &&
+          Number(selectedService.basePrice) > 0)) &&
+      !hasPositiveDuration
+    ) {
+      invalidFields.push("服务时长必须大于 0")
+    }
+    if (
+      normalized.status !== "awaiting_confirmation" &&
+      (!normalized.amount || !isPositiveNumber(normalized.amountValue))
+    ) {
+      invalidFields.push("订单金额必须大于 0")
+    }
     if (
       normalized.status !== "awaiting_confirmation" &&
       !existingEditingOrder &&
       !normalized.amountBreakdown?.length
     ) {
-      setOrderError("请至少添加一项订单金额明细。")
+      invalidFields.push("请至少添加一项订单金额明细")
+    }
+
+    if (invalidFields.length) {
+      setOrderError("")
+      toast.error("表单内容不合法", {
+        description: invalidFields.join("；"),
+      })
       return
     }
 
@@ -882,34 +899,43 @@ export function OrderAdmin({
               </div>
               {!editingOrder.studio ? (
                 <FormField label="卧室数量" required>
-                  <Input
+                  <NumberInput
+                    allowEmpty
                     className="h-9 rounded-md"
                     disabled={isEditingCompletedOrder}
-                    min="1"
-                    onChange={(event) =>
-                      updateEditingOrder({
-                        bedrooms: Number(event.target.value),
-                      })
+                    min="0.1"
+                    onEmpty={() => updateEditingOrder({ bedrooms: undefined })}
+                    onValueChange={(bedrooms) =>
+                      updateEditingOrder({ bedrooms })
                     }
-                    step="1"
-                    type="number"
-                    value={editingOrder.bedrooms ?? 1}
+                    step="0.1"
+                    value={editingOrder.bedrooms}
                   />
                 </FormField>
               ) : null}
-              <FormField label="卫生间数量" required>
+              <FormField label="房屋面积">
                 <Input
                   className="h-9 rounded-md"
                   disabled={isEditingCompletedOrder}
-                  min="1"
                   onChange={(event) =>
-                    updateEditingOrder({
-                      bathrooms: Number(event.target.value),
-                    })
+                    updateEditingOrder({ homeArea: event.target.value })
+                  }
+                  placeholder="例如 85.5 ㎡ 或 920 sq ft"
+                  value={editingOrder.homeArea ?? ""}
+                />
+              </FormField>
+              <FormField label="卫生间数量" required>
+                <NumberInput
+                  allowEmpty
+                  className="h-9 rounded-md"
+                  disabled={isEditingCompletedOrder}
+                  min="1"
+                  onEmpty={() => updateEditingOrder({ bathrooms: undefined })}
+                  onValueChange={(bathrooms) =>
+                    updateEditingOrder({ bathrooms })
                   }
                   step="1"
-                  type="number"
-                  value={editingOrder.bathrooms ?? 1}
+                  value={editingOrder.bathrooms}
                 />
               </FormField>
               <FormField label="宠物情况">

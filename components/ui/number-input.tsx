@@ -8,13 +8,17 @@ type NumberInputProps = Omit<
   ComponentProps<typeof Input>,
   "defaultValue" | "onChange" | "value"
 > & {
+  allowEmpty?: boolean
+  onEmpty?: () => void
   onValueChange: (value: number) => void
   value?: number
 }
 
 function NumberInput({
+  allowEmpty = false,
   min,
   onBlur,
+  onEmpty,
   onValueChange,
   value,
   ...props
@@ -27,6 +31,12 @@ function NumberInput({
       inputMode="decimal"
       min={min}
       onBlur={(event) => {
+        if (allowEmpty && event.currentTarget.value.trim() === "") {
+          setDraft("")
+          onEmpty?.()
+          onBlur?.(event)
+          return
+        }
         const normalized = normalizeDraft(event.currentTarget.value, min)
         setDraft(formatValue(normalized))
         onValueChange(normalized)
@@ -35,7 +45,10 @@ function NumberInput({
       onChange={(event) => {
         const nextDraft = event.target.value
         setDraft(nextDraft)
-        if (nextDraft.trim() === "") return
+        if (nextDraft.trim() === "") {
+          if (allowEmpty) onEmpty?.()
+          return
+        }
         const number = Number(nextDraft)
         if (Number.isFinite(number)) onValueChange(number)
       }}

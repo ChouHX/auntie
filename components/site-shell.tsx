@@ -15,24 +15,12 @@ function SiteShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isAdmin =
     pathname?.startsWith("/admin") || pathname?.startsWith("/sales")
-  const isCheckout = pathname === "/checkout" || pathname === "/pay"
   const isHome = pathname === "/"
 
   if (isAdmin) {
     return (
       <I18nProvider>
         <div className="min-h-screen bg-background text-foreground">
-          {children}
-        </div>
-      </I18nProvider>
-    )
-  }
-
-  if (isCheckout) {
-    return (
-      <I18nProvider>
-        <div className="min-h-screen bg-slate-50 text-slate-950 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
-          <SiteHeadSync />
           {children}
         </div>
       </I18nProvider>

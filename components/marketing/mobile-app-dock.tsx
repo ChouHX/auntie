@@ -36,6 +36,7 @@ function MobileAppDock() {
   )
   const isOrderRoute =
     pathname.startsWith("/orders") ||
+    pathname.startsWith("/checkout") ||
     pathname.startsWith("/pay") ||
     pathname.startsWith("/review")
   const shouldShowOrderPrompt = isPromptVisible && activeOrder && !isOrderRoute
@@ -58,7 +59,10 @@ function MobileAppDock() {
     {
       href: "/orders",
       icon: ReceiptText,
-      isActive: pathname.startsWith("/orders") || pathname.startsWith("/pay"),
+      isActive:
+        pathname.startsWith("/orders") ||
+        pathname.startsWith("/checkout") ||
+        pathname.startsWith("/pay"),
       label: dict.mobileApp.tabs.orders,
     },
     {
@@ -131,9 +135,8 @@ function MobileAppDock() {
         setOrders(
           cachedOrders.filter((order) => !isActiveCachedPaymentOrder(order))
         )
-        void reconcileCachedPaymentOrders(
-          fetchPaymentOrder,
-          (error) => isApiRequestError(error, 404)
+        void reconcileCachedPaymentOrders(fetchPaymentOrder, (error) =>
+          isApiRequestError(error, 404)
         ).then((nextOrders) => {
           if (!cancelled) {
             setOrders(nextOrders)

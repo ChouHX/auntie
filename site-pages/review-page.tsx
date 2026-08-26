@@ -184,7 +184,7 @@ function ReviewPage() {
   }
 
   return (
-    <section className="bg-slate-50 pt-[calc(60px+1.5rem)] pb-12 transition-colors duration-300 sm:pt-[calc(60px+2rem)] sm:pb-16 md:pt-[calc(72px+2rem)] dark:bg-slate-950">
+    <section className="min-h-[calc(100svh-60px)] bg-transparent pt-[calc(60px+1.5rem)] pb-12 sm:pt-[calc(60px+2rem)] sm:pb-16 md:min-h-[calc(100svh-72px)] md:pt-[calc(72px+2rem)]">
       <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
         {displayState === "loading" ? (
           <ReviewLoadingCard />
@@ -311,7 +311,7 @@ function ReviewPaymentPendingCard({
         className="px-5 py-8 text-center sm:px-8 sm:py-10"
         aria-live="polite"
       >
-        <div className="relative mx-auto flex size-14 items-center justify-center rounded-full bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-200">
+        <div className="relative mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
           <CircleNotch
             className="absolute inset-0 size-14 motion-safe:animate-spin"
             size={56}
@@ -339,14 +339,14 @@ function ReviewPaymentPendingCard({
               {index > 0 ? (
                 <span
                   className={`absolute top-3 right-1/2 h-0.5 w-full ${
-                    active ? "bg-violet-500" : "bg-slate-200 dark:bg-white/10"
+                    active ? "bg-primary" : "bg-slate-200 dark:bg-white/10"
                   }`}
                 />
               ) : null}
               <span
                 className={`relative z-10 flex size-6 items-center justify-center rounded-full ${
                   active
-                    ? "bg-violet-600 text-white"
+                    ? "bg-primary text-primary-foreground"
                     : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
                 }`}
               >
