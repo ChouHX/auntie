@@ -7,6 +7,7 @@ const booking = await import("./booking-config.ts")
 const {
   calculateBookingEstimate,
   createConfiguredOrderAmountBreakdown,
+  formatAdminBookingRequest,
   formatBookingRequest,
   getBookingConfigForArea,
   isValidBookingPhone,
@@ -104,6 +105,44 @@ test("formats the copied request with duration and estimated pricing", () => {
   assert.match(text, /房屋面积：920 sq ft/)
   assert.match(text, /附加项目：烤箱内部清洁/)
   assert.match(text, /预估价格: 4小时-\$438/)
+})
+
+test("formats the admin copy with a blank line every 5 lines and the customer reminder footer", () => {
+  const text = formatAdminBookingRequest({
+    addOnItems: [{ id: "oven", label: "烤箱内部清洁", price: 25 }],
+    amount: "",
+    bathrooms: 1,
+    bedrooms: 0,
+    contact: "+1 213 555 0123",
+    createdAt: "2026-08-03T00:00:00.000Z",
+    customerName: "陈女士",
+    estimatedAmountValue: 438,
+    estimatedCurrency: "USD",
+    hasPets: true,
+    homeArea: "920 sq ft",
+    note: "请提前联系",
+    orderId: "ORD20260803TEST",
+    serviceAddress: "123 Main St",
+    serviceArea: "洛杉矶 · 美国",
+    serviceDate: "2026-08-10",
+    serviceDurationHours: 4,
+    serviceType: "日常清洁",
+    status: "awaiting_confirmation",
+    studio: true,
+    updatedAt: "2026-08-03T00:00:00.000Z",
+  })
+
+  const paragraphs = text.split("\n\n")
+  assert.equal(paragraphs.length, 4)
+  assert.deepEqual(
+    paragraphs.map((paragraph) => paragraph.split("\n").length),
+    [5, 5, 4, 1]
+  )
+  assert.ok(!paragraphs[0].includes("房屋面积"))
+  assert.ok(paragraphs[1].startsWith("房屋面积"))
+  assert.ok(paragraphs[2].startsWith("客户备注"))
+  assert.equal(paragraphs[3], "客户空了看一下以上信息是否无误")
+  assert.ok(!text.includes("请客服协助确认服务安排"))
 })
 
 test("validates local phone number length for configured countries", () => {

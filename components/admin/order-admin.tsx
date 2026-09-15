@@ -42,7 +42,7 @@ import {
 import {
   createConfiguredOrderAmountBreakdown,
   createOrderAddOnSnapshot,
-  formatBookingRequest,
+  formatAdminBookingRequest,
   getBookingConfigForArea,
   isValidBookingPhone,
   mergeAddOnsIntoAmountBreakdown,
@@ -428,7 +428,7 @@ export function OrderAdmin({
 
   async function copyBookingInfo(order: CmsPaymentOrder) {
     try {
-      await navigator.clipboard.writeText(formatBookingRequest(order))
+      await navigator.clipboard.writeText(formatAdminBookingRequest(order))
       toast.success("预约信息已复制")
     } catch {
       toast.error("复制失败，请手动复制")

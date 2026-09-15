@@ -168,7 +168,9 @@ function mergeAddOnsIntoAmountBreakdown(
   return [...normalizedManualItems, ...addOnItems]
 }
 
-function formatBookingRequest(order: CmsPaymentOrder) {
+const adminBookingFooter = "客户空了看一下以上信息是否无误"
+
+function getBookingRequestLines(order: CmsPaymentOrder) {
   const home = order.studio
     ? `Studio（开间）/ ${formatRoomCount(order.bathrooms)} 卫`
     : `${formatRoomCount(order.bedrooms)} 卧 / ${formatRoomCount(order.bathrooms)} 卫`
@@ -192,8 +194,25 @@ function formatBookingRequest(order: CmsPaymentOrder) {
     `预估价格: ${formatBookingEstimate(order)}`,
     `联系人：${order.customerName || "无"}`,
     `联系电话：${order.contact || "无"}`,
-    "请客服协助确认服务安排。",
-  ].join("\n")
+  ]
+}
+
+function formatBookingRequest(order: CmsPaymentOrder) {
+  return [...getBookingRequestLines(order), "请客服协助确认服务安排。"].join(
+    "\n"
+  )
+}
+
+// Admin copy format: blank line between every 5 lines, plus the footer on its
+// own paragraph so the customer-facing reminder reads as a closing note.
+function formatAdminBookingRequest(order: CmsPaymentOrder) {
+  const lines = getBookingRequestLines(order)
+  const groups: string[] = []
+  for (let index = 0; index < lines.length; index += 5) {
+    groups.push(lines.slice(index, index + 5).join("\n"))
+  }
+
+  return [...groups, adminBookingFooter].join("\n\n")
 }
 
 function formatOptionalArea(value: string | undefined) {
@@ -273,6 +292,7 @@ export {
   calculateBookingEstimate,
   createConfiguredOrderAmountBreakdown,
   createOrderAddOnSnapshot,
+  formatAdminBookingRequest,
   formatBookingRequest,
   getBookingConfigForArea,
   isValidBookingPhone,
