@@ -1,11 +1,21 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import type { CmsFormulaTemplate, CmsPaymentOrder } from "@/types/cms"
+import type {
+  CmsFormulaField,
+  CmsFormulaTemplate,
+  CmsPaymentOrder,
+} from "@/types/cms"
 
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
 const formula = await import("./sales-formula.ts")
-const { calculateOrderFinancials, evaluateFormulaTokens } = formula
+const {
+  calculateOrderFinancials,
+  createDefaultOrderProfitTokens,
+  evaluateFormulaTokens,
+  formatFormulaTokens,
+  upgradeOrderProfitTemplate,
+} = formula
 
 test("evaluates fields, parentheses and percentages", () => {
   const result = evaluateFormulaTokens(
@@ -117,6 +127,67 @@ test("计算阿姨薪资、学员提成和公司利润", () => {
   )
 })
 
+test("默认利润模板为 (实收金额 - 其他成本) - 阿姨薪资 - 学员提成", () => {
+  assert.equal(
+    formatFormulaTokens(createDefaultOrderProfitTokens()),
+    "( 实收金额（不含小费） - 其他成本 ) - 阿姨薪资 - 学员提成"
+  )
+
+  const now = new Date().toISOString()
+  const { content, order: source } = createDistributableScenario(now, {
+    otherCost: 40,
+    receivedAmount: 520,
+    tipAmount: 60,
+  })
+  const order = calculateOrderFinancials(source, content)
+
+  // (520 - 40) - 408 - 43.2 = 28.8
+  assert.equal(order.orderProfit, 28.8)
+})
+
+test("旧版未分组利润模板自动升级为分组写法，自定义模板保持不变", () => {
+  const legacy: CmsFormulaTemplate = {
+    createdAt: "",
+    enabled: true,
+    id: "formula-order-profit",
+    name: "默认订单利润",
+    target: "orderProfit",
+    tokens: [
+      { type: "field", value: "receivedAmount" },
+      { type: "operator", value: "-" },
+      { type: "field", value: "auntieSalary" },
+      { type: "operator", value: "-" },
+      { type: "field", value: "otherCost" },
+      { type: "operator", value: "-" },
+      { type: "field", value: "salesCommission" },
+    ],
+    updatedAt: "",
+    version: 1,
+  }
+  const upgraded = upgradeOrderProfitTemplate(legacy)
+  assert.deepEqual(upgraded.tokens, createDefaultOrderProfitTokens())
+  // 幂等：已升级的模板不会被再次改写
+  assert.deepEqual(
+    upgradeOrderProfitTemplate(upgraded).tokens,
+    createDefaultOrderProfitTokens()
+  )
+
+  const fields: Record<CmsFormulaField, number> = {
+    auntieSalary: 408,
+    otherCost: 40,
+    paymentAmount: 580,
+    receivedAmount: 520,
+    salesCommission: 43.2,
+  }
+  const resolve = (field: CmsFormulaField) => fields[field]
+  const grouped = evaluateFormulaTokens(upgraded.tokens, resolve)
+  assert.equal(grouped, evaluateFormulaTokens(legacy.tokens, resolve))
+  assert.equal(grouped, 28.8)
+
+  const customized = { ...legacy, tokens: [...legacy.tokens].reverse() }
+  assert.deepEqual(upgradeOrderProfitTemplate(customized), customized)
+})
+
 test("小费不计入阿姨薪资与学员提成的比例计算", () => {
   const now = new Date().toISOString()
   // 客户支付 580（含 60 小费），油费补贴 40 计入其他成本。
@@ -163,15 +234,7 @@ function createDistributableScenario(
           id: "profit",
           name: "利润",
           target: "orderProfit" as const,
-          tokens: [
-            { type: "field" as const, value: "receivedAmount" as const },
-            { type: "operator" as const, value: "-" as const },
-            { type: "field" as const, value: "auntieSalary" as const },
-            { type: "operator" as const, value: "-" as const },
-            { type: "field" as const, value: "otherCost" as const },
-            { type: "operator" as const, value: "-" as const },
-            { type: "field" as const, value: "salesCommission" as const },
-          ],
+          tokens: createDefaultOrderProfitTokens(),
           updatedAt: now,
           version: 1,
         },

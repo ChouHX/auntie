@@ -10,7 +10,10 @@ import {
 import { defaultCmsContent } from "@/data/cms-defaults"
 import { normalizeNotificationSettings } from "@/lib/form-notifications"
 import { logServerEvent } from "@/lib/server-log"
-import { calculateOrderFinancialsSafely } from "@/lib/sales-formula"
+import {
+  calculateOrderFinancialsSafely,
+  upgradeOrderProfitTemplate,
+} from "@/lib/sales-formula"
 import {
   dedupePaymentOrdersById,
   normalizePaymentOrderId,
@@ -91,9 +94,11 @@ function withRuntimeDefaults(content: CmsContent): CmsContent {
     content.formulaTemplates ?? defaultCmsContent.formulaTemplates
   ).filter((template) => template.target === "orderProfit")
   const formulaTemplates = [
-    storedFormulaTemplates.find((template) => template.enabled) ??
-      storedFormulaTemplates[0] ??
-      defaultCmsContent.formulaTemplates[0],
+    upgradeOrderProfitTemplate(
+      storedFormulaTemplates.find((template) => template.enabled) ??
+        storedFormulaTemplates[0] ??
+        defaultCmsContent.formulaTemplates[0]
+    ),
   ]
   const salesMembers = (
     content.salesMembers ?? defaultCmsContent.salesMembers

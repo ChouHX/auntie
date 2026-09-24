@@ -21,6 +21,52 @@ const formulaTargetLabels: Record<CmsFormulaTarget, string> = {
   orderProfit: "公司利润",
 }
 
+/**
+ * 默认利润模板：(实收金额 - 其他成本) - 阿姨薪资 - 学员提成。
+ * 括号内即为阿姨薪资与学员提成的分成基数，保持三者同一口径。
+ */
+function createDefaultOrderProfitTokens(): CmsFormulaToken[] {
+  return [
+    { type: "paren", value: "(" },
+    { type: "field", value: "receivedAmount" },
+    { type: "operator", value: "-" },
+    { type: "field", value: "otherCost" },
+    { type: "paren", value: ")" },
+    { type: "operator", value: "-" },
+    { type: "field", value: "auntieSalary" },
+    { type: "operator", value: "-" },
+    { type: "field", value: "salesCommission" },
+  ]
+}
+
+// 旧版默认模板（未分组）：receivedAmount - auntieSalary - otherCost - salesCommission
+const legacyOrderProfitSignature = [
+  "field:receivedAmount",
+  "operator:-",
+  "field:auntieSalary",
+  "operator:-",
+  "field:otherCost",
+  "operator:-",
+  "field:salesCommission",
+].join("|")
+
+function formulaSignature(tokens: CmsFormulaToken[]) {
+  return tokens.map((token) => `${token.type}:${token.value}`).join("|")
+}
+
+/**
+ * 把旧版未分组的默认利润模板升级为分组写法。运算结果不变，仅调整结构；
+ * 只匹配旧默认序列，用户自定义的模板原样保留。
+ */
+function upgradeOrderProfitTemplate(
+  template: CmsFormulaTemplate
+): CmsFormulaTemplate {
+  if (formulaSignature(template.tokens) !== legacyOrderProfitSignature) {
+    return template
+  }
+  return { ...template, tokens: createDefaultOrderProfitTokens() }
+}
+
 const computedFields = new Set<CmsFormulaField>()
 
 function validateFormulaTokens(tokens: CmsFormulaToken[]) {
@@ -323,10 +369,12 @@ function roundMoney(value: number) {
 export {
   calculateOrderFinancials,
   calculateOrderFinancialsSafely,
+  createDefaultOrderProfitTokens,
   evaluateFormulaTokens,
   formatFormulaTokens,
   formulaFieldLabels,
   formulaTargetLabels,
+  upgradeOrderProfitTemplate,
   validateFormulaTokens,
   validateFormulaTemplateSet,
 }

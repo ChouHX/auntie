@@ -78,6 +78,7 @@ import {
 } from "@/lib/cms-api"
 import { ImagePreviewer } from "@/components/ui/image-previewer"
 import {
+  createDefaultOrderProfitTokens,
   formatFormulaTokens,
   formulaFieldLabels,
   validateFormulaTokens,
@@ -1936,15 +1937,7 @@ function FormulaEditorDialog({
 }
 
 function createDefaultProfitTokens(): CmsFormulaToken[] {
-  return [
-    { type: "field", value: "receivedAmount" },
-    { type: "operator", value: "-" },
-    { type: "field", value: "auntieSalary" },
-    { type: "operator", value: "-" },
-    { type: "field", value: "otherCost" },
-    { type: "operator", value: "-" },
-    { type: "field", value: "salesCommission" },
-  ]
+  return createDefaultOrderProfitTokens()
 }
 
 function createFilter(): SalesFilterCondition {
