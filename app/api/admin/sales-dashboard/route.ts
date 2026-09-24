@@ -86,15 +86,18 @@ export async function PATCH(request: NextRequest) {
               (member) => member.id === patch.salesMemberId
             )
           : null
+      // 小费 100% 归阿姨：baseAmountValue 与 receivedAmount 都按不含小费口径写入，
+      // 与历史订单保持一致（订单金额 340 / 小费 25 / 实收 315）。
+      const orderBaseAmountValue = Math.max(
+        0,
+        paymentAmount - Number(current.tipAmount || 0)
+      )
       const orderForCalculation: CmsPaymentOrder = {
         ...current,
         amount: formatOrderAmount(paymentAmount, current.currency || "USD"),
         amountBreakdown,
         amountValue: paymentAmount,
-        baseAmountValue: Math.max(
-          0,
-          paymentAmount - Number(current.tipAmount || 0)
-        ),
+        baseAmountValue: orderBaseAmountValue,
         customerRelationId:
           patch.customerRelationId ?? current.customerRelationId,
         customerType: patch.customerType ?? current.customerType,
@@ -113,7 +116,7 @@ export async function PATCH(request: NextRequest) {
           ? current.paidAt || new Date().toISOString()
           : current.paidAt,
         provider: offlinePaid ? "offline" : current.provider,
-        receivedAmount: paymentAmount,
+        receivedAmount: orderBaseAmountValue,
         salesMemberId: shouldUpdateSalesMember
           ? (selectedSalesMember?.id ?? "")
           : current.salesMemberId,

@@ -909,7 +909,7 @@ export function AuntieAdmin({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="percentage">
-                            按比例计算（基于订单金额）
+                            按比例计算（基于订单金额减小费与其他成本）
                           </SelectItem>
                           <SelectItem value="hourly">按时薪计算</SelectItem>
                         </SelectContent>
@@ -934,7 +934,7 @@ export function AuntieAdmin({
                     ) : (
                       <FormField
                         className="space-y-1.5"
-                        description="按订单金额计算的薪资比例。"
+                        description="按（订单金额 - 客户小费 - 其他成本）计算的薪资比例。"
                         label="阿姨薪资比例（%）"
                       >
                         <NumberInput

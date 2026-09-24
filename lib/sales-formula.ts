@@ -12,8 +12,8 @@ import * as salesCommissionRules from "./sales-commission.ts"
 const formulaFieldLabels: Record<CmsFormulaField, string> = {
   auntieSalary: "阿姨薪资",
   otherCost: "其他成本",
-  paymentAmount: "订单金额",
-  receivedAmount: "订单金额",
+  paymentAmount: "订单金额（含小费）",
+  receivedAmount: "实收金额（不含小费）",
   salesCommission: "学员提成",
 }
 
@@ -173,6 +173,12 @@ function calculateOrderFinancials(
   )
   const receivedAmount = normalizeNumber(order.receivedAmount)
   const otherCost = normalizeNumber(order.otherCost)
+  // 客户小费 100% 归阿姨，不参与比例分成，需先从订单金额中剔除。
+  const tipAmount = normalizeNumber(order.tipAmount)
+  // 分成基数 = 订单金额 - 客户小费 - 其他成本（油费补贴等）。
+  const distributableAmount = roundMoney(
+    Math.max(0, paymentAmount - tipAmount - otherCost)
+  )
   const auntie = content.teamMembers.find(
     (member) => member.id === order.assignedAuntieId
   )
@@ -210,13 +216,14 @@ function calculateOrderFinancials(
             0,
             (auntie?.salaryMode === "hourly"
               ? serviceDurationHours * salaryHourlyRate
-              : paymentAmount * (salaryPercentage / 100)) + salaryAdjustment
+              : distributableAmount * (salaryPercentage / 100)) +
+              salaryAdjustment
           )
         )
   const salesCommission = roundMoney(
     Math.max(
       0,
-      paymentAmount * (commissionPercentage / 100) + commissionAdjustment
+      distributableAmount * (commissionPercentage / 100) + commissionAdjustment
     )
   )
   const orderProfit = template
@@ -249,11 +256,13 @@ function calculateOrderFinancials(
         : {},
       inputs: {
         auntieSalary,
+        distributableAmount,
         otherCost,
         paymentAmount,
         receivedAmount,
         salesCommission,
         serviceDurationHours,
+        tipAmount,
       },
     },
     formulaTemplateIds: template ? { orderProfit: template.id } : {},

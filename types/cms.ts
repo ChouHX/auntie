@@ -178,11 +178,15 @@ type CmsOrderCalculationSnapshot = {
   >
   inputs: {
     auntieSalary: number
+    /** 分成基数：订单金额扣除其他成本后的可分配金额。 */
+    distributableAmount?: number
     otherCost: number
     paymentAmount: number
     receivedAmount: number
     salesCommission: number
     serviceDurationHours?: number
+    /** 客户小费，100% 归阿姨，不参与分成基数。 */
+    tipAmount?: number
   }
 }
 

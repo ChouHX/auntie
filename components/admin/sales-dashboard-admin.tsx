@@ -1466,6 +1466,7 @@ function FinanceDialog({
                 </FormField>
                 <FormField
                   className="space-y-1.5"
+                  description="不含客户小费；小费全额归阿姨，不参与薪资与提成计算。"
                   label={`其他成本（${row.currency}）`}
                 >
                   <NumberInput

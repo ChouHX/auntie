@@ -187,7 +187,7 @@ function normalizePaymentOrder(
     normalizePaymentAmountValue(order.amountValue, order.amount)
   const status = normalizePaymentOrderStatus(order.status)
   const receivedAmount = normalizeFinanceAmount(
-    order.receivedAmount ?? (status === "paid" ? storedAmountValue : 0)
+    order.receivedAmount ?? (status === "paid" ? storedBaseAmountValue : 0)
   )
   const amountValue =
     storedAmountValue || (status === "paid" ? receivedAmount : 0)

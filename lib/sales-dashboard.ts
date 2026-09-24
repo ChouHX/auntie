@@ -110,6 +110,8 @@ function createOrderRow(
       order.salesOwnerSource === "wecom_tag")
       ? ""
       : order.salesOwner
+  // 小费不参与分成，实收金额统一按不含小费口径回填。
+  const tipAmount = normalizeNumber(order.tipAmount)
   return {
     addTime: order.createdAt || customer?.addTime || "",
     auntieId: order.assignedAuntieId || "",
@@ -138,14 +140,15 @@ function createOrderRow(
     paymentAmount,
     paymentProvider: order.provider ?? "airwallex",
     receivedAmount: normalizeNumber(
-      order.receivedAmount ?? (order.status === "paid" ? paymentAmount : 0)
+      order.receivedAmount ??
+        (order.status === "paid" ? Math.max(0, paymentAmount - tipAmount) : 0)
     ),
     region: order.serviceArea || customer?.region || "",
     salesCommission: normalizeNumber(order.salesCommission),
     salesMemberId: tagSalesMember?.id || storedSalesMember?.id || "",
     salesOwner: tagSalesOwner || storedSalesOwner || "",
     serviceDate: order.serviceDate || "",
-    tipAmount: normalizeNumber(order.tipAmount),
+    tipAmount,
     zellePaymentProof: order.zellePaymentProof,
     supportPaymentProof: order.supportPaymentProof,
   }

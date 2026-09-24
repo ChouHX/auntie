@@ -96,8 +96,8 @@ test("计算阿姨薪资、学员提成和公司利润", () => {
       ],
     }
   )
-  assert.equal(order.auntieSalary, 140)
-  assert.equal(order.salesCommission, 13)
+  assert.equal(order.auntieSalary, 128)
+  assert.equal(order.salesCommission, 12.2)
   assert.deepEqual(
     {
       commissionAdjustment: order.salesCommissionSnapshot?.commissionAdjustment,
@@ -110,12 +110,120 @@ test("计算阿姨薪资、学员提成和公司利润", () => {
       salesMemberId: "sales-1",
     }
   )
-  assert.equal(order.orderProfit, 27)
+  assert.equal(order.orderProfit, 39.8)
   assert.equal(
     order.calculationSnapshot?.formulaVersions.orderProfit?.version,
     1
   )
 })
+
+test("小费不计入阿姨薪资与学员提成的比例计算", () => {
+  const now = new Date().toISOString()
+  // 客户支付 580（含 60 小费），油费补贴 40 计入其他成本。
+  const { content, order: source } = createDistributableScenario(now, {
+    otherCost: 40,
+    receivedAmount: 520,
+    tipAmount: 60,
+  })
+  const order = calculateOrderFinancials(source, content)
+
+  // 分成基数 = 580 - 60 小费 - 40 油费补贴 = 480
+  assert.equal(order.calculationSnapshot?.inputs.distributableAmount, 480)
+  assert.equal(order.calculationSnapshot?.inputs.tipAmount, 60)
+  assert.equal(order.auntieSalary, 408)
+  assert.equal(order.salesCommission, 43.2)
+  assert.equal(order.orderProfit, 28.8)
+})
+
+test("小费已计入其他成本时基数不会重复扣除", () => {
+  const now = new Date().toISOString()
+  // 客户支付 580，60 小费与 40 油费补贴一并记在「其他成本」。
+  const { content, order: source } = createDistributableScenario(now, {
+    otherCost: 100,
+    receivedAmount: 580,
+  })
+  const order = calculateOrderFinancials(source, content)
+
+  assert.equal(order.calculationSnapshot?.inputs.distributableAmount, 480)
+  assert.equal(order.auntieSalary, 408)
+  assert.equal(order.salesCommission, 43.2)
+  assert.equal(order.orderProfit, 28.8)
+})
+
+function createDistributableScenario(
+  now: string,
+  orderPatch: Partial<CmsPaymentOrder>
+) {
+  return {
+    content: {
+      formulaTemplates: [
+        {
+          createdAt: now,
+          enabled: true,
+          id: "profit",
+          name: "利润",
+          target: "orderProfit" as const,
+          tokens: [
+            { type: "field" as const, value: "receivedAmount" as const },
+            { type: "operator" as const, value: "-" as const },
+            { type: "field" as const, value: "auntieSalary" as const },
+            { type: "operator" as const, value: "-" as const },
+            { type: "field" as const, value: "otherCost" as const },
+            { type: "operator" as const, value: "-" as const },
+            { type: "field" as const, value: "salesCommission" as const },
+          ],
+          updatedAt: now,
+          version: 1,
+        },
+      ],
+      salesMembers: [
+        {
+          commissionAdjustment: 0,
+          commissionPercentage: 9,
+          createdAt: now,
+          id: "sales-1",
+          name: "学员 A",
+          status: "active" as const,
+          studentTag: "学员 A",
+          updatedAt: now,
+        },
+      ],
+      teamMembers: [
+        {
+          area: "",
+          avatar: "",
+          completedCount: 0,
+          id: "auntie-1",
+          name: "王阿姨",
+          rating: 0,
+          role: "保洁师",
+          salaryMode: "percentage" as const,
+          salaryPercentage: 85,
+          status: "available" as const,
+        },
+      ],
+    },
+    order: {
+      amount: "$580",
+      amountValue: 580,
+      assignedAuntieId: "auntie-1",
+      contact: "1234567",
+      createdAt: now,
+      customerName: "客户",
+      note: "",
+      orderId: "ORD-DISTRIBUTABLE",
+      salesMemberId: "sales-1",
+      salesOwner: "学员 A",
+      serviceAddress: "地址",
+      serviceArea: "洛杉矶 · 美国",
+      serviceDate: "2026-08-23",
+      serviceType: "日常清洁",
+      status: "paid" as const,
+      updatedAt: now,
+      ...orderPatch,
+    } as CmsPaymentOrder,
+  }
+}
 
 test("销售比例变化后历史订单仍使用原有分成快照", () => {
   const now = new Date().toISOString()
