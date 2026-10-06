@@ -6,7 +6,6 @@ const lifecycle = await import("./payment-order-lifecycle.ts")
 const {
   createPaymentOrderExpiry,
   expirePaymentOrder,
-  isPaymentOrderExpired,
   isPaymentSessionExpired,
 } = lifecycle
 import type { CmsPaymentOrder } from "@/types/cms"
@@ -17,24 +16,21 @@ test("creates a payment session expiry with a five-minute safety buffer", () => 
   assert.equal(createPaymentOrderExpiry(now), "2026-07-31T04:55:00.000Z")
 })
 
-test("keeps an unpaid order payable until its 24-hour deadline", () => {
+test("keeps an unpaid order payable", () => {
   const order = createOrder({
     createdAt: new Date(now - 23 * 60 * 60 * 1000).toISOString(),
   })
 
-  assert.equal(isPaymentOrderExpired(order, now), false)
   assert.equal(expirePaymentOrder(order, new Date(now)), order)
 })
 
-test("cancels an unpaid order after 24 hours", () => {
+test("keeps an advance booking payable after seven days", () => {
   const order = createOrder({
-    createdAt: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
   })
   const expired = expirePaymentOrder(order, new Date(now))
 
-  assert.equal(isPaymentOrderExpired(order, now), true)
-  assert.equal(expired.status, "cancelled")
-  assert.equal(expired.failureReason, "payment_timeout")
+  assert.equal(expired, order)
 })
 
 test("resets an expired payment session without cancelling the order", () => {
@@ -61,14 +57,14 @@ test("resets an expired payment session without cancelling the order", () => {
   assert.equal(expired.paymentExpiresAt, undefined)
 })
 
-test("the 24-hour order deadline takes priority over session renewal", () => {
+test("renews expired sessions for bookings older than seven days", () => {
   const order = createOrder({
-    createdAt: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
     paymentExpiresAt: new Date(now).toISOString(),
     status: "pending",
   })
 
-  assert.equal(expirePaymentOrder(order, new Date(now)).status, "cancelled")
+  assert.equal(expirePaymentOrder(order, new Date(now)).status, "unpaid")
 })
 
 test("does not expire a paid order", () => {
@@ -95,7 +91,6 @@ test("does not expire a Zelle order while its proof is under review", () => {
     },
   })
 
-  assert.equal(isPaymentOrderExpired(order, now), false)
   assert.equal(isPaymentSessionExpired(order, now), false)
   assert.equal(expirePaymentOrder(order, new Date(now)), order)
 })

@@ -5,22 +5,9 @@ import { isZellePaymentAwaitingReview } from "./zelle-payment-status.ts"
 // Airwallex client secrets are valid for 60 minutes. Keep a small buffer so
 // the browser does not start a payment with a secret that is about to expire.
 const paymentOrderTimeoutMs = 55 * 60 * 1000
-const unpaidOrderTimeoutMs = 24 * 60 * 60 * 1000
 
 function createPaymentOrderExpiry(now = Date.now()) {
   return new Date(now + paymentOrderTimeoutMs).toISOString()
-}
-
-function isPaymentOrderExpired(order: CmsPaymentOrder, now = Date.now()) {
-  if (isZellePaymentAwaitingReview(order)) {
-    return false
-  }
-
-  if (!["pending", "unpaid"].includes(order.status) || !order.createdAt) {
-    return false
-  }
-  const expiresAt = new Date(order.createdAt).getTime() + unpaidOrderTimeoutMs
-  return Number.isFinite(expiresAt) && expiresAt <= now
 }
 
 function isPaymentSessionExpired(order: CmsPaymentOrder, now = Date.now()) {
@@ -31,16 +18,6 @@ function isPaymentSessionExpired(order: CmsPaymentOrder, now = Date.now()) {
 }
 
 function expirePaymentOrder(order: CmsPaymentOrder, now = new Date()) {
-  if (isPaymentOrderExpired(order, now.getTime())) {
-    return {
-      ...order,
-      failureReason: "payment_timeout",
-      gatewayStatus: "expired",
-      status: "cancelled" as const,
-      updatedAt: now.toISOString(),
-    }
-  }
-
   return resetExpiredPaymentSession(order, now)
 }
 
@@ -88,7 +65,6 @@ function formatPaymentAmount(value: number, previousAmount: string) {
 export {
   createPaymentOrderExpiry,
   expirePaymentOrder,
-  isPaymentOrderExpired,
   isPaymentSessionExpired,
   resetExpiredPaymentSession,
 }

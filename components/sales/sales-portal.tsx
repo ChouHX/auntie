@@ -1,5 +1,7 @@
 "use client"
 
+import { OrderMonthSelect } from "@/components/sales/order-month-select"
+
 import { type FormEvent, useCallback, useEffect, useState } from "react"
 import Image from "next/image"
 import { HouseLine } from "@phosphor-icons/react"
@@ -56,6 +58,7 @@ const salesTabs: Array<{
 ]
 
 export function SalesPortal() {
+  const [month, setMonth] = useState("")
   const [data, setData] = useState<SalesUserDashboard | null>(null)
   const [activeSection, setActiveSection] = useState<SalesSection>("dashboard")
   const [loading, setLoading] = useState(true)
@@ -64,27 +67,34 @@ export function SalesPortal() {
   const [dataReloadKey, setDataReloadKey] = useState(0)
   const { setTheme, theme } = useTheme()
 
-  const loadDashboard = useCallback(async (manual = false) => {
-    if (manual) {
-      setRefreshing(true)
-      setDataReloadKey((current) => current + 1)
-    }
-    try {
-      const response = await fetch("/api/sales/dashboard", {
-        cache: "no-store",
-      })
-      setData(response.ok ? await response.json() : null)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
+  const loadDashboard = useCallback(
+    async (manual = false) => {
+      if (manual) {
+        setRefreshing(true)
+        setDataReloadKey((current) => current + 1)
+      }
+      try {
+        const response = await fetch(`/api/sales/dashboard?month=${month}`, {
+          cache: "no-store",
+        })
+        setData(response.ok ? await response.json() : null)
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [month]
+  )
 
   useEffect(() => {
     let mounted = true
-    fetch("/api/sales/dashboard", { cache: "no-store" })
+    fetch(`/api/sales/dashboard?month=${month}`, { cache: "no-store" })
       .then(async (response) => {
-        if (mounted) setData(response.ok ? await response.json() : null)
+        const result = response.ok ? await response.json() : null
+        if (mounted) setData(result)
+      })
+      .catch(() => {
+        if (mounted) toast.error("统计数据加载失败，请重试")
       })
       .finally(() => {
         if (mounted) setLoading(false)
@@ -92,7 +102,7 @@ export function SalesPortal() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [month])
 
   if (loading) return <SalesLoading />
   if (!data)
@@ -131,10 +141,14 @@ export function SalesPortal() {
         subtitle={`${data.member.name} · ${data.member.username}`}
         title="Dashboard"
       >
-        <div className="space-y-4">
+        <div className="space-y-3">
           <SalesTabs active={activeSection} onChange={setActiveSection} />
           {activeSection === "dashboard" ? (
-            <SalesDashboardContent data={data} />
+            <SalesDashboardContent
+              data={data}
+              month={month || data.month}
+              onMonthChange={setMonth}
+            />
           ) : activeSection === "customers" ? (
             <SalesCustomerPanel reloadKey={dataReloadKey} />
           ) : (
@@ -170,7 +184,7 @@ function SalesTabs({
           <button
             aria-selected={selected}
             className={cn(
-              "relative flex h-11 min-w-24 shrink-0 items-center justify-center gap-2 px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+              "relative flex h-9 min-w-20 shrink-0 items-center justify-center gap-2 px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
               selected && "text-primary"
             )}
             key={tab.id}
@@ -190,17 +204,36 @@ function SalesTabs({
   )
 }
 
-function SalesDashboardContent({ data }: { data: SalesUserDashboard }) {
+function SalesDashboardContent({
+  data,
+  month,
+  onMonthChange,
+}: {
+  data: SalesUserDashboard
+  month: string
+  onMonthChange: (month: string) => void
+}) {
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-semibold">你好，{data.member.name}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          截至今日的客户与成交数据
-        </p>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold">你好，{data.member.name}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            订单按生成月份统计（北京时间），客户按添加时间统计
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-xs">
+          统计月份
+          <OrderMonthSelect
+            months={data.months}
+            value={month}
+            onValueChange={onMonthChange}
+            allowAll={false}
+          />
+        </label>
       </div>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
         <MetricCard
           icon={Users}
           label="总添加客户数"
@@ -218,7 +251,7 @@ function SalesDashboardContent({ data }: { data: SalesUserDashboard }) {
         />
         <MetricCard
           icon={CalendarDays}
-          label="本月添加客户数"
+          label={`${data.monthLabel}添加客户数`}
           value={String(data.customerCounts.month)}
         />
         <MetricCard
@@ -235,18 +268,18 @@ function SalesDashboardContent({ data }: { data: SalesUserDashboard }) {
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-3 lg:grid-cols-2">
         <RankingPanel
           currentMemberId={data.member.id}
           mode="count"
           rankings={data.orderCountRanking}
-          title="本月成交订单量排行"
+          title={`${data.monthLabel}成交订单量排行`}
         />
         <RankingPanel
           currentMemberId={data.member.id}
           mode="revenue"
           rankings={data.orderRevenueRanking}
-          title="本月成交金额排行"
+          title={`${data.monthLabel}成交金额排行`}
         />
       </section>
     </div>
@@ -502,12 +535,12 @@ function MetricCard({
   value: string
 }) {
   return (
-    <Card className={cn("min-w-0 rounded-lg p-4 shadow-sm sm:p-5", className)}>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground sm:text-sm">
+    <Card className={cn("min-w-0 gap-0 rounded-lg p-3 shadow-sm", className)}>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="size-4 text-primary" />
         <span>{label}</span>
       </div>
-      <p className="mt-3 text-xl font-semibold break-words tabular-nums sm:text-2xl">
+      <p className="mt-2 text-lg font-semibold break-words tabular-nums">
         {value}
       </p>
     </Card>
@@ -527,7 +560,7 @@ function RankingPanel({
 }) {
   return (
     <Card className="overflow-hidden rounded-lg shadow-sm">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-4 sm:px-5">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <Trophy className="size-4 text-amber-600" />
         <h2 className="text-sm font-semibold">{title}</h2>
       </div>
@@ -537,7 +570,7 @@ function RankingPanel({
           return (
             <div
               className={cn(
-                "grid min-h-14 grid-cols-[2rem_1fr_auto] items-center gap-2 px-4 py-3 sm:px-5",
+                "grid min-h-11 grid-cols-[2rem_1fr_auto] items-center gap-2 px-3 py-2",
                 isCurrent && "bg-primary/5"
               )}
               key={item.salesMemberId}

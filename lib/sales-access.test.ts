@@ -76,3 +76,88 @@ function order(orderId: string, salesMemberId: string, salesOwner: string) {
     status: "paid",
   } as CmsPaymentOrder
 }
+
+test("月份筛选按北京时间包含月末，按所有页及币种汇总，排除其他销售", () => {
+  const orders = Array.from({ length: 12 }, (_, index) => ({
+    ...order(`a-${index}`, alice.id, alice.name),
+    createdAt: "2026-08-31T15:59:59Z",
+  }))
+  const result = createSalesOrderPage(
+    [
+      ...orders,
+      {
+        ...order("next-month", alice.id, alice.name),
+        createdAt: "2026-08-31T16:00:00Z",
+      },
+      order("other", sameName.id, sameName.name),
+      { ...orders[0], orderId: "cny", currency: "CNY" },
+    ],
+    alice,
+    {
+      page: 1,
+      pageSize: 10,
+      query: "",
+      month: "2026-08",
+    }
+  )
+  assert.equal(result.orders.length, 10)
+  assert.equal(result.pagination.totalCount, 13)
+  assert.deepEqual(result.totals, [
+    { currency: "USD", amount: 1200, commission: 150 },
+    { currency: "CNY", amount: 100, commission: 12.5 },
+  ])
+})
+
+test("生成月份可与搜索叠加，不使用预约月份", () => {
+  const orders = [
+    { ...order("booking", alice.id, alice.name), serviceDate: "2026-09-07" },
+  ]
+  const options = {
+    page: 1,
+    pageSize: 10,
+    query: "booking",
+    month: "2026-08",
+  }
+  assert.equal(
+    createSalesOrderPage(orders, alice, options).pagination.totalCount,
+    1
+  )
+  assert.equal(
+    createSalesOrderPage(orders, alice, { ...options, month: "2026-09" })
+      .pagination.totalCount,
+    0
+  )
+  assert.equal(
+    createSalesOrderPage(orders, alice, { ...options, month: "" }).pagination
+      .totalCount,
+    1
+  )
+  assert.deepEqual(
+    createSalesOrderPage(orders, alice, { ...options, query: "missing" })
+      .totals,
+    []
+  )
+})
+
+test("月份选项基于本人全部订单，不受搜索、月份筛选或分页影响", () => {
+  const items = [
+    {
+      ...order("owned", alice.id, alice.name),
+      createdAt: "2025-12-01T00:00:00Z",
+    },
+    {
+      ...order("other", sameName.id, sameName.name),
+      createdAt: "2024-01-01T00:00:00Z",
+    },
+  ]
+  const result = createSalesOrderPage(items, alice, {
+    page: 1,
+    pageSize: 10,
+    query: "missing",
+    month: "2026-02",
+  })
+  assert.equal(result.orders.length, 0)
+  assert.equal(result.months.at(-1), "2025-12")
+  assert.ok(result.months.includes("2026-02"))
+  assert.equal(result.months.includes("2024-01"), false)
+})

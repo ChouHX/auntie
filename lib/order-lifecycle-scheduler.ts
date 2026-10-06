@@ -1,7 +1,7 @@
 import { readCmsContent, updateCmsContent } from "@/lib/cms-store"
 import {
   expirePaymentOrder,
-  isPaymentOrderExpired,
+  isPaymentSessionExpired,
 } from "@/lib/payment-order-lifecycle"
 import { logServerEvent } from "@/lib/server-log"
 
@@ -18,7 +18,7 @@ async function sweepExpiredPaymentOrders() {
     const content = await readCmsContent()
     const now = new Date()
     const expiredIds = content.paymentOrders
-      .filter((order) => isPaymentOrderExpired(order, now.getTime()))
+      .filter((order) => isPaymentSessionExpired(order, now.getTime()))
       .map((order) => order.orderId)
     if (!expiredIds.length) return 0
     const idSet = new Set(expiredIds)

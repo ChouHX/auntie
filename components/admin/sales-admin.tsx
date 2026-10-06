@@ -1,5 +1,7 @@
 "use client"
 
+import { OrderMonthSelect } from "@/components/sales/order-month-select"
+
 import { useEffect, useState } from "react"
 import { PencilSimple, Plus, Trash } from "@phosphor-icons/react"
 import { toast } from "sonner"
@@ -39,6 +41,8 @@ import type { AdminSalesCommissionSummary } from "@/lib/cms-api"
 import type { CmsSalesMember } from "@/types/cms"
 
 export function SalesAdmin({ token }: { token: string }) {
+  const [months, setMonths] = useState<string[]>([])
+  const [month, setMonth] = useState("")
   const [members, setMembers] = useState<CmsSalesMember[]>([])
   const [studentTags, setStudentTags] = useState<string[]>([])
   const [commissionSummaries, setCommissionSummaries] = useState<
@@ -52,12 +56,13 @@ export function SalesAdmin({ token }: { token: string }) {
 
   useEffect(() => {
     let mounted = true
-    fetchAdminSalesMembers(token)
+    fetchAdminSalesMembers(token, month)
       .then((result) => {
         if (!mounted) return
         setMembers(result.salesMembers)
         setStudentTags(result.studentTags)
         setCommissionSummaries(result.commissionSummaries)
+        setMonths(result.months)
       })
       .catch(
         (error) =>
@@ -70,7 +75,7 @@ export function SalesAdmin({ token }: { token: string }) {
     return () => {
       mounted = false
     }
-  }, [token])
+  }, [token, month])
 
   function createMember() {
     const now = new Date().toISOString()
@@ -96,11 +101,13 @@ export function SalesAdmin({ token }: { token: string }) {
         nextMembers,
         editing && editingPassword
           ? { [editing.id]: editingPassword }
-          : undefined
+          : undefined,
+        month
       )
       setMembers(result.salesMembers)
       setStudentTags(result.studentTags)
       setCommissionSummaries(result.commissionSummaries)
+      setMonths(result.months)
       setEditing(null)
       setEditingPassword("")
       toast.success("销售资料已保存")
@@ -138,17 +145,33 @@ export function SalesAdmin({ token }: { token: string }) {
     <>
       {noticeDialog}
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">销售管理</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               将企业微信学员分区标签绑定到销售，并配置订单学员提成。
             </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              表格金额按所选订单生成月份统计每位销售的已支付订单。
+            </p>
           </div>
-          <Button className="h-8" onClick={createMember} size="sm">
-            <Plus size={15} />
-            新建销售
-          </Button>
+          <div className="flex max-w-full items-center gap-2 overflow-x-auto">
+            <label className="flex shrink-0 items-center gap-2 text-xs">
+              订单生成月份（北京时间）
+              <OrderMonthSelect
+                months={months}
+                value={month}
+                onValueChange={(nextMonth) => {
+                  setIsLoading(true)
+                  setMonth(nextMonth)
+                }}
+              />
+            </label>
+            <Button className="h-8 shrink-0" onClick={createMember} size="sm">
+              <Plus size={15} />
+              新建销售
+            </Button>
+          </div>
         </div>
         <Card className="overflow-hidden rounded-lg shadow-sm">
           <Table>
@@ -158,7 +181,8 @@ export function SalesAdmin({ token }: { token: string }) {
                 <TableHead>登录账号</TableHead>
                 <TableHead>学员分区标签</TableHead>
                 <TableHead>分成规则</TableHead>
-                <TableHead>累计提成（原币 / 人民币）</TableHead>
+                <TableHead>订单总金额</TableHead>
+                <TableHead>提成总额（原币 / 人民币）</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -182,9 +206,21 @@ export function SalesAdmin({ token }: { token: string }) {
                     </TableCell>
                     <TableCell>{formatCommissionRule(member)}</TableCell>
                     <TableCell>
-                      <CommissionSummary
-                        summary={commissionSummaryMap.get(member.id)}
-                      />
+                      {isLoading
+                        ? "加载中..."
+                        : formatTotals(
+                            commissionSummaryMap.get(member.id)?.orderAmounts ??
+                              []
+                          )}
+                    </TableCell>
+                    <TableCell>
+                      {isLoading ? (
+                        "加载中..."
+                      ) : (
+                        <CommissionSummary
+                          summary={commissionSummaryMap.get(member.id)}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -229,7 +265,7 @@ export function SalesAdmin({ token }: { token: string }) {
                 <TableRow>
                   <TableCell
                     className="h-28 text-center text-muted-foreground"
-                    colSpan={7}
+                    colSpan={8}
                   >
                     {isLoading
                       ? "正在加载..."
@@ -482,5 +518,19 @@ function CommissionSummary({
           : ""}
       </div>
     </div>
+  )
+}
+
+function formatTotals(items: Array<{ amount: number; currency: string }>) {
+  const totals = new Map<string, number>()
+  items.forEach((item) =>
+    totals.set(item.currency, (totals.get(item.currency) ?? 0) + item.amount)
+  )
+  return (
+    Array.from(
+      totals,
+      ([currency, amount]) =>
+        `${currency} ${amount.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    ).join(" · ") || "0.00"
   )
 }

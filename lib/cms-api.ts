@@ -7,6 +7,7 @@ import type {
 } from "@/types/cms"
 
 type AdminSalesCommissionSummary = {
+  orderAmounts: Array<{ amount: number; currency: string }>
   cnyAmount: number
   currencies: Array<{ amount: number; currency: string }>
   missingCnyCount: number
@@ -259,24 +260,29 @@ async function fetchSalesDashboard(token: string, query: SalesDashboardQuery) {
   })
 }
 
-async function fetchAdminSalesMembers(token: string) {
+async function fetchAdminSalesMembers(token: string, month = "") {
   return request<{
+    months: string[]
     commissionSummaries: AdminSalesCommissionSummary[]
     salesMembers: CmsSalesMember[]
     studentTags: string[]
-  }>("/api/admin/sales-members", { headers: createAuthHeaders(token) })
+  }>(`/api/admin/sales-members?month=${encodeURIComponent(month)}`, {
+    headers: createAuthHeaders(token),
+  })
 }
 
 async function saveAdminSalesMembers(
   token: string,
   salesMembers: CmsSalesMember[],
-  passwordUpdates: Record<string, string> = {}
+  passwordUpdates: Record<string, string> = {},
+  month = ""
 ) {
   return request<{
+    months: string[]
     commissionSummaries: AdminSalesCommissionSummary[]
     salesMembers: CmsSalesMember[]
     studentTags: string[]
-  }>("/api/admin/sales-members", {
+  }>(`/api/admin/sales-members?month=${encodeURIComponent(month)}`, {
     body: JSON.stringify({ passwordUpdates, salesMembers }),
     headers: createAuthHeaders(token),
     method: "PUT",

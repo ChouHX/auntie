@@ -39,8 +39,26 @@ const customers = [
   customer("b-1", "B区", "2026-08-19T02:00:00.000Z"),
 ]
 const orders = [
-  order("a-aug", "sales-a", "Alice", "2026-08-10T02:00:00.000Z", 100, 30, "USD", 7),
-  order("a-jul", "sales-a", "Alice", "2026-07-10T02:00:00.000Z", 80, 10, "USD", 7),
+  order(
+    "a-aug",
+    "sales-a",
+    "Alice",
+    "2026-08-10T02:00:00.000Z",
+    100,
+    30,
+    "USD",
+    7
+  ),
+  order(
+    "a-jul",
+    "sales-a",
+    "Alice",
+    "2026-07-10T02:00:00.000Z",
+    80,
+    10,
+    "USD",
+    7
+  ),
   order("b-1", "sales-b", "Bob", "2026-08-11T02:00:00.000Z", 300, 20, "CNY", 1),
   order("b-2", "sales-b", "Bob", "2026-08-12T02:00:00.000Z", 250, 20, "CNY", 1),
 ]
@@ -107,3 +125,47 @@ function order(
     updatedAt: paidAt,
   } as CmsPaymentOrder
 }
+
+test("选择历史月份会更新月客户数、利润及排行，保留累计统计", () => {
+  const result = createSalesUserDashboard(
+    content,
+    customers,
+    members[0],
+    new Date("2026-08-19T04:00:00Z"),
+    "2026-07"
+  )
+  assert.equal(result.month, "2026-07")
+  assert.equal(result.customerCounts.month, 1)
+  assert.deepEqual(result.monthlyProfit, [{ amount: 10, currency: "USD" }])
+  assert.deepEqual(result.orderProfitTotal, [{ amount: 40, currency: "USD" }])
+  assert.equal(result.orderCountRanking[0].salesMemberId, "sales-a")
+  assert.equal(result.orderCountRanking[0].orderCount, 1)
+})
+
+test("Dashboard 月统计按生成日期，不按付款或预约日期", () => {
+  const deferred = {
+    ...orders[0],
+    createdAt: "2026-07-31T16:00:00Z",
+    paidAt: "2026-09-07T00:00:00Z",
+    serviceDate: "2026-09-07",
+  }
+  const fixture = { ...content, paymentOrders: [deferred] }
+  const august = createSalesUserDashboard(
+    fixture,
+    [],
+    members[0],
+    new Date("2026-10-01T00:00:00Z"),
+    "2026-08"
+  )
+  assert.deepEqual(august.monthlyProfit, [{ amount: 30, currency: "USD" }])
+  assert.equal(august.orderCountRanking[0].orderCount, 1)
+  const september = createSalesUserDashboard(
+    fixture,
+    [],
+    members[0],
+    new Date("2026-10-01T00:00:00Z"),
+    "2026-09"
+  )
+  assert.deepEqual(september.monthlyProfit, [])
+  assert.equal(september.orderCountRanking[0].orderCount, 0)
+})

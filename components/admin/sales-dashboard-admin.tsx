@@ -707,13 +707,13 @@ export function SalesOrderDataPanel({
               <TableHead className="lg:sticky lg:left-0 lg:z-20 lg:bg-card">
                 订单号
               </TableHead>
+              <TableHead>服务日期</TableHead>
               <TableHead>客户</TableHead>
               <TableHead>订单状态</TableHead>
               <TableHead>学员/销售</TableHead>
               <TableHead>地区</TableHead>
               <TableHead>对接阿姨</TableHead>
               <TableHead>清洁类型</TableHead>
-              <TableHead>服务日期</TableHead>
               <TableHead>订单金额</TableHead>
               <TableHead>阿姨薪资</TableHead>
               <TableHead>其他成本</TableHead>
@@ -739,6 +739,7 @@ export function SalesOrderDataPanel({
                       {formatDateTime(row.addTime)}
                     </div>
                   </TableCell>
+                  <TableCell>{row.serviceDate || "待确认"}</TableCell>
                   <TableCell className="font-medium">
                     {row.customerName || "未填写"}
                   </TableCell>
@@ -749,7 +750,6 @@ export function SalesOrderDataPanel({
                   <TableCell>{row.region || "-"}</TableCell>
                   <TableCell>{row.auntieName || "未分配"}</TableCell>
                   <TableCell>{row.cleaningType || "-"}</TableCell>
-                  <TableCell>{row.serviceDate || "待确认"}</TableCell>
                   <TableCell>
                     {formatMoney(row.currency, row.paymentAmount)}
                   </TableCell>

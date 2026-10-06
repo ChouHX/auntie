@@ -1,4 +1,6 @@
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+import { shanghaiDate, validMonth, orderMonthOptions } from "./sales-date.ts"
+// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
 import { findSalesMemberForStudentTags } from "./sales-attribution.ts"
 import type { WecomCustomer } from "@/lib/wecom-types"
 import type { CmsContent, CmsPaymentOrder, CmsSalesMember } from "@/types/cms"
@@ -16,6 +18,8 @@ type SalesOrderRanking = {
 type SalesUserDashboard = {
   customerCounts: { month: number; today: number; total: number; week: number }
   member: { id: string; name: string; username: string }
+  month: string
+  months: string[]
   monthLabel: string
   monthlyProfit: MoneyTotal[]
   orderCountRanking: SalesOrderRanking[]
@@ -27,10 +31,11 @@ function createSalesUserDashboard(
   content: CmsContent,
   customers: WecomCustomer[],
   currentMember: CmsSalesMember,
-  now = new Date()
+  now = new Date(),
+  selectedMonth = ""
 ): SalesUserDashboard {
   const today = shanghaiDate(now)
-  const month = today.slice(0, 7)
+  const month = validMonth(selectedMonth) ? selectedMonth : today.slice(0, 7)
   const weekStart = getWeekStart(today)
   const ownedCustomers = customers.filter(
     (customer) =>
@@ -44,9 +49,7 @@ function createSalesUserDashboard(
   const monthlyPaidOrders = content.paymentOrders.filter(
     (order) =>
       order.status === "paid" &&
-      shanghaiDate(
-        new Date(order.paidAt || order.updatedAt || order.createdAt)
-      ).startsWith(month)
+      shanghaiDate(new Date(order.createdAt)).startsWith(month)
   )
   const rankings = content.salesMembers
     .filter((member) => member.status === "active")
@@ -71,12 +74,17 @@ function createSalesUserDashboard(
       name: currentMember.name,
       username: currentMember.accountUsername ?? "",
     },
-    monthLabel: `${Number(month.slice(5, 7))} 月`,
+    month,
+    months: orderMonthOptions(
+      content.paymentOrders.filter((order) =>
+        isOrderOwnedBySalesMember(order, currentMember)
+      ),
+      now
+    ),
+    monthLabel: `${month.slice(0, 4)} 年 ${Number(month.slice(5, 7))} 月`,
     monthlyProfit: sumMoney(
       ownedPaidOrders.filter((order) =>
-        shanghaiDate(
-          new Date(order.paidAt || order.updatedAt || order.createdAt)
-        ).startsWith(month)
+        shanghaiDate(new Date(order.createdAt)).startsWith(month)
       ),
       "orderProfit"
     ),
@@ -130,16 +138,6 @@ function sumMoney(
     amount: roundMoney(amount),
     currency,
   })).toSorted((left, right) => left.currency.localeCompare(right.currency))
-}
-
-function shanghaiDate(date: Date) {
-  if (!Number.isFinite(date.getTime())) return ""
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-  }).format(date)
 }
 
 function getWeekStart(date: string) {

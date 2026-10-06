@@ -1,3 +1,5 @@
+// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+import { shanghaiDate, validMonth, orderMonthOptions } from "./sales-date.ts"
 import type { CmsPaymentOrder, CmsSalesMember } from "@/types/cms"
 
 type SalesOrder = {
@@ -14,6 +16,8 @@ type SalesOrder = {
 }
 
 type SalesOrderPage = {
+  months: string[]
+  totals: Array<{ currency: string; amount: number; commission: number }>
   orders: SalesOrder[]
   pagination: {
     page: number
@@ -26,11 +30,23 @@ type SalesOrderPage = {
 function createSalesOrderPage(
   orders: CmsPaymentOrder[],
   member: CmsSalesMember,
-  options: { page: number; pageSize: number; query: string }
+  options: {
+    page: number
+    pageSize: number
+    query: string
+    month?: string
+  }
 ): SalesOrderPage {
   const query = options.query.trim().toLocaleLowerCase()
-  const ownedOrders = orders
-    .filter((order) => isOrderOwnedBySalesMember(order, member))
+  const accessibleOrders = orders.filter((order) =>
+    isOrderOwnedBySalesMember(order, member)
+  )
+  const ownedOrders = accessibleOrders
+    .filter(
+      (order) =>
+        !validMonth(options.month ?? "") ||
+        shanghaiDate(new Date(order.createdAt)).startsWith(options.month!)
+    )
     .toSorted(
       (left, right) =>
         new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
@@ -57,7 +73,27 @@ function createSalesOrderPage(
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const page = Math.min(Math.max(1, Math.trunc(options.page) || 1), totalPages)
 
+  const totals = new Map<
+    string,
+    { currency: string; amount: number; commission: number }
+  >()
+  filtered.map(toSalesOrder).forEach((order) => {
+    const total = totals.get(order.currency) ?? {
+      currency: order.currency,
+      amount: 0,
+      commission: 0,
+    }
+    total.amount += order.amount
+    total.commission += order.salesCommission
+    totals.set(order.currency, total)
+  })
   return {
+    months: orderMonthOptions(accessibleOrders),
+    totals: Array.from(totals.values()).map((total) => ({
+      ...total,
+      amount: normalizeAmount(total.amount),
+      commission: normalizeAmount(total.commission),
+    })),
     orders: filtered
       .slice((page - 1) * pageSize, page * pageSize)
       .map(toSalesOrder),

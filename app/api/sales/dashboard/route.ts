@@ -22,5 +22,13 @@ export async function GET(request: NextRequest) {
     readCmsContent(),
     listAllWecomCustomersForAnalytics(),
   ])
-  return Response.json(createSalesUserDashboard(content, customers, member))
+  return Response.json(
+    createSalesUserDashboard(
+      content,
+      customers,
+      member,
+      new Date(),
+      request.nextUrl.searchParams.get("month") ?? ""
+    )
+  )
 }

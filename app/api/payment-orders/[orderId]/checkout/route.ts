@@ -15,8 +15,6 @@ import {
 } from "@/lib/cms-store"
 import {
   createPaymentOrderExpiry,
-  expirePaymentOrder,
-  isPaymentOrderExpired,
   isPaymentSessionExpired,
   resetExpiredPaymentSession,
 } from "@/lib/payment-order-lifecycle"
@@ -69,19 +67,6 @@ export async function POST(
         error: "payment_order_not_ready",
         message: "The booking is awaiting service and price confirmation.",
         order: toCheckoutPaymentOrder(existingOrder),
-      },
-      { status: 409 }
-    )
-  }
-
-  if (isPaymentOrderExpired(existingOrder)) {
-    const expiredOrder = await cancelExpiredPaymentOrder(existingOrder.orderId)
-
-    return Response.json(
-      {
-        error: "payment_order_expired",
-        message: "This payment order has expired.",
-        order: toCheckoutPaymentOrder(expiredOrder ?? existingOrder),
       },
       { status: 409 }
     )
@@ -260,27 +245,6 @@ export async function POST(
       { status: 502 }
     )
   }
-}
-
-async function cancelExpiredPaymentOrder(orderId: string) {
-  let expiredOrder: CmsPaymentOrder | null = null
-
-  await updateCmsContent((content) => {
-    const normalizedOrderId = normalizePaymentOrderId(orderId)
-    const nextOrders = content.paymentOrders.map((order) => {
-      if (normalizePaymentOrderId(order.orderId) !== normalizedOrderId) {
-        return order
-      }
-
-      const nextOrder = expirePaymentOrder(order)
-      expiredOrder = nextOrder
-      return nextOrder
-    })
-
-    return { ...content, paymentOrders: nextOrders }
-  })
-
-  return expiredOrder
 }
 
 async function resetExpiredPaymentSessionInStore(orderId: string) {

@@ -76,7 +76,7 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
 
   return (
     <Card className="overflow-hidden rounded-lg shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <div className="flex flex-col gap-2 border-b border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Users className="size-4 text-primary" />
@@ -87,14 +87,14 @@ export function SalesCustomerPanel({ reloadKey }: { reloadKey: number }) {
         <form className="flex w-full gap-2 sm:w-80" onSubmit={search}>
           <Input
             aria-label="搜索我的客户"
-            className="h-9 min-w-0"
+            className="h-8 min-w-0 text-xs"
             onChange={(event) => setInput(event.target.value)}
             placeholder="搜索客户、地区或备注"
             value={input}
           />
           <Button
             aria-label="搜索"
-            className="size-9"
+            className="size-8"
             size="icon"
             type="submit"
           >
@@ -169,7 +169,7 @@ function SalesCustomerRow({ customer }: { customer: SalesCustomer }) {
     .filter(Boolean)
     .join(" · ")
   return (
-    <TableRow className="[&>td]:h-12">
+    <TableRow className="[&>td]:h-10">
       <TableCell>
         <div className="flex items-center gap-2">
           {customer.avatar ? (

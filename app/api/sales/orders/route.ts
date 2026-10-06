@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
   const content = await readCmsContent()
   return Response.json(
     createSalesOrderPage(content.paymentOrders, member, {
+      month: request.nextUrl.searchParams.get("month") ?? "",
       page: Number(request.nextUrl.searchParams.get("page") ?? 1),
       pageSize: Number(request.nextUrl.searchParams.get("pageSize") ?? 10),
       query: request.nextUrl.searchParams.get("query") ?? "",

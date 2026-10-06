@@ -36,7 +36,7 @@ export function SalesDataPagination({
   const end = Math.min(page * pageSize, totalCount)
 
   return (
-    <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-5">
+    <div className="flex flex-col gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2">
         <span>每页显示</span>
         <Select
