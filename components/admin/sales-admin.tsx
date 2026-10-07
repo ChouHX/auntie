@@ -1,5 +1,7 @@
 "use client"
 
+import { SalesColumnFilter } from "@/components/admin/sales-column-filter"
+
 import { OrderMonthSelect } from "@/components/sales/order-month-select"
 
 import { useEffect, useState } from "react"
@@ -41,6 +43,8 @@ import type { AdminSalesCommissionSummary } from "@/lib/cms-api"
 import type { CmsSalesMember } from "@/types/cms"
 
 export function SalesAdmin({ token }: { token: string }) {
+  const [selectedNames, setSelectedNames] = useState<string[] | null>(null)
+  const [selectedTags, setSelectedTags] = useState<string[] | null>(null)
   const [months, setMonths] = useState<string[]>([])
   const [month, setMonth] = useState("")
   const [members, setMembers] = useState<CmsSalesMember[]>([])
@@ -141,6 +145,12 @@ export function SalesAdmin({ token }: { token: string }) {
     commissionSummaries.map((summary) => [summary.salesMemberId, summary])
   )
 
+  const filteredMembers = members.filter(
+    (member) =>
+      (selectedNames === null || selectedNames.includes(member.name)) &&
+      (selectedTags === null || selectedTags.includes(member.studentTag))
+  )
+
   return (
     <>
       {noticeDialog}
@@ -152,12 +162,12 @@ export function SalesAdmin({ token }: { token: string }) {
               将企业微信学员分区标签绑定到销售，并配置订单学员提成。
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              表格金额按所选订单生成月份统计每位销售的已支付订单。
+              表格金额按所选服务月份统计每位销售的已支付订单。
             </p>
           </div>
           <div className="flex max-w-full items-center gap-2 overflow-x-auto">
             <label className="flex shrink-0 items-center gap-2 text-xs">
-              订单生成月份（北京时间）
+              服务月份
               <OrderMonthSelect
                 months={months}
                 value={month}
@@ -173,13 +183,42 @@ export function SalesAdmin({ token }: { token: string }) {
             </Button>
           </div>
         </div>
+        {(selectedNames !== null || selectedTags !== null) && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            显示 {filteredMembers.length} / {members.length} 位销售
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setSelectedNames(null)
+                setSelectedTags(null)
+              }}
+            >
+              清除列筛选
+            </Button>
+          </div>
+        )}
         <Card className="overflow-hidden rounded-lg shadow-sm">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>销售名称</TableHead>
+                <TableHead>
+                  <SalesColumnFilter
+                    label="销售名称"
+                    options={members.map((member) => member.name)}
+                    selected={selectedNames}
+                    onChange={setSelectedNames}
+                  />
+                </TableHead>
                 <TableHead>登录账号</TableHead>
-                <TableHead>学员分区标签</TableHead>
+                <TableHead>
+                  <SalesColumnFilter
+                    label="学员分区标签"
+                    options={members.map((member) => member.studentTag)}
+                    selected={selectedTags}
+                    onChange={setSelectedTags}
+                  />
+                </TableHead>
                 <TableHead>分成规则</TableHead>
                 <TableHead>订单总金额</TableHead>
                 <TableHead>提成总额（原币 / 人民币）</TableHead>
@@ -188,8 +227,8 @@ export function SalesAdmin({ token }: { token: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.length ? (
-                members.map((member) => (
+              {filteredMembers.length ? (
+                filteredMembers.map((member) => (
                   <TableRow key={member.id}>
                     <TableCell className="font-medium">{member.name}</TableCell>
                     <TableCell>
@@ -269,7 +308,9 @@ export function SalesAdmin({ token }: { token: string }) {
                   >
                     {isLoading
                       ? "正在加载..."
-                      : "暂无销售，请从学员分区标签创建"}
+                      : members.length
+                        ? "没有符合筛选条件的销售"
+                        : "暂无销售，请从学员分区标签创建"}
                   </TableCell>
                 </TableRow>
               )}

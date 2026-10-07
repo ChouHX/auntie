@@ -4,7 +4,7 @@ import type { CmsContent } from "@/types/cms"
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
 import { createCommissionSummaries } from "./sales-member-summary.ts"
 
-test("销售管理按生成月份汇总，区分币种、同名销售及未支付订单", () => {
+test("销售管理按服务月份汇总，区分币种、同名销售及未支付订单", () => {
   const base = {
     salesMemberId: "a",
     salesOwner: "Same",
@@ -14,7 +14,7 @@ test("销售管理按生成月份汇总，区分币种、同名销售及未支�
     salesCommission: 10,
     createdAt: "2026-08-31T16:00:00Z",
     paidAt: "2026-10-10T00:00:00Z",
-    serviceDate: "2026-10-09",
+    serviceDate: "2026-09-09",
     profitExchangeRateToCny: 7,
   }
   const content = {
@@ -25,7 +25,7 @@ test("销售管理按生成月份汇总，区分币种、同名销售及未支�
     paymentOrders: [
       base,
       { ...base, status: "unpaid" },
-      { ...base, createdAt: "2026-08-31T15:59:59Z" },
+      { ...base, serviceDate: "2026-08-31" },
       { ...base, currency: "CNY", amountValue: 200 },
       { ...base, salesMemberId: "b" },
     ],

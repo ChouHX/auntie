@@ -1,6 +1,6 @@
 import type { CmsContent } from "@/types/cms"
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
-import { shanghaiDate, validMonth } from "./sales-date.ts"
+import { serviceMonth, validMonth } from "./sales-date.ts"
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
 import { isOrderOwnedBySalesMember } from "./sales-orders.ts"
 
@@ -16,7 +16,7 @@ export function createCommissionSummaries(content: CmsContent, month = "") {
         order.status !== "paid" ||
         !isOrderOwnedBySalesMember(order, member) ||
         (validMonth(month) &&
-          !shanghaiDate(new Date(order.createdAt)).startsWith(month))
+          !serviceMonth(order.serviceDate).startsWith(month))
       ) {
         return
       }

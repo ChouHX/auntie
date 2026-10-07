@@ -67,7 +67,8 @@ function customer(relationId: string, studentType: string) {
 function order(orderId: string, salesMemberId: string, salesOwner: string) {
   return {
     amountValue: 100,
-    createdAt: "2026-08-19T00:00:00.000Z",
+    createdAt: "2026-07-19T00:00:00.000Z",
+    serviceDate: "2026-08-19",
     currency: "USD",
     orderId,
     salesMemberId,
@@ -77,17 +78,17 @@ function order(orderId: string, salesMemberId: string, salesOwner: string) {
   } as CmsPaymentOrder
 }
 
-test("月份筛选按北京时间包含月末，按所有页及币种汇总，排除其他销售", () => {
+test("月份筛选按服务日期包含月末，按所有页及币种汇总，排除其他销售", () => {
   const orders = Array.from({ length: 12 }, (_, index) => ({
     ...order(`a-${index}`, alice.id, alice.name),
-    createdAt: "2026-08-31T15:59:59Z",
+    serviceDate: "2026-08-31",
   }))
   const result = createSalesOrderPage(
     [
       ...orders,
       {
         ...order("next-month", alice.id, alice.name),
-        createdAt: "2026-08-31T16:00:00Z",
+        serviceDate: "2026-09-01",
       },
       order("other", sameName.id, sameName.name),
       { ...orders[0], orderId: "cny", currency: "CNY" },
@@ -108,7 +109,7 @@ test("月份筛选按北京时间包含月末，按所有页及币种汇总，�
   ])
 })
 
-test("生成月份可与搜索叠加，不使用预约月份", () => {
+test("服务月份可与搜索叠加，不使用生成月份", () => {
   const orders = [
     { ...order("booking", alice.id, alice.name), serviceDate: "2026-09-07" },
   ]
@@ -116,14 +117,14 @@ test("生成月份可与搜索叠加，不使用预约月份", () => {
     page: 1,
     pageSize: 10,
     query: "booking",
-    month: "2026-08",
+    month: "2026-09",
   }
   assert.equal(
     createSalesOrderPage(orders, alice, options).pagination.totalCount,
     1
   )
   assert.equal(
-    createSalesOrderPage(orders, alice, { ...options, month: "2026-09" })
+    createSalesOrderPage(orders, alice, { ...options, month: "2026-07" })
       .pagination.totalCount,
     0
   )
@@ -143,11 +144,11 @@ test("月份选项基于本人全部订单，不受搜索、月份筛选或分�
   const items = [
     {
       ...order("owned", alice.id, alice.name),
-      createdAt: "2025-12-01T00:00:00Z",
+      serviceDate: "2025-12-01",
     },
     {
       ...order("other", sameName.id, sameName.name),
-      createdAt: "2024-01-01T00:00:00Z",
+      serviceDate: "2024-01-01",
     },
   ]
   const result = createSalesOrderPage(items, alice, {
@@ -160,4 +161,26 @@ test("月份选项基于本人全部订单，不受搜索、月份筛选或分�
   assert.equal(result.months.at(-1), "2025-12")
   assert.ok(result.months.includes("2026-02"))
   assert.equal(result.months.includes("2024-01"), false)
+})
+
+test("未填或非法服务日期不回退到生成日期统计，全部月份仍保留订单", () => {
+  const items = [
+    {
+      ...order("missing", alice.id, alice.name),
+      serviceDate: "",
+      createdAt: "2026-02-01T00:00:00Z",
+    },
+    {
+      ...order("invalid", alice.id, alice.name),
+      serviceDate: "2026-02-30",
+      createdAt: "2026-02-01T00:00:00Z",
+    },
+  ]
+  const options = { page: 1, pageSize: 10, query: "", month: "2026-02" }
+  assert.deepEqual(createSalesOrderPage(items, alice, options).totals, [])
+  assert.equal(
+    createSalesOrderPage(items, alice, { ...options, month: "" }).pagination
+      .totalCount,
+    2
+  )
 })

@@ -1,5 +1,5 @@
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
-import { shanghaiDate, validMonth, orderMonthOptions } from "./sales-date.ts"
+import { serviceMonth, validMonth, orderMonthOptions } from "./sales-date.ts"
 import type { CmsPaymentOrder, CmsSalesMember } from "@/types/cms"
 
 type SalesOrder = {
@@ -45,7 +45,7 @@ function createSalesOrderPage(
     .filter(
       (order) =>
         !validMonth(options.month ?? "") ||
-        shanghaiDate(new Date(order.createdAt)).startsWith(options.month!)
+        serviceMonth(order.serviceDate).startsWith(options.month!)
     )
     .toSorted(
       (left, right) =>

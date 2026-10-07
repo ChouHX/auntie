@@ -31,10 +31,7 @@ export function OrderMonthSelect({
         if (month !== value) onValueChange(month)
       }}
     >
-      <SelectTrigger
-        aria-label="订单生成月份（北京时间）"
-        className="h-8 w-36 shrink-0"
-      >
+      <SelectTrigger aria-label="服务月份" className="h-8 w-36 shrink-0">
         <SelectValue placeholder="选择月份" />
       </SelectTrigger>
       <SelectContent>

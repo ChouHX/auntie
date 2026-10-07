@@ -113,6 +113,7 @@ function order(
   return {
     amountValue: receivedAmount,
     createdAt: paidAt,
+    serviceDate: paidAt.slice(0, 10),
     currency,
     orderId,
     orderProfit,
@@ -142,11 +143,11 @@ test("选择历史月份会更新月客户数、利润及排行，保留累计�
   assert.equal(result.orderCountRanking[0].orderCount, 1)
 })
 
-test("Dashboard 月统计按生成日期，不按付款或预约日期", () => {
+test("Dashboard 月统计按服务日期，不按生成或付款日期", () => {
   const deferred = {
     ...orders[0],
     createdAt: "2026-07-31T16:00:00Z",
-    paidAt: "2026-09-07T00:00:00Z",
+    paidAt: "2026-08-07T00:00:00Z",
     serviceDate: "2026-09-07",
   }
   const fixture = { ...content, paymentOrders: [deferred] }
@@ -157,8 +158,8 @@ test("Dashboard 月统计按生成日期，不按付款或预约日期", () => {
     new Date("2026-10-01T00:00:00Z"),
     "2026-08"
   )
-  assert.deepEqual(august.monthlyProfit, [{ amount: 30, currency: "USD" }])
-  assert.equal(august.orderCountRanking[0].orderCount, 1)
+  assert.deepEqual(august.monthlyProfit, [])
+  assert.equal(august.orderCountRanking[0].orderCount, 0)
   const september = createSalesUserDashboard(
     fixture,
     [],
@@ -166,6 +167,6 @@ test("Dashboard 月统计按生成日期，不按付款或预约日期", () => {
     new Date("2026-10-01T00:00:00Z"),
     "2026-09"
   )
-  assert.deepEqual(september.monthlyProfit, [])
-  assert.equal(september.orderCountRanking[0].orderCount, 0)
+  assert.deepEqual(september.monthlyProfit, [{ amount: 30, currency: "USD" }])
+  assert.equal(september.orderCountRanking[0].orderCount, 1)
 })

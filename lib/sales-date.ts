@@ -14,14 +14,14 @@ export function validMonth(value: string) {
 
 // Build the range before applying month, search, or pagination filters.
 export function orderMonthOptions(
-  orders: ReadonlyArray<{ createdAt: string }>,
+  orders: ReadonlyArray<{ serviceDate?: string }>,
   now = new Date()
 ) {
   const current = shanghaiDate(now).slice(0, 7)
   let earliest = current
   let latest = current
   for (const order of orders) {
-    const month = shanghaiDate(new Date(order.createdAt)).slice(0, 7)
+    const month = serviceMonth(order.serviceDate)
     if (!validMonth(month)) continue
     if (month < earliest) earliest = month
     if (month > latest) latest = month
@@ -35,4 +35,14 @@ export function orderMonthOptions(
     )
   }
   return months
+}
+
+// Service dates are calendar dates in the service location, not timestamps.
+export function serviceMonth(value: string | undefined) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return ""
+  const date = new Date(`${value}T00:00:00Z`)
+  return Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value
+    ? value.slice(0, 7)
+    : ""
 }

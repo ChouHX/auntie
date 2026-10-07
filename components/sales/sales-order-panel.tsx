@@ -131,7 +131,7 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
         aria-live="polite"
       >
         <p className="text-muted-foreground">
-          生成月份：{month || "全部"}（北京时间）· 全部筛选结果合计
+          服务月份：{month || "全部"}· 全部筛选结果合计
         </p>
         {loading
           ? "加载中..."

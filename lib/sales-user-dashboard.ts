@@ -1,5 +1,10 @@
-// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
-import { shanghaiDate, validMonth, orderMonthOptions } from "./sales-date.ts"
+import {
+  shanghaiDate,
+  serviceMonth,
+  validMonth,
+  orderMonthOptions,
+  // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+} from "./sales-date.ts"
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
 import { findSalesMemberForStudentTags } from "./sales-attribution.ts"
 import type { WecomCustomer } from "@/lib/wecom-types"
@@ -49,7 +54,7 @@ function createSalesUserDashboard(
   const monthlyPaidOrders = content.paymentOrders.filter(
     (order) =>
       order.status === "paid" &&
-      shanghaiDate(new Date(order.createdAt)).startsWith(month)
+      serviceMonth(order.serviceDate).startsWith(month)
   )
   const rankings = content.salesMembers
     .filter((member) => member.status === "active")
@@ -84,7 +89,7 @@ function createSalesUserDashboard(
     monthLabel: `${month.slice(0, 4)} 年 ${Number(month.slice(5, 7))} 月`,
     monthlyProfit: sumMoney(
       ownedPaidOrders.filter((order) =>
-        shanghaiDate(new Date(order.createdAt)).startsWith(month)
+        serviceMonth(order.serviceDate).startsWith(month)
       ),
       "orderProfit"
     ),

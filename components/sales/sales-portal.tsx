@@ -219,7 +219,7 @@ function SalesDashboardContent({
         <div>
           <h2 className="text-base font-semibold">你好，{data.member.name}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            订单按生成月份统计（北京时间），客户按添加时间统计
+            订单按服务月份统计，客户按添加时间统计
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs">
