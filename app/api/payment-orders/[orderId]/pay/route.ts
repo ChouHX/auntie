@@ -104,7 +104,6 @@ export async function POST(
       savedOrder,
       {
         logoImage,
-        siteOrigin: new URL(request.url).origin,
       }
     )
   } catch (error) {

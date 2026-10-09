@@ -105,7 +105,7 @@ beforeEach(() => {
 })
 
 function request(patch = {}) {
-  return new Request("https://example.com/api/bookings", {
+  return new Request("https://0.0.0.0:3000/api/bookings", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -155,7 +155,8 @@ test("saved bookings send their details to the configured recipient after the re
     assert.ok(messages[0].text.includes(detail), detail)
   }
   assert.match(messages[0].html, /Test &lt;Customer&gt;/)
-  assert.match(messages[0].html, /https:\/\/example.com\/logo.webp/)
+  assert.match(messages[0].html, /https:\/\/auntiechen.com\/logo.webp/)
+  assert.ok(!messages[0].html.includes("0.0.0.0"))
   assert.ok(
     events.some(
       (event) =>

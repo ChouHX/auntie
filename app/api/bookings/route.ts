@@ -197,7 +197,6 @@ export async function POST(request: NextRequest) {
       requestId,
     })
 
-    const siteOrigin = new URL(request.url).origin
     after(async () => {
       const notificationStartedAt = Date.now()
       try {
@@ -206,7 +205,6 @@ export async function POST(request: NextRequest) {
           order,
           {
             logoImage: bookingContent.siteSettings.logoImage,
-            siteOrigin,
           }
         )
         logServerEvent(

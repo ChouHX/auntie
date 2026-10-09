@@ -36,7 +36,6 @@ export async function POST(
       submission,
       {
         logoImage: content.siteSettings.logoImage,
-        siteOrigin: new URL(request.url).origin,
       }
     )
 

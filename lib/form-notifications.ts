@@ -10,7 +10,6 @@ type FormSubmission = {
 
 type NotificationOptions = {
   logoImage?: string
-  siteOrigin?: string
 }
 
 const brandName = "陈阿姨到家"
@@ -289,30 +288,20 @@ function createNotificationHtml({
 </div>`
 }
 
-function getLogoUrl({ logoImage, siteOrigin }: NotificationOptions = {}) {
-  const explicitLogoUrl = String(logoImage || "").trim()
-  const publicSiteUrl = String(
-    siteOrigin || process.env.PUBLIC_SITE_URL || ""
-  ).trim()
+function getLogoUrl({ logoImage }: NotificationOptions = {}) {
+  const explicitLogoUrl = String(logoImage || "").trim() || "/logo.webp"
+  // Request origins can contain Docker's internal host behind a reverse proxy.
+  const publicSiteUrl =
+    String(process.env.PUBLIC_SITE_URL || "").trim() || "https://auntiechen.com"
 
-  if (explicitLogoUrl) {
-    if (/^https?:\/\//i.test(explicitLogoUrl)) {
-      return explicitLogoUrl
-    }
-
-    if (publicSiteUrl) {
-      return `${publicSiteUrl.replace(/\/+$/, "")}/${explicitLogoUrl.replace(
-        /^\/+/,
-        ""
-      )}`
-    }
+  if (/^https?:\/\//i.test(explicitLogoUrl)) {
+    return explicitLogoUrl
   }
 
-  if (!publicSiteUrl) {
-    return ""
-  }
-
-  return `${publicSiteUrl.replace(/\/+$/, "")}/logo.webp`
+  return `${publicSiteUrl.replace(/\/+$/, "")}/${explicitLogoUrl.replace(
+    /^\/+/,
+    ""
+  )}`
 }
 
 function serviceError(status: number, error: string, message: string) {

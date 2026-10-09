@@ -46,7 +46,6 @@ type WebhookApplyResult = {
 export async function POST(request: NextRequest) {
   const config = getAirwallexConfig()
   const rawBody = await request.text()
-  const siteOrigin = new URL(request.url).origin
   const timestamp = request.headers.get("x-timestamp") ?? ""
   const signature = request.headers.get("x-signature") ?? ""
 
@@ -99,7 +98,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (result.shouldNotify && result.order && result.notificationSettings) {
-    sendPaymentNotificationInBackground(result, siteOrigin)
+    sendPaymentNotificationInBackground(result)
   }
 
   return Response.json({
@@ -460,10 +459,7 @@ function getNumber(value: unknown) {
   return Number.isFinite(numberValue) ? numberValue : undefined
 }
 
-function sendPaymentNotificationInBackground(
-  result: WebhookApplyResult,
-  siteOrigin: string
-) {
+function sendPaymentNotificationInBackground(result: WebhookApplyResult) {
   if (!result.order || !result.notificationSettings) {
     return
   }
@@ -479,7 +475,6 @@ function sendPaymentNotificationInBackground(
         order,
         {
           logoImage,
-          siteOrigin,
         }
       )
     } catch (error) {
