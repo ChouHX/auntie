@@ -1589,9 +1589,19 @@ function BookingSuccessPage({
               </Button>
               <p className="mt-4 text-sm leading-7 text-muted-foreground">
                 {isZh
-                  ? "请点击按钮复制完整预约信息，并返回企业微信发送给客服。客服收到信息后，会为您确认服务安排。"
-                  : "Copy the complete booking information and send it to support in WeCom. Support will confirm the arrangement."}
+                  ? "请长按二维码，自动弹出对话框，即可快速添加客服企业微信。"
+                  : "Press and hold the QR code to open the dialog and quickly add our customer support on WeCom."}
               </p>
+            </div>
+
+            <div>
+              <div className="mx-auto w-full max-w-52 rounded-xl border border-border bg-white p-2 shadow-sm dark:border-white/10">
+                <img
+                  alt={isZh ? "企业微信客服二维码" : "WeCom support QR code"}
+                  className="aspect-square w-full rounded-lg object-contain"
+                  src={qrImage}
+                />
+              </div>
               <div className="mt-4 grid gap-2 text-sm">
                 <a
                   className="flex w-fit items-center gap-2 rounded-md px-1 py-1 font-medium text-blue-700 transition-colors hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
@@ -1612,14 +1622,6 @@ function BookingSuccessPage({
                   <span className="break-all">{contactEmail}</span>
                 </a>
               </div>
-            </div>
-
-            <div className="mx-auto w-full max-w-52 rounded-xl border border-border bg-white p-2 shadow-sm dark:border-white/10">
-              <img
-                alt={isZh ? "企业微信客服二维码" : "WeCom support QR code"}
-                className="aspect-square w-full rounded-lg object-contain"
-                src={qrImage}
-              />
             </div>
           </div>
         </Card>
