@@ -31,7 +31,7 @@ export async function POST(
     const formType = type === "join" ? "join" : "estimate"
     const submission = normalizeFormSubmission(formType, body)
 
-    await sendFormNotification(
+    const notificationSent = await sendFormNotification(
       normalizeNotificationSettings(content.notificationSettings),
       submission,
       {
@@ -39,6 +39,17 @@ export async function POST(
         siteOrigin: new URL(request.url).origin,
       }
     )
+
+    // These forms are delivered only by email; never acknowledge a dropped submission.
+    if (!notificationSent) {
+      return Response.json(
+        {
+          error: "form_notifications_disabled",
+          message: "暂时无法提交申请，请通过电话或企业微信联系我们。",
+        },
+        { status: 503 }
+      )
+    }
 
     return Response.json({ ok: true }, { status: 202 })
   } catch (error) {

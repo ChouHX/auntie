@@ -1,4 +1,5 @@
 import { sendMail, type SmtpConfig } from "@/lib/mailer"
+import { normalizeNotificationSettings } from "@/lib/notification-settings"
 import type { CmsNotificationSettings, CmsPaymentOrder } from "@/types/cms"
 
 type FormSubmission = {
@@ -12,35 +13,8 @@ type NotificationOptions = {
   siteOrigin?: string
 }
 
-const defaultNotificationSettings: CmsNotificationSettings = {
-  recipientEmail: "auntiechenhome@gmail.com",
-  smtpFrom: "",
-  smtpHost: "",
-  smtpPassword: "",
-  smtpPort: "587",
-  smtpSecure: false,
-  smtpUsername: "",
-}
 const brandName = "陈阿姨到家"
 const emailSubjectPrefix = "[Auntichen]"
-
-function normalizeNotificationSettings(
-  value?: Partial<CmsNotificationSettings> | null
-): CmsNotificationSettings {
-  return {
-    recipientEmail: String(
-      value?.recipientEmail || defaultNotificationSettings.recipientEmail
-    ).trim(),
-    smtpFrom: String(value?.smtpFrom || "").trim(),
-    smtpHost: String(value?.smtpHost || "").trim(),
-    smtpPassword: String(value?.smtpPassword || ""),
-    smtpPort: String(value?.smtpPort || defaultNotificationSettings.smtpPort)
-      .trim()
-      .replace(/[^0-9]/g, ""),
-    smtpSecure: Boolean(value?.smtpSecure),
-    smtpUsername: String(value?.smtpUsername || "").trim(),
-  }
-}
 
 function normalizeFormSubmission(
   formType: FormSubmission["formType"],
@@ -69,6 +43,8 @@ async function sendFormNotification(
   submission: FormSubmission,
   options: NotificationOptions = {}
 ) {
+  settings = normalizeNotificationSettings(settings)
+  if (!settings.enabled) return false
   const recipientEmail = settings.recipientEmail
 
   if (!recipientEmail || !isEmailLike(recipientEmail)) {
@@ -137,6 +113,7 @@ async function sendFormNotification(
     text,
     to: recipientEmail,
   })
+  return true
 }
 
 async function sendPaymentOrderNotification(
@@ -144,6 +121,8 @@ async function sendPaymentOrderNotification(
   order: CmsPaymentOrder,
   options: NotificationOptions = {}
 ) {
+  settings = normalizeNotificationSettings(settings)
+  if (!settings.enabled) return false
   const recipientEmail = settings.recipientEmail
 
   if (!recipientEmail || !isEmailLike(recipientEmail)) {
@@ -191,6 +170,46 @@ async function sendPaymentOrderNotification(
     text,
     to: recipientEmail,
   })
+  return true
+}
+
+async function sendBookingOrderNotification(
+  settings: CmsNotificationSettings,
+  order: CmsPaymentOrder,
+  options: NotificationOptions = {}
+) {
+  const addOns = [
+    ...(order.addOnItems ?? []).map((item) => item.label),
+    order.addOnOther?.trim(),
+  ].filter(Boolean)
+
+  return sendFormNotification(
+    settings,
+    {
+      formType: "estimate",
+      submittedAt: order.createdAt,
+      fields: [
+        ["预约订单号", order.orderId],
+        ["客户姓名", order.customerName],
+        ["联系方式", order.contact],
+        ["服务城市 / 区域", order.serviceArea],
+        ["详细地址", order.serviceAddress],
+        ["期望服务日期", order.serviceDate],
+        ["服务类型", order.serviceType],
+        [
+          "房屋情况",
+          order.studio
+            ? `Studio（开间）/ ${order.bathrooms ?? 0} 卫`
+            : `${order.bedrooms ?? 0} 卧 / ${order.bathrooms ?? 0} 卫`,
+        ],
+        ["是否有宠物", order.hasPets ? "是" : "否"],
+        ["附加项目", addOns.join("、") || "无"],
+        ["备注", order.note || "无"],
+        ["预约状态", "待客服确认服务安排及费用"],
+      ],
+    },
+    options
+  )
 }
 
 function createSmtpConfig(settings: CmsNotificationSettings): SmtpConfig {
@@ -272,8 +291,9 @@ function createNotificationHtml({
 
 function getLogoUrl({ logoImage, siteOrigin }: NotificationOptions = {}) {
   const explicitLogoUrl = String(logoImage || "").trim()
-  const publicSiteUrl = String(siteOrigin || process.env.PUBLIC_SITE_URL || "")
-    .trim()
+  const publicSiteUrl = String(
+    siteOrigin || process.env.PUBLIC_SITE_URL || ""
+  ).trim()
 
   if (explicitLogoUrl) {
     if (/^https?:\/\//i.test(explicitLogoUrl)) {
@@ -306,9 +326,11 @@ function serviceError(status: number, error: string, message: string) {
 }
 
 export {
-  defaultNotificationSettings,
   normalizeFormSubmission,
   normalizeNotificationSettings,
+  sendBookingOrderNotification,
   sendPaymentOrderNotification,
   sendFormNotification,
 }
+
+export { defaultNotificationSettings } from "@/lib/notification-settings"

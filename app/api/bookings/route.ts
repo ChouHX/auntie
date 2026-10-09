@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import type { NextRequest } from "next/server"
+import { after, type NextRequest } from "next/server"
 
 import { readCmsContent, updateCmsContent } from "@/lib/cms-store"
 import {
@@ -10,6 +10,10 @@ import {
   isValidBookingPhone,
 } from "@/lib/booking-config"
 import { logServerEvent, serializeServerError } from "@/lib/server-log"
+import {
+  normalizeNotificationSettings,
+  sendBookingOrderNotification,
+} from "@/lib/form-notifications"
 import type {
   CmsPaymentOrder,
   CmsServiceLocation,
@@ -191,6 +195,39 @@ export async function POST(request: NextRequest) {
       durationMs: Date.now() - startedAt,
       orderId: order.orderId,
       requestId,
+    })
+
+    const siteOrigin = new URL(request.url).origin
+    after(async () => {
+      const notificationStartedAt = Date.now()
+      try {
+        const notificationSent = await sendBookingOrderNotification(
+          normalizeNotificationSettings(bookingContent.notificationSettings),
+          order,
+          {
+            logoImage: bookingContent.siteSettings.logoImage,
+            siteOrigin,
+          }
+        )
+        logServerEvent(
+          "info",
+          notificationSent
+            ? "booking.notification.sent"
+            : "booking.notification.skipped",
+          {
+            durationMs: Date.now() - notificationStartedAt,
+            orderId: order.orderId,
+            requestId,
+          }
+        )
+      } catch (error) {
+        logServerEvent("error", "booking.notification.failed", {
+          durationMs: Date.now() - notificationStartedAt,
+          error: serializeServerError(error),
+          orderId: order.orderId,
+          requestId,
+        })
+      }
     })
 
     return bookingJsonResponse({ order }, 201, requestId)

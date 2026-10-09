@@ -99,7 +99,7 @@ export async function POST(
   let notificationSent = false
 
   try {
-    await sendPaymentOrderNotification(
+    notificationSent = await sendPaymentOrderNotification(
       normalizeNotificationSettings(notificationSettings),
       savedOrder,
       {
@@ -107,7 +107,6 @@ export async function POST(
         siteOrigin: new URL(request.url).origin,
       }
     )
-    notificationSent = true
   } catch (error) {
     console.error("Payment notification failed", error)
   }

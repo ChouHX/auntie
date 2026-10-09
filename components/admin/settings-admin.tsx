@@ -48,6 +48,10 @@ import {
   type AdminPaymentRuntimeConfig,
 } from "@/lib/cms-api"
 import { cn } from "@/lib/utils"
+import {
+  getNotificationSettingsIssues,
+  normalizeNotificationSettings,
+} from "@/lib/notification-settings"
 import type {
   CmsAfterSalesPageContent,
   CmsAfterSalesQrItem,
@@ -561,12 +565,24 @@ export function SiteSettingsAdmin({
     ]
   )
   const logoPreviewImage = draft.logoImage.trim() || "/logo.webp"
+  const notificationIssues = getNotificationSettingsIssues(
+    createNotificationSettingsFromSiteSettings(
+      content.notificationSettings,
+      draft
+    )
+  )
 
   function updateDraft(patch: Partial<SiteSettingsDraft>) {
-    setDraft((current) => ({
-      ...current,
-      ...patch,
-    }))
+    setDraft((current) => {
+      const next = { ...current, ...patch }
+      return {
+        ...next,
+        notificationEnabled: createNotificationSettingsFromSiteSettings(
+          content.notificationSettings,
+          next
+        ).enabled,
+      }
+    })
   }
 
   async function handleContactQrUpload(file: File) {
@@ -853,6 +869,30 @@ export function SiteSettingsAdmin({
                 <p>用于用户付款完成、预约通知和加入申请邮件。</p>
               </div>
             </div>
+            <div className="mb-3 space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={
+                    draft.notificationEnabled && notificationIssues.length === 0
+                  }
+                  disabled={notificationIssues.length > 0 || isSaving}
+                  onCheckedChange={(checked) =>
+                    updateDraft({ notificationEnabled: checked === true })
+                  }
+                />
+                <span>启用邮件通知</span>
+              </label>
+              <p
+                className="text-xs leading-5 text-muted-foreground"
+                role="status"
+              >
+                {notificationIssues.length > 0
+                  ? `通知已自动禁用，请补全或修正：${notificationIssues.join("、")}。`
+                  : draft.notificationEnabled
+                    ? "通知已启用，修改后请保存站点设置。"
+                    : "通知已关闭。可勾选启用，并保存站点设置。"}
+              </p>
+            </div>
             <div className="grid gap-2.5 sm:grid-cols-2">
               <FormField className="space-y-1.5" label="SMTP Host">
                 <Input
@@ -1028,6 +1068,7 @@ type SiteSettingsDraft = {
   email: string
   logoImage: string
   notificationEmail: string
+  notificationEnabled: boolean
   phone: string
   smtpFrom: string
   smtpHost: string
@@ -1046,7 +1087,9 @@ function createSiteSettingsDraft(content: CmsContent): SiteSettingsDraft {
     content.afterSalesPage?.zh,
     defaultAfterSalesPage.zh
   )
-  const notificationSettings = content.notificationSettings
+  const notificationSettings = normalizeNotificationSettings(
+    content.notificationSettings
+  )
 
   return {
     afterSalesFeedbackQrImage:
@@ -1064,11 +1107,12 @@ function createSiteSettingsDraft(content: CmsContent): SiteSettingsDraft {
       notificationSettings?.recipientEmail ||
       contactPage.contactEmail ||
       defaultContactPage.zh.contactEmail,
+    notificationEnabled: notificationSettings.enabled,
     phone: contactPage.contactPhone || defaultContactPage.zh.contactPhone,
     smtpFrom: notificationSettings?.smtpFrom || "",
     smtpHost: notificationSettings?.smtpHost || "",
     smtpPassword: notificationSettings?.smtpPassword || "",
-    smtpPort: notificationSettings?.smtpPort || "587",
+    smtpPort: notificationSettings.smtpPort,
     smtpSecure: Boolean(notificationSettings?.smtpSecure),
     smtpUsername: notificationSettings?.smtpUsername || "",
   }
@@ -1088,16 +1132,17 @@ function createNotificationSettingsFromSiteSettings(
   value: CmsContent["notificationSettings"] | undefined,
   draft: SiteSettingsDraft
 ): CmsContent["notificationSettings"] {
-  return {
+  return normalizeNotificationSettings({
     ...value,
+    enabled: draft.notificationEnabled,
     recipientEmail: draft.notificationEmail.trim(),
     smtpFrom: draft.smtpFrom.trim(),
     smtpHost: draft.smtpHost.trim(),
     smtpPassword: draft.smtpPassword,
-    smtpPort: draft.smtpPort.trim().replace(/[^0-9]/g, "") || "587",
+    smtpPort: draft.smtpPort.trim(),
     smtpSecure: draft.smtpSecure,
     smtpUsername: draft.smtpUsername.trim(),
-  }
+  })
 }
 
 function createContactPageRecordFromSiteSettings(

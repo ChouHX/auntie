@@ -8,7 +8,7 @@ import {
 } from "node:crypto"
 
 import { defaultCmsContent } from "@/data/cms-defaults"
-import { normalizeNotificationSettings } from "@/lib/form-notifications"
+import { normalizeNotificationSettings } from "@/lib/notification-settings"
 import { logServerEvent } from "@/lib/server-log"
 import {
   calculateOrderFinancialsSafely,
@@ -817,6 +817,7 @@ function toPublicContent(content: CmsContent): CmsContent {
     paymentOrders: [],
     paymentSettings: content.paymentSettings,
     notificationSettings: {
+      enabled: false,
       recipientEmail: "",
       smtpFrom: "",
       smtpHost: "",
