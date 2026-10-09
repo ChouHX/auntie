@@ -100,9 +100,17 @@ async function sendSmtpMessage({
   to,
   username,
 }: SmtpMessageInput) {
+  // Cross-region SMTP connections may need longer than Node's default 250 ms
+  // before falling back to the next IPv4/IPv6 address.
+  const connectionOptions = {
+    host,
+    port,
+    autoSelectFamily: true,
+    autoSelectFamilyAttemptTimeout: 5_000,
+  }
   let socket: net.Socket | tls.TLSSocket = secure
-    ? tls.connect({ host, port, servername: host })
-    : net.connect({ host, port })
+    ? tls.connect({ ...connectionOptions, servername: host })
+    : net.connect(connectionOptions)
   socket.setEncoding("utf8")
   socket.setTimeout(20_000)
 

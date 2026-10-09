@@ -11,6 +11,7 @@
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "test:notifications": "node --experimental-test-module-mocks --test --test-isolation=none app/api/bookings/route.test.mjs lib/notification-settings.test.ts lib/booking-config.test.ts",
+    "test:smtp": "node --test --test-isolation=none lib/mailer.test.mjs lib/server-log.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
