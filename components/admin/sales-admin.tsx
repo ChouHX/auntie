@@ -3,6 +3,8 @@
 import { SalesColumnFilter } from "@/components/admin/sales-column-filter"
 
 import { OrderMonthSelect } from "@/components/sales/order-month-select"
+import { SalesOrderPanel } from "@/components/sales/sales-order-panel"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { useEffect, useState } from "react"
 import { PencilSimple, Plus, Trash } from "@phosphor-icons/react"
@@ -43,6 +45,7 @@ import type { AdminSalesCommissionSummary } from "@/lib/cms-api"
 import type { CmsSalesMember } from "@/types/cms"
 
 export function SalesAdmin({ token }: { token: string }) {
+  const [selectedMemberId, setSelectedMemberId] = useState("")
   const [selectedNames, setSelectedNames] = useState<string[] | null>(null)
   const [selectedTags, setSelectedTags] = useState<string[] | null>(null)
   const [months, setMonths] = useState<string[]>([])
@@ -151,173 +154,235 @@ export function SalesAdmin({ token }: { token: string }) {
       (selectedTags === null || selectedTags.includes(member.studentTag))
   )
 
+  const selectedMember =
+    members.find((member) => member.id === selectedMemberId) ?? members[0]
+
   return (
     <>
       {noticeDialog}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">销售管理</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              将企业微信学员分区标签绑定到销售，并配置订单学员提成。
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              表格金额按所选服务月份统计每位销售的已支付订单。
-            </p>
+      <Tabs defaultValue="members" className="space-y-3">
+        <TabsList aria-label="销售管理页面">
+          <TabsTrigger value="members">销售资料</TabsTrigger>
+          <TabsTrigger value="orders">销售订单与汇总</TabsTrigger>
+        </TabsList>
+        <TabsContent value="members">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">销售管理</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                将企业微信学员分区标签绑定到销售，并配置订单学员提成。
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                表格金额按所选服务月份统计每位销售的已支付订单。
+              </p>
+            </div>
+            <div className="flex max-w-full items-center gap-2 overflow-x-auto">
+              <label className="flex shrink-0 items-center gap-2 text-xs">
+                服务月份
+                <OrderMonthSelect
+                  months={months}
+                  value={month}
+                  onValueChange={(nextMonth) => {
+                    setIsLoading(true)
+                    setMonth(nextMonth)
+                  }}
+                />
+              </label>
+              <Button className="h-8 shrink-0" onClick={createMember} size="sm">
+                <Plus size={15} />
+                新建销售
+              </Button>
+            </div>
           </div>
-          <div className="flex max-w-full items-center gap-2 overflow-x-auto">
-            <label className="flex shrink-0 items-center gap-2 text-xs">
-              服务月份
-              <OrderMonthSelect
-                months={months}
-                value={month}
-                onValueChange={(nextMonth) => {
-                  setIsLoading(true)
-                  setMonth(nextMonth)
+          {(selectedNames !== null || selectedTags !== null) && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              显示 {filteredMembers.length} / {members.length} 位销售
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setSelectedNames(null)
+                  setSelectedTags(null)
                 }}
-              />
-            </label>
-            <Button className="h-8 shrink-0" onClick={createMember} size="sm">
-              <Plus size={15} />
-              新建销售
-            </Button>
-          </div>
-        </div>
-        {(selectedNames !== null || selectedTags !== null) && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            显示 {filteredMembers.length} / {members.length} 位销售
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setSelectedNames(null)
-                setSelectedTags(null)
-              }}
-            >
-              清除列筛选
-            </Button>
-          </div>
-        )}
-        <Card className="overflow-hidden rounded-lg shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <SalesColumnFilter
-                    label="销售名称"
-                    options={members.map((member) => member.name)}
-                    selected={selectedNames}
-                    onChange={setSelectedNames}
-                  />
-                </TableHead>
-                <TableHead>登录账号</TableHead>
-                <TableHead>
-                  <SalesColumnFilter
-                    label="学员分区标签"
-                    options={members.map((member) => member.studentTag)}
-                    selected={selectedTags}
-                    onChange={setSelectedTags}
-                  />
-                </TableHead>
-                <TableHead>分成规则</TableHead>
-                <TableHead>订单总金额</TableHead>
-                <TableHead>提成总额（原币 / 人民币）</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredMembers.length ? (
-                filteredMembers.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell className="font-medium">{member.name}</TableCell>
-                    <TableCell>
-                      {member.accountUsername ? (
-                        <span className="font-mono text-xs">
-                          {member.accountUsername}
-                        </span>
-                      ) : (
-                        <Badge variant="secondary">未开通</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{member.studentTag}</Badge>
-                    </TableCell>
-                    <TableCell>{formatCommissionRule(member)}</TableCell>
-                    <TableCell>
+              >
+                清除列筛选
+              </Button>
+            </div>
+          )}
+          <Card className="overflow-hidden rounded-lg shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>
+                    <SalesColumnFilter
+                      label="销售名称"
+                      options={members.map((member) => member.name)}
+                      selected={selectedNames}
+                      onChange={setSelectedNames}
+                    />
+                  </TableHead>
+                  <TableHead>登录账号</TableHead>
+                  <TableHead>
+                    <SalesColumnFilter
+                      label="学员分区标签"
+                      options={members.map((member) => member.studentTag)}
+                      selected={selectedTags}
+                      onChange={setSelectedTags}
+                    />
+                  </TableHead>
+                  <TableHead>分成规则</TableHead>
+                  <TableHead>订单总金额</TableHead>
+                  <TableHead>提成总额（原币 / 人民币）</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredMembers.length ? (
+                  filteredMembers.map((member) => (
+                    <TableRow key={member.id}>
+                      <TableCell className="font-medium">
+                        {member.name}
+                      </TableCell>
+                      <TableCell>
+                        {member.accountUsername ? (
+                          <span className="font-mono text-xs">
+                            {member.accountUsername}
+                          </span>
+                        ) : (
+                          <Badge variant="secondary">未开通</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{member.studentTag}</Badge>
+                      </TableCell>
+                      <TableCell>{formatCommissionRule(member)}</TableCell>
+                      <TableCell>
+                        {isLoading
+                          ? "加载中..."
+                          : formatTotals(
+                              commissionSummaryMap.get(member.id)
+                                ?.orderAmounts ?? []
+                            )}
+                      </TableCell>
+                      <TableCell>
+                        {isLoading ? (
+                          "加载中..."
+                        ) : (
+                          <CommissionSummary
+                            summary={commissionSummaryMap.get(member.id)}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            member.status === "active"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-muted text-muted-foreground"
+                          }
+                          variant="secondary"
+                        >
+                          {member.status === "active" ? "启用" : "停用"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            aria-label="编辑销售"
+                            className="size-8"
+                            onClick={() => {
+                              setEditingPassword("")
+                              setEditing({ ...member })
+                            }}
+                            size="icon-sm"
+                            variant="navIcon"
+                          >
+                            <PencilSimple size={14} />
+                          </Button>
+                          <Button
+                            aria-label="删除销售"
+                            className="size-8"
+                            onClick={() => void deleteMember(member)}
+                            size="icon-sm"
+                            variant="destructive"
+                          >
+                            <Trash size={14} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      className="h-28 text-center text-muted-foreground"
+                      colSpan={8}
+                    >
                       {isLoading
-                        ? "加载中..."
-                        : formatTotals(
-                            commissionSummaryMap.get(member.id)?.orderAmounts ??
-                              []
-                          )}
-                    </TableCell>
-                    <TableCell>
-                      {isLoading ? (
-                        "加载中..."
-                      ) : (
-                        <CommissionSummary
-                          summary={commissionSummaryMap.get(member.id)}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          member.status === "active"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-muted text-muted-foreground"
-                        }
-                        variant="secondary"
-                      >
-                        {member.status === "active" ? "启用" : "停用"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          aria-label="编辑销售"
-                          className="size-8"
-                          onClick={() => {
-                            setEditingPassword("")
-                            setEditing({ ...member })
-                          }}
-                          size="icon-sm"
-                          variant="navIcon"
-                        >
-                          <PencilSimple size={14} />
-                        </Button>
-                        <Button
-                          aria-label="删除销售"
-                          className="size-8"
-                          onClick={() => void deleteMember(member)}
-                          size="icon-sm"
-                          variant="destructive"
-                        >
-                          <Trash size={14} />
-                        </Button>
-                      </div>
+                        ? "正在加载..."
+                        : members.length
+                          ? "没有符合筛选条件的销售"
+                          : "暂无销售，请从学员分区标签创建"}
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    className="h-28 text-center text-muted-foreground"
-                    colSpan={8}
-                  >
-                    {isLoading
-                      ? "正在加载..."
-                      : members.length
-                        ? "没有符合筛选条件的销售"
-                        : "暂无销售，请从学员分区标签创建"}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Card>
-      </div>
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+        <TabsContent value="orders">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">销售订单与汇总</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                按销售和服务月份查看订单；订单金额与提成按全部筛选结果分币种汇总，与销售工作台一致。
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-xs">
+              销售
+              <Select
+                value={selectedMember?.id ?? ""}
+                onValueChange={setSelectedMemberId}
+                disabled={!members.length}
+              >
+                <SelectTrigger aria-label="选择销售" className="h-8 w-56">
+                  <SelectValue placeholder="选择销售" />
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name} · {member.studentTag}
+                      {member.status === "inactive" ? "（已停用）" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          </div>
+          {selectedMember ? (
+            <SalesOrderPanel
+              key={selectedMember.id}
+              reloadKey={0}
+              adminView={{
+                memberId: selectedMember.id,
+                memberName: selectedMember.name,
+                month,
+                months,
+                onMonthChange: (nextMonth) => {
+                  setIsLoading(true)
+                  setMonth(nextMonth)
+                },
+                token,
+              }}
+            />
+          ) : (
+            <Card className="p-8 text-center text-sm text-muted-foreground">
+              {isLoading ? "正在加载销售..." : "暂无销售，请先创建销售资料"}
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
       <Dialog
         onOpenChange={(open) => {
           if (!open) {

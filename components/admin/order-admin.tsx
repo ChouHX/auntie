@@ -515,6 +515,9 @@ export function OrderAdmin({
     )
 
     const invalidFields: string[] = []
+    if (!existingEditingOrder && !normalized.customerRelationId?.trim()) {
+      invalidFields.push("客服创建订单必须选择微信客户")
+    }
     const hasPositiveDuration = isPositiveNumber(
       normalized.serviceDurationHours
     )
@@ -695,7 +698,7 @@ export function OrderAdmin({
           </DialogHeader>
           {editingOrder ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="选择用户">
+              <FormField label="微信客户" required={!existingEditingOrder}>
                 <OrderCustomerSelect
                   customerName={editingOrder.customerName}
                   customerRelationId={editingOrder.customerRelationId}

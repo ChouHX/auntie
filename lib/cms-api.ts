@@ -27,6 +27,7 @@ import type {
   SalesDashboardResult,
   SalesOrderFinancePatch,
 } from "@/lib/sales-dashboard-types"
+import type { SalesOrderPage } from "@/lib/sales-orders"
 
 const ADMIN_TOKEN_KEY = "auntie-chen-admin-token"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
@@ -267,6 +268,22 @@ async function fetchAdminSalesMembers(token: string, month = "") {
     salesMembers: CmsSalesMember[]
     studentTags: string[]
   }>(`/api/admin/sales-members?month=${encodeURIComponent(month)}`, {
+    headers: createAuthHeaders(token),
+  })
+}
+
+export async function fetchAdminSalesOrders(
+  token: string,
+  salesMemberId: string,
+  options: { month: string; page: number; pageSize: number; query: string }
+) {
+  const params = new URLSearchParams({
+    ...options,
+    page: String(options.page),
+    pageSize: String(options.pageSize),
+    salesMemberId,
+  })
+  return request<SalesOrderPage>(`/api/admin/sales-orders?${params}`, {
     headers: createAuthHeaders(token),
   })
 }

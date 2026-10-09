@@ -1,8 +1,11 @@
 import crypto from "node:crypto"
 import net from "node:net"
 import tls from "node:tls"
+// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+import { isEmailAddress, uniqueEmailAddresses } from "./email-addresses.ts"
 
 type SendMailInput = {
+  cc?: string[]
   html: string
   smtp: SmtpConfig
   subject: string
@@ -26,11 +29,18 @@ type SmtpMessageInput = {
   password: string
   port: number
   secure: boolean
-  to: string
+  recipients: string[]
   username: string
 }
 
-async function sendMail({ html, smtp, subject, text, to }: SendMailInput) {
+async function sendMail({
+  cc = [],
+  html,
+  smtp,
+  subject,
+  text,
+  to,
+}: SendMailInput) {
   if (!smtp.host) {
     throw serviceError(
       503,
@@ -54,10 +64,24 @@ async function sendMail({ html, smtp, subject, text, to }: SendMailInput) {
     )
   }
 
+  const recipient = extractEmailAddress(to)
+  const copies = uniqueEmailAddresses(cc.map(extractEmailAddress)).filter(
+    (email) => email.toLowerCase() !== recipient.toLowerCase()
+  )
+  if (
+    [from, to, ...cc].some((value) => /[\r\n]/.test(value)) ||
+    ![extractEmailAddress(from), recipient, ...copies].every(isEmailAddress)
+  ) {
+    throw serviceError(400, "invalid_email_address", "邮件地址格式不正确。")
+  }
+
   const boundary = `auntie-chen-${crypto.randomBytes(8).toString("hex")}`
   const message = [
     `From: ${formatEmailAddress(from)}`,
     `To: ${formatEmailAddress(to)}`,
+    ...(copies.length
+      ? [`Cc: ${copies.map(formatEmailAddress).join(",\r\n ")}`]
+      : []),
     `Subject: ${encodeMailHeader(subject)}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -85,7 +109,7 @@ async function sendMail({ html, smtp, subject, text, to }: SendMailInput) {
     password,
     port,
     secure,
-    to,
+    recipients: [recipient, ...copies],
     username,
   })
 }
@@ -97,7 +121,7 @@ async function sendSmtpMessage({
   password,
   port,
   secure,
-  to,
+  recipients,
   username,
 }: SmtpMessageInput) {
   // Cross-region SMTP connections may need longer than Node's default 250 ms
@@ -194,7 +218,9 @@ async function sendSmtpMessage({
     }
 
     await command(`MAIL FROM:<${extractEmailAddress(from)}>`, [250])
-    await command(`RCPT TO:<${extractEmailAddress(to)}>`, [250, 251])
+    for (const recipient of recipients) {
+      await command(`RCPT TO:<${recipient}>`, [250, 251])
+    }
     await command("DATA", [354])
     await command(`${message.replace(/\r?\n\./g, "\r\n..")}\r\n.`, [250])
     await command("QUIT", [221])

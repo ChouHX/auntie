@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { FormField } from "@/components/ui/form-field"
+import { EmailTagInput } from "@/components/ui/email-tag-input"
 import { ImagePreviewer } from "@/components/ui/image-previewer"
 import { Input } from "@/components/ui/input"
 import {
@@ -822,14 +823,14 @@ export function SiteSettingsAdmin({
             </div>
           </section>
 
-          <section className="rounded-lg border border-border bg-card p-2.5 p-3">
+          <section className="rounded-lg border border-border bg-card p-2.5 p-3 xl:col-span-2">
             <div className="mb-2 mb-3 flex items-start gap-2 [&_h2]:text-sm [&_h2]:font-semibold [&_p]:mt-0.5 [&_p]:text-xs [&_p]:text-muted-foreground [&_svg]:mt-0.5 [&_svg]:shrink-0 [&_svg]:text-primary">
               <div>
                 <h2>联系方式</h2>
                 <p>显示在联系我们、页脚和支付辅助入口中。</p>
               </div>
             </div>
-            <div className="grid gap-2.5">
+            <div className="grid gap-2.5 sm:grid-cols-2">
               <FormField className="space-y-1.5" label="电话 / 微信">
                 <Input
                   className="h-8 rounded-md"
@@ -849,117 +850,196 @@ export function SiteSettingsAdmin({
                   value={draft.email}
                 />
               </FormField>
-              <FormField className="space-y-1.5" label="表单通知邮箱">
-                <Input
-                  className="h-8 rounded-md"
-                  onChange={(event) =>
-                    updateDraft({ notificationEmail: event.target.value })
-                  }
-                  type="email"
-                  value={draft.notificationEmail}
-                />
-              </FormField>
             </div>
           </section>
 
-          <section className="rounded-lg border border-border bg-card p-2.5 p-3">
-            <div className="mb-2 mb-3 flex items-start gap-2 [&_h2]:text-sm [&_h2]:font-semibold [&_p]:mt-0.5 [&_p]:text-xs [&_p]:text-muted-foreground [&_svg]:mt-0.5 [&_svg]:shrink-0 [&_svg]:text-primary">
-              <div>
-                <h2>通知 SMTP</h2>
-                <p>用于用户付款完成、预约通知和加入申请邮件。</p>
-              </div>
-            </div>
-            <div className="mb-3 space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <Checkbox
-                  checked={
-                    draft.notificationEnabled && notificationIssues.length === 0
-                  }
-                  disabled={notificationIssues.length > 0 || isSaving}
-                  onCheckedChange={(checked) =>
-                    updateDraft({ notificationEnabled: checked === true })
-                  }
-                />
-                <span>启用邮件通知</span>
-              </label>
-              <p
-                className="text-xs leading-5 text-muted-foreground"
-                role="status"
-              >
-                {notificationIssues.length > 0
-                  ? `通知已自动禁用，请补全或修正：${notificationIssues.join("、")}。`
-                  : draft.notificationEnabled
-                    ? "通知已启用，修改后请保存站点设置。"
-                    : "通知已关闭。可勾选启用，并保存站点设置。"}
+          <section
+            aria-labelledby="notification-heading"
+            className="rounded-lg border border-border bg-card p-3 xl:col-span-2"
+          >
+            <div className="mb-4">
+              <h2 id="notification-heading" className="text-sm font-semibold">
+                邮件通知
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                用于用户付款完成、预约通知和加入申请邮件。
               </p>
             </div>
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              <FormField className="space-y-1.5" label="SMTP Host">
-                <Input
-                  className="h-8 rounded-md"
-                  onChange={(event) =>
-                    updateDraft({ smtpHost: event.target.value })
-                  }
-                  placeholder="smtp.example.com"
-                  value={draft.smtpHost}
-                />
-              </FormField>
-              <FormField className="space-y-1.5" label="SMTP Port">
-                <Input
-                  className="h-8 rounded-md"
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    updateDraft({ smtpPort: event.target.value })
-                  }
-                  placeholder="587"
-                  value={draft.smtpPort}
-                />
-              </FormField>
-              <label className="flex h-8 items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 text-xs text-muted-foreground">
-                <Checkbox
-                  checked={draft.smtpSecure}
-                  onCheckedChange={(checked) =>
-                    updateDraft({ smtpSecure: checked === true })
-                  }
-                />
-                <span>SSL / 465</span>
-              </label>
-              <FormField className="space-y-1.5" label="SMTP Username">
-                <Input
-                  className="h-8 rounded-md"
-                  onChange={(event) =>
-                    updateDraft({ smtpUsername: event.target.value })
-                  }
-                  value={draft.smtpUsername}
-                />
-              </FormField>
-              <FormField
-                className="space-y-1.5"
-                label="SMTP Password / App Password"
+            <div className="grid gap-5 lg:grid-cols-2">
+              <fieldset className="min-w-0 space-y-3" disabled={isSaving}>
+                <legend className="mb-3 text-xs font-semibold text-muted-foreground">
+                  通知与收件人
+                </legend>
+                <FormField
+                  className="space-y-1.5"
+                  htmlFor="notification-enabled"
+                  label="通知开关"
+                >
+                  <label
+                    className="flex h-9 items-center gap-2 rounded-md border border-input bg-muted/30 px-3 text-sm"
+                    htmlFor="notification-enabled"
+                  >
+                    <Checkbox
+                      id="notification-enabled"
+                      checked={
+                        draft.notificationEnabled &&
+                        notificationIssues.length === 0
+                      }
+                      disabled={notificationIssues.length > 0 || isSaving}
+                      onCheckedChange={(checked) =>
+                        updateDraft({ notificationEnabled: checked === true })
+                      }
+                    />
+                    <span>启用邮件通知</span>
+                  </label>
+                  <p
+                    className="text-xs leading-5 text-muted-foreground"
+                    role="status"
+                  >
+                    {notificationIssues.length > 0
+                      ? `通知已自动禁用，请补全或修正：${notificationIssues.join("、")}。`
+                      : draft.notificationEnabled
+                        ? "通知已启用，修改后请保存站点设置。"
+                        : "通知已关闭。可勾选启用，并保存站点设置。"}
+                  </p>
+                </FormField>
+                <FormField
+                  className="space-y-1.5"
+                  htmlFor="notification-recipient"
+                  label="通知收件邮箱"
+                >
+                  <Input
+                    id="notification-recipient"
+                    className="h-9 rounded-md"
+                    onChange={(event) =>
+                      updateDraft({ notificationEmail: event.target.value })
+                    }
+                    placeholder="admin@example.com"
+                    type="email"
+                    value={draft.notificationEmail}
+                  />
+                </FormField>
+                <FormField
+                  className="space-y-1.5"
+                  htmlFor="notification-cc"
+                  label="抄送邮箱（可选）"
+                >
+                  <EmailTagInput
+                    id="notification-cc"
+                    disabled={isSaving}
+                    value={draft.notificationCcEmails}
+                    onChange={(notificationCcEmails) =>
+                      updateDraft({ notificationCcEmails })
+                    }
+                  />
+                </FormField>
+              </fieldset>
+              <fieldset
+                className="min-w-0 border-t border-border pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5"
+                disabled={isSaving}
               >
-                <Input
-                  className="h-8 rounded-md"
-                  onChange={(event) =>
-                    updateDraft({ smtpPassword: event.target.value })
-                  }
-                  type="password"
-                  value={draft.smtpPassword}
-                />
-              </FormField>
-              <FormField
-                className="space-y-1.5"
-                description="留空时默认使用 SMTP Username 作为发件邮箱。"
-                label="发件邮箱"
-              >
-                <Input
-                  className="h-8 rounded-md"
-                  onChange={(event) =>
-                    updateDraft({ smtpFrom: event.target.value })
-                  }
-                  type="email"
-                  value={draft.smtpFrom}
-                />
-              </FormField>
+                <legend className="mb-3 text-xs font-semibold text-muted-foreground">
+                  SMTP 发送设置
+                </legend>
+                <div className="grid items-start gap-3 sm:grid-cols-2">
+                  <FormField
+                    className="space-y-1.5"
+                    htmlFor="smtp-host"
+                    label="SMTP Host"
+                  >
+                    <Input
+                      id="smtp-host"
+                      className="h-9 rounded-md"
+                      onChange={(event) =>
+                        updateDraft({ smtpHost: event.target.value })
+                      }
+                      placeholder="smtp.example.com"
+                      value={draft.smtpHost}
+                    />
+                  </FormField>
+                  <FormField
+                    className="space-y-1.5"
+                    htmlFor="smtp-port"
+                    label="SMTP Port"
+                  >
+                    <Input
+                      id="smtp-port"
+                      className="h-9 rounded-md"
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        updateDraft({ smtpPort: event.target.value })
+                      }
+                      placeholder="587"
+                      value={draft.smtpPort}
+                    />
+                  </FormField>
+                  <FormField
+                    className="space-y-1.5"
+                    htmlFor="smtp-username"
+                    label="SMTP Username"
+                  >
+                    <Input
+                      id="smtp-username"
+                      className="h-9 rounded-md"
+                      onChange={(event) =>
+                        updateDraft({ smtpUsername: event.target.value })
+                      }
+                      value={draft.smtpUsername}
+                    />
+                  </FormField>
+                  <FormField
+                    className="space-y-1.5"
+                    htmlFor="smtp-password"
+                    label="SMTP Password / App Password"
+                  >
+                    <Input
+                      id="smtp-password"
+                      className="h-9 rounded-md"
+                      onChange={(event) =>
+                        updateDraft({ smtpPassword: event.target.value })
+                      }
+                      type="password"
+                      value={draft.smtpPassword}
+                    />
+                  </FormField>
+                  <FormField
+                    className="space-y-1.5"
+                    htmlFor="smtp-from"
+                    description="留空时使用 SMTP Username 作为发件邮箱。"
+                    label="发件邮箱"
+                  >
+                    <Input
+                      id="smtp-from"
+                      className="h-9 rounded-md"
+                      onChange={(event) =>
+                        updateDraft({ smtpFrom: event.target.value })
+                      }
+                      type="email"
+                      value={draft.smtpFrom}
+                    />
+                  </FormField>
+                  <FormField
+                    className="space-y-1.5"
+                    htmlFor="smtp-secure"
+                    description="465 端口使用 SSL；587 端口使用 STARTTLS。"
+                    label="连接安全"
+                  >
+                    <label
+                      className="flex h-9 items-center gap-2 rounded-md border border-input bg-muted/30 px-3 text-sm"
+                      htmlFor="smtp-secure"
+                    >
+                      <Checkbox
+                        id="smtp-secure"
+                        checked={draft.smtpSecure}
+                        onCheckedChange={(checked) =>
+                          updateDraft({ smtpSecure: checked === true })
+                        }
+                      />
+                      <span>SSL / 465</span>
+                    </label>
+                  </FormField>
+                </div>
+              </fieldset>
             </div>
           </section>
 
@@ -1068,6 +1148,7 @@ type SiteSettingsDraft = {
   email: string
   logoImage: string
   notificationEmail: string
+  notificationCcEmails: string[]
   notificationEnabled: boolean
   phone: string
   smtpFrom: string
@@ -1107,6 +1188,7 @@ function createSiteSettingsDraft(content: CmsContent): SiteSettingsDraft {
       notificationSettings?.recipientEmail ||
       contactPage.contactEmail ||
       defaultContactPage.zh.contactEmail,
+    notificationCcEmails: notificationSettings.ccEmails ?? [],
     notificationEnabled: notificationSettings.enabled,
     phone: contactPage.contactPhone || defaultContactPage.zh.contactPhone,
     smtpFrom: notificationSettings?.smtpFrom || "",
@@ -1136,6 +1218,7 @@ function createNotificationSettingsFromSiteSettings(
     ...value,
     enabled: draft.notificationEnabled,
     recipientEmail: draft.notificationEmail.trim(),
+    ccEmails: draft.notificationCcEmails,
     smtpFrom: draft.smtpFrom.trim(),
     smtpHost: draft.smtpHost.trim(),
     smtpPassword: draft.smtpPassword,

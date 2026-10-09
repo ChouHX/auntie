@@ -31,6 +31,10 @@ export async function POST(request: NextRequest) {
     filters: Array.isArray(body.filters) ? body.filters.slice(0, 20) : [],
     logic: body.logic === "any" ? "any" : "all",
     ordersOnly: body.ordersOnly !== false,
+    orderSource:
+      body.orderSource === "support" || body.orderSource === "self_service"
+        ? body.orderSource
+        : undefined,
     page: Number(body.page) || 1,
     pageSize: Number(body.pageSize) || 20,
   }

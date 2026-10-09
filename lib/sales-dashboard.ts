@@ -16,9 +16,12 @@ function createSalesDashboardResult(
   query: SalesDashboardQuery
 ): SalesDashboardResult {
   const allRows = createSalesRows(content, customers)
-  const sourceRows = query.ordersOnly
-    ? allRows.filter((row) => Boolean(row.orderId))
-    : allRows
+  const sourceRows = allRows.filter((row) => {
+    if ((query.ordersOnly || query.orderSource) && !row.orderId) return false
+    if (query.orderSource === "support") return Boolean(row.customerRelationId)
+    if (query.orderSource === "self_service") return !row.customerRelationId
+    return true
+  })
   const filteredRows = query.filters.length
     ? sourceRows.filter((row) =>
         query.logic === "any"
@@ -67,7 +70,7 @@ function createSalesRows(content: CmsContent, customers: WecomCustomer[]) {
   )
   const rows = content.paymentOrders.map((order) => {
     const customer = order.customerRelationId
-      ? customerMap.get(order.customerRelationId)
+      ? customerMap.get(order.customerRelationId.trim())
       : undefined
     if (customer) linkedCustomers.add(customer.relationId)
     return createOrderRow(order, customer, auntieMap, salesMembers)
@@ -122,10 +125,11 @@ function createOrderRow(
     currency: order.currency || "USD",
     customerKey: order.customerRelationId || `order:${order.orderId}`,
     customerName,
-    customerRelationId: order.customerRelationId || "",
+    customerRelationId: order.customerRelationId?.trim() || "",
     customerType,
     dealStatus: order.status === "paid" ? "converted" : "unconverted",
     financeNote: order.financeNote || "",
+    followUser: customer?.followUser || customer?.followUserId || "",
     formulaTemplateIds: order.formulaTemplateIds || {},
     note: order.note,
     orderId: order.orderId,
@@ -171,6 +175,7 @@ function createCustomerRow(
     customerType: getCustomerType(customer.nameAndType),
     dealStatus: "unconverted",
     financeNote: "",
+    followUser: customer.followUser || customer.followUserId || "",
     formulaTemplateIds: {},
     note: customer.description,
     orderId: "",
@@ -302,6 +307,7 @@ function createFilterOptions(rows: SalesDashboardRow[]) {
     cleaningTypes: unique(rows.map((row) => row.cleaningType)),
     currencies: unique(rows.map((row) => row.currency)),
     customerTypes: unique(rows.map((row) => row.customerType)),
+    followUsers: unique(rows.map((row) => row.followUser)),
     regions: unique(rows.map((row) => row.region)),
     salesOwners: unique(rows.map((row) => row.salesOwner)),
   }

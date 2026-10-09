@@ -268,6 +268,7 @@ type CmsOrderReview = {
 }
 
 type CmsNotificationSettings = {
+  ccEmails?: string[]
   enabled: boolean
   recipientEmail: string
   smtpFrom: string

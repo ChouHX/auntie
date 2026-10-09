@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import type { SalesOrder, SalesOrderPage } from "@/lib/sales-orders"
+import { fetchAdminSalesOrders } from "@/lib/cms-api"
 
 const statusLabels: Record<SalesOrder["status"], string> = {
   awaiting_confirmation: "待确认",
@@ -30,14 +31,31 @@ const statusLabels: Record<SalesOrder["status"], string> = {
   unpaid: "未支付",
 }
 
-export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
+export function SalesOrderPanel({
+  adminView,
+  reloadKey,
+}: {
+  adminView?: {
+    memberId: string
+    memberName: string
+    month: string
+    months: string[]
+    onMonthChange: (month: string) => void
+    token: string
+  }
+  reloadKey: number
+}) {
   const [data, setData] = useState<SalesOrderPage | null>(null)
   const [input, setInput] = useState("")
-  const [month, setMonth] = useState("")
+  const [localMonth, setMonth] = useState("")
   const [query, setQuery] = useState("")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const month = adminView?.month ?? localMonth
+  const adminToken = adminView?.token
+  const salesMemberId = adminView?.memberId
 
   useEffect(() => {
     let mounted = true
@@ -47,20 +65,38 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
       query,
       month,
     })
-    fetch(`/api/sales/orders?${params}`, { cache: "no-store" })
-      .then(async (response) => {
-        const result = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(result.message || "订单数据加载失败")
+    const request =
+      adminToken && salesMemberId
+        ? fetchAdminSalesOrders(adminToken, salesMemberId, {
+            month,
+            page,
+            pageSize,
+            query,
+          })
+        : fetch(`/api/sales/orders?${params}`, { cache: "no-store" }).then(
+            async (response) => {
+              const result = await response.json().catch(() => ({}))
+              if (!response.ok)
+                throw new Error(result.message || "订单数据加载失败")
+              return result as SalesOrderPage
+            }
+          )
+    request
+      .then((result) => {
         if (mounted) {
+          setError("")
           setData(result)
           setPage(result.pagination.page)
         }
       })
       .catch((error) => {
-        if (mounted)
-          toast.error(
+        if (mounted) {
+          const message =
             error instanceof Error ? error.message : "订单数据加载失败"
-          )
+          setData(null)
+          setError(message)
+          toast.error(message)
+        }
       })
       .finally(() => {
         if (mounted) setLoading(false)
@@ -68,7 +104,7 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
     return () => {
       mounted = false
     }
-  }, [page, pageSize, query, reloadKey, month])
+  }, [page, pageSize, query, reloadKey, month, adminToken, salesMemberId])
 
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -91,7 +127,9 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
         <div>
           <div className="flex items-center gap-2">
             <ClipboardList className="size-4 text-primary" />
-            <h2 className="text-sm font-semibold">我的订单</h2>
+            <h2 className="text-sm font-semibold">
+              {adminView ? `${adminView.memberName}的订单` : "我的订单"}
+            </h2>
             <Badge variant="secondary">{pagination.totalCount}</Badge>
           </div>
         </div>
@@ -100,16 +138,17 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
           onSubmit={search}
         >
           <OrderMonthSelect
-            months={data?.months ?? []}
+            months={adminView?.months ?? data?.months ?? []}
             value={month}
             onValueChange={(nextMonth) => {
-              setMonth(nextMonth)
+              if (adminView) adminView.onMonthChange(nextMonth)
+              else setMonth(nextMonth)
               setPage(1)
               setLoading(true)
             }}
           />
           <Input
-            aria-label="搜索我的订单"
+            aria-label={adminView ? "搜索销售订单" : "搜索我的订单"}
             className="h-8 min-w-0 flex-1 text-xs sm:w-56"
             onChange={(event) => setInput(event.target.value)}
             placeholder="搜索订单号、客户或地区"
@@ -135,14 +174,16 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
         </p>
         {loading
           ? "加载中..."
-          : data?.totals.length
-            ? data.totals.map((total) => (
-                <p key={total.currency}>
-                  订单总金额：{formatMoney(total.amount, total.currency)} ·
-                  提成总额：{formatMoney(total.commission, total.currency)}
-                </p>
-              ))
-            : "订单总金额：0.00 · 提成总额：0.00"}
+          : error
+            ? "汇总加载失败"
+            : data?.totals.length
+              ? data.totals.map((total) => (
+                  <p key={total.currency}>
+                    订单总金额：{formatMoney(total.amount, total.currency)} ·
+                    提成总额：{formatMoney(total.commission, total.currency)}
+                  </p>
+                ))
+              : "订单总金额：0.00 · 提成总额：0.00"}
       </div>
       <div className="overflow-x-auto">
         <Table className="min-w-[900px] text-xs [&_td]:px-3 [&_td]:py-2 [&_th]:h-9 [&_th]:px-3">
@@ -178,7 +219,12 @@ export function SalesOrderPanel({ reloadKey }: { reloadKey: number }) {
                   className="h-28 text-center text-muted-foreground"
                   colSpan={8}
                 >
-                  {query ? "没有找到匹配的订单" : "暂无归属到你的订单"}
+                  {error ||
+                    (query
+                      ? "没有找到匹配的订单"
+                      : adminView
+                        ? "该销售在所选月份暂无订单"
+                        : "暂无归属到你的订单")}
                 </TableCell>
               </TableRow>
             )}

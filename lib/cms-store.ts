@@ -817,6 +817,7 @@ function toPublicContent(content: CmsContent): CmsContent {
     paymentOrders: [],
     paymentSettings: content.paymentSettings,
     notificationSettings: {
+      ccEmails: [],
       enabled: false,
       recipientEmail: "",
       smtpFrom: "",

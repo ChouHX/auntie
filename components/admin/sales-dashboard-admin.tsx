@@ -63,6 +63,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   ChartContainer,
   ChartTooltip,
@@ -116,6 +117,7 @@ const fieldDefinitions: Array<{
   { field: "orderId", label: "订单号", type: "text" },
   { field: "orderStatus", label: "订单状态", type: "enum" },
   { field: "salesOwner", label: "学员/销售", type: "text" },
+  { field: "followUser", label: "对接客服", type: "text" },
   { field: "region", label: "地区", type: "text" },
   { field: "auntieName", label: "对接阿姨", type: "text" },
   { field: "cleaningType", label: "清洁类型", type: "text" },
@@ -565,6 +567,7 @@ export function SalesOrderDataPanel({
   const [query, setQuery] = useState<SalesDashboardQuery>({
     ...emptyQuery,
     ordersOnly: true,
+    orderSource: "support",
   })
   const [draftFilters, setDraftFilters] = useState<SalesFilterCondition[]>([])
   const [logic, setLogic] = useState<"all" | "any">("all")
@@ -633,12 +636,33 @@ export function SalesOrderDataPanel({
   }
 
   return (
-    <div className="space-y-3">
+    <Tabs
+      className="space-y-3"
+      value={query.orderSource}
+      onValueChange={(value) => {
+        setIsLoading(true)
+        setData(null)
+        setDraftFilters([])
+        setLogic("all")
+        setQuery((current) => ({
+          ...current,
+          orderSource: value === "self_service" ? "self_service" : "support",
+          filters: [],
+          logic: "all",
+          page: 1,
+        }))
+      }}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">订单管理</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            共 {data?.pagination.totalCount ?? 0} 条订单
+            {query.orderSource === "support"
+              ? "客服创建的订单，已绑定微信客户"
+              : "客户自主预约的订单，未绑定微信客户"}
+            {isLoading
+              ? " · 加载中..."
+              : ` · 共 ${data?.pagination.totalCount ?? 0} 条订单`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -648,6 +672,7 @@ export function SalesOrderDataPanel({
             filters={draftFilters}
             logic={logic}
             onApply={() => {
+              setIsLoading(true)
               setQuery((current) => ({
                 ...current,
                 filters: draftFilters,
@@ -666,6 +691,7 @@ export function SalesOrderDataPanel({
               }
             }}
             onReset={() => {
+              setIsLoading(true)
               setDraftFilters([])
               setLogic("all")
               setQuery((current) => ({
@@ -691,7 +717,14 @@ export function SalesOrderDataPanel({
           <Button
             className="h-8"
             disabled={isSaving}
-            onClick={onCreateOrder}
+            onClick={() => {
+              if (query.orderSource !== "support") {
+                setIsLoading(true)
+                setData(null)
+                setQuery({ ...emptyQuery, orderSource: "support" })
+              }
+              onCreateOrder()
+            }}
             size="sm"
           >
             <Plus size={15} weight="bold" />
@@ -700,274 +733,299 @@ export function SalesOrderDataPanel({
         </div>
       </div>
 
-      <Card className="overflow-hidden rounded-lg shadow-sm">
-        <Table className="min-w-[2180px] text-xs [&_td]:px-2 [&_th]:px-2">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="lg:sticky lg:left-0 lg:z-20 lg:bg-card">
-                订单号
-              </TableHead>
-              <TableHead>服务日期</TableHead>
-              <TableHead>客户</TableHead>
-              <TableHead>订单状态</TableHead>
-              <TableHead>学员/销售</TableHead>
-              <TableHead>地区</TableHead>
-              <TableHead>对接阿姨</TableHead>
-              <TableHead>清洁类型</TableHead>
-              <TableHead>订单金额</TableHead>
-              <TableHead>阿姨薪资</TableHead>
-              <TableHead>其他成本</TableHead>
-              <TableHead>学员提成</TableHead>
-              <TableHead>公司利润</TableHead>
-              <TableHead>付款链接</TableHead>
-              <TableHead>备注</TableHead>
-              <TableHead className="sticky right-0 z-20 w-12 min-w-12 border-l border-border bg-card text-center lg:min-w-40 lg:text-right">
-                操作
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data?.rows.length ? (
-              data.rows.map((row) => (
-                <TableRow
-                  className="group"
-                  key={`${row.customerKey}-${row.orderId || "customer"}`}
-                >
-                  <TableCell className="whitespace-nowrap group-hover:bg-muted lg:sticky lg:left-0 lg:z-10 lg:bg-card">
-                    <div className="font-semibold">{row.orderId}</div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
-                      {formatDateTime(row.addTime)}
-                    </div>
-                  </TableCell>
-                  <TableCell>{row.serviceDate || "待确认"}</TableCell>
-                  <TableCell className="font-medium">
-                    {row.customerName || "未填写"}
-                  </TableCell>
-                  <TableCell>
-                    <OrderStatusBadge row={row} />
-                  </TableCell>
-                  <TableCell>{row.salesOwner || "未归属"}</TableCell>
-                  <TableCell>{row.region || "-"}</TableCell>
-                  <TableCell>{row.auntieName || "未分配"}</TableCell>
-                  <TableCell>{row.cleaningType || "-"}</TableCell>
-                  <TableCell>
-                    {formatMoney(row.currency, row.paymentAmount)}
-                  </TableCell>
-                  <TableCell>
-                    {formatMoney(row.currency, row.auntieSalary)}
-                  </TableCell>
-                  <TableCell>
-                    {row.orderId ? (
-                      <InlineCost row={row} onSave={saveFinance} />
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {formatMoney(row.currency, row.salesCommission)}
-                  </TableCell>
-                  <TableCell
-                    className={
-                      row.orderProfit < 0
-                        ? "text-destructive"
-                        : "text-emerald-600"
-                    }
+      <TabsList aria-label="订单来源">
+        <TabsTrigger value="support">客服创建订单</TabsTrigger>
+        <TabsTrigger value="self_service">自主预约订单</TabsTrigger>
+      </TabsList>
+      <TabsContent value={query.orderSource ?? "support"} asChild>
+        <Card className="space-y-0 overflow-hidden rounded-lg shadow-sm">
+          <Table className="min-w-[2280px] text-xs [&_td]:px-2 [&_th]:px-2">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="lg:sticky lg:left-0 lg:z-20 lg:bg-card">
+                  订单号
+                </TableHead>
+                <TableHead>服务日期</TableHead>
+                <TableHead>客户</TableHead>
+                <TableHead>订单状态</TableHead>
+                <TableHead>对接客服</TableHead>
+                <TableHead>学员/销售</TableHead>
+                <TableHead>地区</TableHead>
+                <TableHead>对接阿姨</TableHead>
+                <TableHead>清洁类型</TableHead>
+                <TableHead>订单金额</TableHead>
+                <TableHead>阿姨薪资</TableHead>
+                <TableHead>其他成本</TableHead>
+                <TableHead>学员提成</TableHead>
+                <TableHead>公司利润</TableHead>
+                <TableHead>付款链接</TableHead>
+                <TableHead>备注</TableHead>
+                <TableHead className="sticky right-0 z-20 w-12 min-w-12 border-l border-border bg-card text-center lg:min-w-40 lg:text-right">
+                  操作
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!isLoading && data?.rows.length ? (
+                data.rows.map((row) => (
+                  <TableRow
+                    className="group"
+                    key={`${row.customerKey}-${row.orderId || "customer"}`}
                   >
-                    <CompanyProfitValue row={row} />
-                  </TableCell>
-                  <TableCell>
-                    <PaymentOrderLink
-                      orderId={row.orderId}
-                      status={row.orderStatus}
-                    />
-                  </TableCell>
-                  <TableCell
-                    className="max-w-56 truncate"
-                    title={[row.note, row.financeNote]
-                      .filter(Boolean)
-                      .join("；")}
-                  >
-                    {[row.note, row.financeNote].filter(Boolean).join("；") ||
-                      "-"}
-                  </TableCell>
-                  <TableCell className="sticky right-0 z-10 border-l border-border bg-card text-center group-hover:bg-muted lg:min-w-40 lg:text-right">
-                    <div className="flex justify-center gap-1 lg:justify-end">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
+                    <TableCell className="whitespace-nowrap group-hover:bg-muted lg:sticky lg:left-0 lg:z-10 lg:bg-card">
+                      <div className="font-semibold">{row.orderId}</div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">
+                        {formatDateTime(row.addTime)}
+                      </div>
+                    </TableCell>
+                    <TableCell>{row.serviceDate || "待确认"}</TableCell>
+                    <TableCell className="font-medium">
+                      {row.customerName || "未填写"}
+                    </TableCell>
+                    <TableCell>
+                      <OrderStatusBadge row={row} />
+                    </TableCell>
+                    <TableCell>{row.followUser || "-"}</TableCell>
+                    <TableCell>{row.salesOwner || "未归属"}</TableCell>
+                    <TableCell>{row.region || "-"}</TableCell>
+                    <TableCell>{row.auntieName || "未分配"}</TableCell>
+                    <TableCell>{row.cleaningType || "-"}</TableCell>
+                    <TableCell>
+                      {formatMoney(row.currency, row.paymentAmount)}
+                    </TableCell>
+                    <TableCell>
+                      {formatMoney(row.currency, row.auntieSalary)}
+                    </TableCell>
+                    <TableCell>
+                      {row.orderId ? (
+                        <InlineCost row={row} onSave={saveFinance} />
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {formatMoney(row.currency, row.salesCommission)}
+                    </TableCell>
+                    <TableCell
+                      className={
+                        row.orderProfit < 0
+                          ? "text-destructive"
+                          : "text-emerald-600"
+                      }
+                    >
+                      <CompanyProfitValue row={row} />
+                    </TableCell>
+                    <TableCell>
+                      <PaymentOrderLink
+                        orderId={row.orderId}
+                        status={row.orderStatus}
+                      />
+                    </TableCell>
+                    <TableCell
+                      className="max-w-56 truncate"
+                      title={[row.note, row.financeNote]
+                        .filter(Boolean)
+                        .join("；")}
+                    >
+                      {[row.note, row.financeNote].filter(Boolean).join("；") ||
+                        "-"}
+                    </TableCell>
+                    <TableCell className="sticky right-0 z-10 border-l border-border bg-card text-center group-hover:bg-muted lg:min-w-40 lg:text-right">
+                      <div className="flex justify-center gap-1 lg:justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              aria-label="打开订单操作菜单"
+                              className="size-8 rounded-full lg:hidden"
+                              size="icon-sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <DotsThree size={18} weight="bold" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="rounded-lg"
+                          >
+                            <DropdownMenuItem
+                              onClick={() => void onCopyOrder(row.orderId)}
+                            >
+                              <ClipboardText size={15} />
+                              复制预约信息
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => void onOpenOrder(row.orderId)}
+                            >
+                              {isCompletedSalesOrder(row) ? (
+                                <Eye size={15} />
+                              ) : (
+                                <PencilSimple size={15} />
+                              )}
+                              {isCompletedSalesOrder(row)
+                                ? "查看订单"
+                                : "编辑订单"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditingRow(row)
+                                setFinanceOpen(true)
+                              }}
+                            >
+                              <Calculator size={15} />
+                              编辑经营数据
+                            </DropdownMenuItem>
+                            {!isCompletedSalesOrder(row) ? (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  disabled={isSaving}
+                                  onClick={() =>
+                                    void onDeleteOrder(row.orderId)
+                                  }
+                                  variant="destructive"
+                                >
+                                  <Trash size={15} />
+                                  删除订单
+                                </DropdownMenuItem>
+                              </>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <div className="hidden gap-1 lg:flex">
                           <Button
-                            aria-label="打开订单操作菜单"
-                            className="size-8 rounded-full lg:hidden"
-                            size="icon-sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <DotsThree size={18} weight="bold" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-lg">
-                          <DropdownMenuItem
+                            aria-label="复制预约信息"
+                            className="size-8"
                             onClick={() => void onCopyOrder(row.orderId)}
+                            size="icon-sm"
+                            variant="navIcon"
                           >
-                            <ClipboardText size={15} />
-                            复制预约信息
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
+                            <ClipboardText size={14} />
+                          </Button>
+                          <Button
+                            aria-label={
+                              isCompletedSalesOrder(row)
+                                ? "查看订单"
+                                : "编辑订单"
+                            }
+                            className="size-8"
                             onClick={() => void onOpenOrder(row.orderId)}
+                            size="icon-sm"
+                            variant="navIcon"
                           >
                             {isCompletedSalesOrder(row) ? (
-                              <Eye size={15} />
+                              <Eye size={14} />
                             ) : (
-                              <PencilSimple size={15} />
+                              <PencilSimple size={14} />
                             )}
-                            {isCompletedSalesOrder(row)
-                              ? "查看订单"
-                              : "编辑订单"}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
+                          </Button>
+                          <Button
+                            aria-label="编辑经营数据"
+                            className="size-8"
                             onClick={() => {
                               setEditingRow(row)
                               setFinanceOpen(true)
                             }}
-                          >
-                            <Calculator size={15} />
-                            编辑经营数据
-                          </DropdownMenuItem>
-                          {!isCompletedSalesOrder(row) ? (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                disabled={isSaving}
-                                onClick={() => void onDeleteOrder(row.orderId)}
-                                variant="destructive"
-                              >
-                                <Trash size={15} />
-                                删除订单
-                              </DropdownMenuItem>
-                            </>
-                          ) : null}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <div className="hidden gap-1 lg:flex">
-                        <Button
-                          aria-label="复制预约信息"
-                          className="size-8"
-                          onClick={() => void onCopyOrder(row.orderId)}
-                          size="icon-sm"
-                          variant="navIcon"
-                        >
-                          <ClipboardText size={14} />
-                        </Button>
-                        <Button
-                          aria-label={
-                            isCompletedSalesOrder(row) ? "查看订单" : "编辑订单"
-                          }
-                          className="size-8"
-                          onClick={() => void onOpenOrder(row.orderId)}
-                          size="icon-sm"
-                          variant="navIcon"
-                        >
-                          {isCompletedSalesOrder(row) ? (
-                            <Eye size={14} />
-                          ) : (
-                            <PencilSimple size={14} />
-                          )}
-                        </Button>
-                        <Button
-                          aria-label="编辑经营数据"
-                          className="size-8"
-                          onClick={() => {
-                            setEditingRow(row)
-                            setFinanceOpen(true)
-                          }}
-                          size="icon-sm"
-                          variant="navIcon"
-                        >
-                          <Calculator size={14} />
-                        </Button>
-                        {!isCompletedSalesOrder(row) ? (
-                          <Button
-                            aria-label="删除订单"
-                            className="size-8"
-                            disabled={isSaving}
-                            onClick={() => void onDeleteOrder(row.orderId)}
                             size="icon-sm"
-                            variant="destructive"
+                            variant="navIcon"
                           >
-                            <Trash size={14} />
+                            <Calculator size={14} />
                           </Button>
-                        ) : null}
+                          {!isCompletedSalesOrder(row) ? (
+                            <Button
+                              aria-label="删除订单"
+                              className="size-8"
+                              disabled={isSaving}
+                              onClick={() => void onDeleteOrder(row.orderId)}
+                              size="icon-sm"
+                              variant="destructive"
+                            >
+                              <Trash size={14} />
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    className="h-28 text-center text-muted-foreground"
+                    colSpan={17}
+                  >
+                    {isLoading ? "正在加载订单..." : "没有符合条件的订单"}
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  className="h-28 text-center text-muted-foreground"
-                  colSpan={16}
-                >
-                  {isLoading ? "正在加载订单..." : "没有符合条件的订单"}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-        <div className="flex items-center justify-between border-t border-border px-3 py-2">
-          <Select
-            onValueChange={(value) =>
-              setQuery((current) => ({
-                ...current,
-                page: 1,
-                pageSize: Number(value),
-              }))
-            }
-            value={String(query.pageSize)}
-          >
-            <SelectTrigger className="h-8 w-24">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[10, 20, 50, 100].map((size) => (
-                <SelectItem key={size} value={String(size)}>
-                  {size} 条
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>
-              第 {data?.pagination.page ?? 1} /{" "}
-              {data?.pagination.totalPages ?? 1} 页
-            </span>
-            <Button
-              className="size-8"
-              disabled={(data?.pagination.page ?? 1) <= 1}
-              onClick={() =>
-                setQuery((current) => ({ ...current, page: current.page - 1 }))
-              }
-              size="icon-sm"
-              variant="outline"
+              )}
+            </TableBody>
+          </Table>
+          <div className="flex items-center justify-between border-t border-border px-3 py-2">
+            <Select
+              onValueChange={(value) => {
+                setIsLoading(true)
+                setQuery((current) => ({
+                  ...current,
+                  page: 1,
+                  pageSize: Number(value),
+                }))
+              }}
+              value={String(query.pageSize)}
             >
-              <CaretLeft size={14} />
-            </Button>
-            <Button
-              className="size-8"
-              disabled={
-                (data?.pagination.page ?? 1) >=
-                (data?.pagination.totalPages ?? 1)
-              }
-              onClick={() =>
-                setQuery((current) => ({ ...current, page: current.page + 1 }))
-              }
-              size="icon-sm"
-              variant="outline"
-            >
-              <CaretRight size={14} />
-            </Button>
+              <SelectTrigger className="h-8 w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 20, 50, 100].map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size} 条
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                第 {data?.pagination.page ?? 1} /{" "}
+                {data?.pagination.totalPages ?? 1} 页
+              </span>
+              <Button
+                className="size-8"
+                disabled={isLoading || (data?.pagination.page ?? 1) <= 1}
+                onClick={() => {
+                  setIsLoading(true)
+                  setQuery((current) => ({
+                    ...current,
+                    page: (data?.pagination.page ?? 1) - 1,
+                  }))
+                }}
+                size="icon-sm"
+                variant="outline"
+              >
+                <CaretLeft size={14} />
+              </Button>
+              <Button
+                className="size-8"
+                disabled={
+                  isLoading ||
+                  (data?.pagination.page ?? 1) >=
+                    (data?.pagination.totalPages ?? 1)
+                }
+                onClick={() => {
+                  setIsLoading(true)
+                  setQuery((current) => ({
+                    ...current,
+                    page: (data?.pagination.page ?? 1) + 1,
+                  }))
+                }}
+                size="icon-sm"
+                variant="outline"
+              >
+                <CaretRight size={14} />
+              </Button>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      </TabsContent>
 
       <FinanceDialog
         salesMembers={data?.salesMembers ?? []}
@@ -988,7 +1046,7 @@ export function SalesOrderDataPanel({
         onSave={(formula) => void saveFormula(formula)}
         open={formulaOpen}
       />
-    </div>
+    </Tabs>
   )
 }
 
@@ -1975,6 +2033,7 @@ function getFilterOptions(
   const map: Partial<Record<SalesFilterField, string[]>> = {
     auntieName: data?.filterOptions.aunties,
     cleaningType: data?.filterOptions.cleaningTypes,
+    followUser: data?.filterOptions.followUsers,
     region: data?.filterOptions.regions,
     salesOwner: data?.filterOptions.salesOwners,
   }

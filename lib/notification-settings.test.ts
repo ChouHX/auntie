@@ -3,8 +3,9 @@ import test from "node:test"
 import type { CmsNotificationSettings } from "@/types/cms"
 
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+const notificationSettings = await import("./notification-settings.ts")
 const { getNotificationSettingsIssues, normalizeNotificationSettings } =
-  await import("./notification-settings.ts")
+  notificationSettings
 
 const configured: CmsNotificationSettings = {
   enabled: true,
@@ -85,4 +86,35 @@ test("an explicit sender allows non-email SMTP usernames and passwords are prese
   })
   assert.equal(settings.enabled, true)
   assert.equal(settings.smtpPassword, " password with spaces ")
+})
+
+test("CC is optional for legacy settings and normalizes multiple addresses without case duplicates", () => {
+  assert.deepEqual(normalizeNotificationSettings(configured).ccEmails, [])
+  const settings = normalizeNotificationSettings({
+    ...configured,
+    ccEmails: [
+      " team@example.com ",
+      "TEAM@example.com",
+      "owner@example.com",
+      "",
+    ],
+  })
+  assert.equal(settings.enabled, true)
+  assert.deepEqual(settings.ccEmails, ["team@example.com", "owner@example.com"])
+})
+
+test("invalid CC addresses remain visible for correction and disable notification delivery", () => {
+  for (const email of [
+    "invalid",
+    "one@example.com,two@example.com",
+    "copy@example.com\r\nBcc: hidden@example.com",
+  ]) {
+    const settings = normalizeNotificationSettings({
+      ...configured,
+      ccEmails: [email],
+    })
+    assert.equal(settings.enabled, false)
+    assert.deepEqual(settings.ccEmails, [email])
+    assert.ok(getNotificationSettingsIssues(settings).includes("抄送邮箱格式"))
+  }
 })

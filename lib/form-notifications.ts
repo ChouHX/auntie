@@ -106,6 +106,7 @@ async function sendFormNotification(
 </div>`
 
   await sendMail({
+    cc: settings.ccEmails,
     html,
     smtp: createSmtpConfig(settings),
     subject,
@@ -163,6 +164,7 @@ async function sendPaymentOrderNotification(
   })
 
   await sendMail({
+    cc: settings.ccEmails,
     html,
     smtp: createSmtpConfig(settings),
     subject,

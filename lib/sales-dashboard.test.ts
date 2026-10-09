@@ -251,3 +251,134 @@ test("公司账户订单使用实收金额补全订单金额", () => {
 
   assert.equal(result.rows[0].paymentAmount, 148)
 })
+
+test("订单来源在分页和任意条件筛选前隔离，微信同步缺失不改变来源", () => {
+  const content = {
+    formulaTemplates: [],
+    paymentOrders: [
+      ...Array.from({ length: 12 }, (_, index) =>
+        order({
+          orderId: `SUPPORT-${index}`,
+          customerRelationId: customer.relationId,
+        })
+      ),
+      order({
+        orderId: "MISSING-CUSTOMER",
+        customerRelationId: "removed-relation",
+      }),
+      order({
+        orderId: "SELF-SERVICE",
+        salesOwner: "客服陈",
+        contact: "微信号",
+      }),
+      order({ orderId: "WHITESPACE", customerRelationId: "  " }),
+    ],
+    salesMembers: [],
+    teamMembers: [],
+  } as unknown as CmsContent
+  const query = {
+    filters: [
+      {
+        field: "customerName" as const,
+        id: "name",
+        operator: "eq" as const,
+        value: "李女士",
+      },
+      {
+        field: "orderId" as const,
+        id: "id",
+        operator: "eq" as const,
+        value: "SELF-SERVICE",
+      },
+    ],
+    logic: "any" as const,
+    ordersOnly: true,
+    page: 2,
+    pageSize: 10,
+  }
+  const support = createSalesDashboardResult(
+    content,
+    [customer, { ...customer, relationId: "no-orders" }],
+    {
+      ...query,
+      orderSource: "support",
+    }
+  )
+  assert.equal(support.pagination.totalCount, 13)
+  assert.equal(support.rows.length, 3)
+  assert.ok(support.rows.every((row) => row.customerRelationId))
+  assert.equal(support.currencySummaries[0].convertedAmount, 1300)
+  assert.deepEqual(support.filterOptions.followUsers, ["客服陈"])
+
+  const selfService = createSalesDashboardResult(content, [customer], {
+    ...query,
+    orderSource: "self_service",
+  })
+  assert.equal(selfService.pagination.page, 1)
+  assert.deepEqual(
+    selfService.rows.map((row) => row.orderId),
+    ["SELF-SERVICE", "WHITESPACE"]
+  )
+  assert.ok(selfService.rows.every((row) => !row.followUser))
+  assert.deepEqual(selfService.filterOptions.followUsers, [])
+})
+
+test("对接客服来自订单绑定的微信跟进关系，可筛选姓名、空值及缺少姓名的客服账号", () => {
+  const secondCustomer = {
+    ...customer,
+    relationId: "second-relation",
+    followUser: "",
+    followUserId: "support-2",
+  }
+  const content = {
+    formulaTemplates: [],
+    paymentOrders: [
+      order({ orderId: "FIRST", customerRelationId: customer.relationId }),
+      order({
+        orderId: "SECOND",
+        customerRelationId: secondCustomer.relationId,
+      }),
+      order({ orderId: "UNLINKED" }),
+    ],
+    salesMembers: [],
+    teamMembers: [],
+  } as unknown as CmsContent
+  const query = {
+    logic: "all" as const,
+    ordersOnly: true,
+    page: 1,
+    pageSize: 10,
+  }
+  for (const [value, expected] of [
+    ["客服陈", "FIRST"],
+    ["support-2", "SECOND"],
+  ]) {
+    const result = createSalesDashboardResult(
+      content,
+      [customer, secondCustomer],
+      {
+        ...query,
+        filters: [
+          { field: "followUser", id: "support", operator: "eq", value },
+        ],
+      }
+    )
+    assert.deepEqual(
+      result.rows.map((row) => row.orderId),
+      [expected]
+    )
+    assert.equal(result.rows[0].salesOwner, "")
+  }
+  const unlinked = createSalesDashboardResult(
+    content,
+    [customer, secondCustomer],
+    {
+      ...query,
+      filters: [{ field: "followUser", id: "support", operator: "empty" }],
+    }
+  )
+  assert.deepEqual(
+    unlinked.rows.map((row) => row.orderId),
+    ["UNLINKED"]
+  )
+})

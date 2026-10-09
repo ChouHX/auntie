@@ -1,6 +1,9 @@
 import type { CmsNotificationSettings } from "@/types/cms"
+// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+import { isEmailAddress, uniqueEmailAddresses } from "./email-addresses.ts"
 
 const defaultNotificationSettings: CmsNotificationSettings = {
+  ccEmails: [],
   enabled: false,
   recipientEmail: "auntiechenhome@gmail.com",
   smtpFrom: "",
@@ -15,7 +18,6 @@ function getNotificationSettingsIssues(
   value: Partial<CmsNotificationSettings>
 ): string[] {
   const issues: string[] = []
-  const isEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   const host = value.smtpHost?.trim() ?? ""
   const port = Number(value.smtpPort)
   if (!host || /[\s/:]/.test(host)) issues.push("有效的 SMTP Host")
@@ -29,10 +31,14 @@ function getNotificationSettingsIssues(
   }
   if (!value.smtpUsername?.trim()) issues.push("SMTP Username")
   if (!value.smtpPassword?.trim()) issues.push("SMTP Password / App Password")
-  if (!isEmail(value.recipientEmail?.trim() ?? "")) issues.push("表单通知邮箱")
+  if (!isEmailAddress(value.recipientEmail?.trim() ?? ""))
+    issues.push("通知收件邮箱")
+  if ((value.ccEmails ?? []).some((email) => !isEmailAddress(email.trim()))) {
+    issues.push("抄送邮箱格式")
+  }
   const sender = value.smtpFrom?.trim() || value.smtpUsername?.trim() || ""
   const senderEmail = sender.match(/<([^>]+)>/)?.[1] ?? sender
-  if (!isEmail(senderEmail))
+  if (!isEmailAddress(senderEmail))
     issues.push("发件邮箱（或使用邮箱格式的 SMTP Username）")
   return issues
 }
@@ -41,6 +47,7 @@ function normalizeNotificationSettings(
   value?: Partial<CmsNotificationSettings> | null
 ): CmsNotificationSettings {
   const settings: CmsNotificationSettings = {
+    ccEmails: uniqueEmailAddresses(value?.ccEmails ?? []),
     enabled: false,
     recipientEmail: String(
       value?.recipientEmail ?? defaultNotificationSettings.recipientEmail

@@ -874,6 +874,7 @@ const defaultCmsContent: CmsContent = {
     currency: "USD",
   },
   notificationSettings: {
+    ccEmails: [],
     enabled: false,
     recipientEmail: "auntiechenhome@gmail.com",
     smtpFrom: "",

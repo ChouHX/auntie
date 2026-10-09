@@ -11,6 +11,7 @@ type SalesFilterField =
   | "cleaningType"
   | "customerName"
   | "customerType"
+  | "followUser"
   | "otherCost"
   | "orderProfit"
   | "paymentAmount"
@@ -47,6 +48,7 @@ type SalesDashboardQuery = {
   filters: SalesFilterCondition[]
   logic: "all" | "any"
   ordersOnly?: boolean
+  orderSource?: "support" | "self_service"
   page: number
   pageSize: number
 }
@@ -64,6 +66,7 @@ type SalesDashboardRow = {
   customerType: string
   dealStatus: "converted" | "unconverted"
   financeNote: string
+  followUser: string
   formulaTemplateIds: CmsPaymentOrder["formulaTemplateIds"]
   note: string
   orderId: string
@@ -111,6 +114,7 @@ type SalesDashboardResult = {
     cleaningTypes: string[]
     currencies: string[]
     customerTypes: string[]
+    followUsers: string[]
     regions: string[]
     salesOwners: string[]
   }

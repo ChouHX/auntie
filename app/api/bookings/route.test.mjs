@@ -236,3 +236,29 @@ test("email-only forms report disabled notifications instead of claiming the app
   assert.equal((await response.json()).error, "form_notifications_disabled")
   assert.equal(messages.length, 0)
 })
+
+test("booking, join, and payment notifications all include configured CC addresses", async () => {
+  content.notificationSettings.ccEmails = [
+    " team@example.com ",
+    "TEAM@example.com",
+    "owner@example.com",
+  ]
+  const response = await POST(request())
+  const { order } = await response.json()
+  await callbacks[0]()
+  await sendFormNotification(content.notificationSettings, {
+    formType: "join",
+    fields: [["姓名", "Test"]],
+    submittedAt: new Date().toISOString(),
+  })
+  await sendPaymentOrderNotification(content.notificationSettings, {
+    ...order,
+    status: "paid",
+    amount: "USD 125",
+  })
+  assert.equal(messages.length, 3)
+  for (const message of messages) {
+    assert.equal(message.to, "admin@example.com")
+    assert.deepEqual(message.cc, ["team@example.com", "owner@example.com"])
+  }
+})
