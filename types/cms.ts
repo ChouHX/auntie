@@ -232,6 +232,7 @@ type CmsPaymentOrder = {
   orderId: string
   orderProfit?: number
   orderProfitCny?: number
+  orderSource?: "booking" | "admin"
   otherCost?: number
   paidAt?: string
   paymentExpiresAt?: string

@@ -18,8 +18,9 @@ function createSalesDashboardResult(
   const allRows = createSalesRows(content, customers)
   const sourceRows = allRows.filter((row) => {
     if ((query.ordersOnly || query.orderSource) && !row.orderId) return false
-    if (query.orderSource === "support") return Boolean(row.customerRelationId)
-    if (query.orderSource === "self_service") return !row.customerRelationId
+    if (query.orderSource === "support") return row.orderSource === "support"
+    if (query.orderSource === "self_service")
+      return row.orderSource === "self_service"
     return true
   })
   const filteredRows = query.filters.length
@@ -83,6 +84,15 @@ function createSalesRows(content: CmsContent, customers: WecomCustomer[]) {
   return rows
 }
 
+function getDashboardOrderSource(
+  order: CmsPaymentOrder
+): SalesDashboardRow["orderSource"] {
+  if (order.orderSource === "booking") return "self_service"
+  if (order.orderSource === "admin") return "support"
+  // 历史订单没有创建来源标记，回退为按是否绑定微信客户推断。
+  return order.customerRelationId?.trim() ? "support" : "self_service"
+}
+
 function createOrderRow(
   order: CmsPaymentOrder,
   customer: WecomCustomer | undefined,
@@ -138,6 +148,7 @@ function createOrderRow(
       order.orderProfitCny === undefined
         ? undefined
         : normalizeNumber(order.orderProfitCny),
+    orderSource: getDashboardOrderSource(order),
     orderStatus: order.status,
     otherCost: normalizeNumber(order.otherCost),
     overdue24: isTimeout,

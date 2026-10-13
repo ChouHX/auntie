@@ -658,8 +658,8 @@ export function SalesOrderDataPanel({
           <h2 className="text-sm font-semibold">订单管理</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {query.orderSource === "support"
-              ? "客服创建的订单，已绑定微信客户"
-              : "客户自主预约的订单，未绑定微信客户"}
+              ? "客服通过管理后台创建的订单"
+              : "客户通过预约页面自主创建的订单"}
             {isLoading
               ? " · 加载中..."
               : ` · 共 ${data?.pagination.totalCount ?? 0} 条订单`}

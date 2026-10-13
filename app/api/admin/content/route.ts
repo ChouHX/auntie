@@ -9,6 +9,7 @@ import {
 import { createAuntieStatsMap } from "@/lib/admin-analytics"
 import {
   deletePaymentOrderFromCollection,
+  findPaymentOrderById,
   upsertPaymentOrderInCollection,
 } from "@/lib/payment-order-collection"
 import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
@@ -608,9 +609,18 @@ function getOrderTimestamp(order: CmsPaymentOrder) {
 }
 
 function upsertPaymentOrder(content: CmsContent, order: CmsPaymentOrder) {
+  // 管理员接口新建的订单固定标记为客服订单；编辑时保留原创建来源，
+  // 来源以服务端记录为准，不信任客户端提交的值。
+  const existingOrder = findPaymentOrderById(
+    content.paymentOrders,
+    order.orderId
+  )
   return {
     ...content,
-    paymentOrders: upsertPaymentOrderInCollection(content.paymentOrders, order),
+    paymentOrders: upsertPaymentOrderInCollection(content.paymentOrders, {
+      ...order,
+      orderSource: existingOrder ? existingOrder.orderSource : "admin",
+    }),
   }
 }
 

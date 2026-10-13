@@ -72,6 +72,7 @@ type SalesDashboardRow = {
   orderId: string
   orderProfit: number
   orderProfitCny?: number
+  orderSource?: "support" | "self_service"
   orderStatus: CmsPaymentOrder["status"] | "none"
   otherCost: number
   overdue24: boolean

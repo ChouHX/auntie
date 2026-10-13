@@ -161,6 +161,7 @@ export async function POST(request: NextRequest) {
         hasPets: body.hasPets === true,
         note: normalizeText(body.note),
         orderId: createPaymentOrderId(content.paymentOrders ?? []),
+        orderSource: "booking",
         serviceAddress: normalizeText(body.serviceAddress),
         serviceArea,
         serviceDate,

@@ -323,6 +323,52 @@ test("订单来源在分页和任意条件筛选前隔离，微信同步缺失�
   assert.deepEqual(selfService.filterOptions.followUsers, [])
 })
 
+test("订单按创建来源分类，客服订单无需绑定微信客户，旧数据回退到绑定推断", () => {
+  const content = {
+    formulaTemplates: [],
+    paymentOrders: [
+      // 新订单：预约页面创建，即使后来绑定了微信客户也算自主预约。
+      order({
+        orderId: "BOOKING-BOUND",
+        orderSource: "booking",
+        customerRelationId: customer.relationId,
+      }),
+      // 新订单：客服创建，即使未绑定微信客户也算客服订单。
+      order({ orderId: "ADMIN-UNBOUND", orderSource: "admin" }),
+      // 旧数据：无来源标记，回退为按微信客户绑定推断。
+      order({ orderId: "LEGACY-BOUND", customerRelationId: customer.relationId }),
+      order({ orderId: "LEGACY-UNBOUND" }),
+    ],
+    salesMembers: [],
+    teamMembers: [],
+  } as unknown as CmsContent
+  const baseQuery = {
+    filters: [],
+    logic: "all" as const,
+    ordersOnly: true,
+    page: 1,
+    pageSize: 20,
+  }
+
+  const support = createSalesDashboardResult(content, [customer], {
+    ...baseQuery,
+    orderSource: "support",
+  })
+  assert.deepEqual(
+    support.rows.map((row) => row.orderId).sort(),
+    ["ADMIN-UNBOUND", "LEGACY-BOUND"]
+  )
+
+  const selfService = createSalesDashboardResult(content, [customer], {
+    ...baseQuery,
+    orderSource: "self_service",
+  })
+  assert.deepEqual(
+    selfService.rows.map((row) => row.orderId).sort(),
+    ["BOOKING-BOUND", "LEGACY-UNBOUND"]
+  )
+})
+
 test("对接客服来自订单绑定的微信跟进关系，可筛选姓名、空值及缺少姓名的客服账号", () => {
   const secondCustomer = {
     ...customer,
