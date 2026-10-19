@@ -1,8 +1,6 @@
 import { type FormEvent, useMemo, useState } from "react"
 import {
   ChatCircleText,
-  Check,
-  ClipboardText,
   EnvelopeSimple,
   PhoneCall,
   PaperPlaneTiltIcon,
@@ -372,7 +370,6 @@ function BookingRequestSection() {
         copy={copy}
         language={language}
         order={submittedOrder}
-        qrImage={contactQrImage}
         wecomContactUrl={wecomContactUrl}
       />
     )
@@ -1521,7 +1518,6 @@ function BookingSuccessPage({
   copy,
   language,
   order,
-  qrImage,
   wecomContactUrl,
 }: {
   contactEmail: string
@@ -1529,7 +1525,6 @@ function BookingSuccessPage({
   copy: BookingCopy
   language: Language
   order: CmsPaymentOrder
-  qrImage: string
   wecomContactUrl: string
 }) {
   const isZh = language === "zh"
@@ -1551,104 +1546,94 @@ function BookingSuccessPage({
   }
 
   return (
-    <section className="relative overflow-hidden pt-[calc(60px+2rem)] pb-8 md:pt-[calc(72px+3rem)] md:pb-10">
-      <div className="relative mx-auto max-w-3xl px-4 sm:px-6">
+    <section className="relative overflow-hidden pt-[calc(60px+2rem)] pb-8 md:pt-[calc(72px+2.5rem)] md:pb-10">
+      <div className="relative mx-auto max-w-xl px-4 sm:px-6">
         <Card className="animate-fade-up overflow-hidden shadow-xl shadow-blue-950/8">
-          <div className="border-b border-border bg-blue-50/70 px-5 py-5 sm:px-7 sm:py-6 dark:bg-blue-500/10">
+          <div className="border-b border-border bg-blue-50/70 px-5 py-4 sm:px-6 dark:bg-blue-500/10">
             <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white dark:bg-blue-500">
-                <PaperPlaneTiltIcon size={20} weight="fill" />
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white dark:bg-blue-500">
+                <PaperPlaneTiltIcon size={18} weight="fill" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-foreground sm:text-2xl">
+                <h1 className="text-lg font-semibold text-foreground sm:text-xl">
                   {isZh ? "预约信息已生成" : "Booking information ready"}
                 </h1>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
                   {copy.success}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="grid gap-6 p-5 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center sm:p-7">
-            <div>
-              <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-4 dark:border-blue-400/20 dark:bg-blue-500/10">
-                <div className="text-xs text-muted-foreground">
-                  {isZh ? "预约订单号" : "Booking order number"}
-                </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <div className="min-w-0 flex-1 font-mono text-lg font-semibold break-all text-foreground">
-                    {order.orderId}
-                  </div>
-                </div>
+          <div className="space-y-3 p-5 sm:p-6">
+            <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3 dark:border-blue-400/20 dark:bg-blue-500/10">
+              <div className="text-xs text-muted-foreground">
+                {isZh ? "预约订单号" : "Booking order number"}
               </div>
-              {wecomContactUrl ? (
-                <Button asChild className="mt-4 h-11 w-full" variant="brand">
-                  <a
-                    href={wecomContactUrl}
-                    onClick={copyBookingInfo}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    <ChatCircleText size={18} weight="fill" />
-                    {isZh
-                      ? "一键添加客服・提交派单"
-                      : "Add support & submit order"}
-                  </a>
-                </Button>
-              ) : null}
-              <Button
-                className="mt-3 h-11 w-full"
-                onClick={copyBookingInfo}
-                type="button"
-                variant={wecomContactUrl ? "outline" : "brand"}
-              >
-                {isBookingCopied ? (
-                  <Check size={18} weight="bold" />
-                ) : (
-                  <ClipboardText size={18} weight="bold" />
-                )}
-                {isZh ? "一键复制预约信息" : "Copy booking information"}
-              </Button>
-              <p className="mt-4 text-sm leading-7 text-muted-foreground">
-                {wecomContactUrl
-                  ? isZh
-                    ? "点击上方按钮会复制预约信息并打开企业微信，添加客服后粘贴发送即可；也可以长按右侧二维码添加。"
-                    : "The button copies your booking info and opens WeCom — add support, then paste and send. You can also press and hold the QR code."
-                  : isZh
-                    ? "请长按二维码，自动弹出对话框，即可快速添加客服企业微信。"
-                    : "Press and hold the QR code to open the dialog and quickly add our customer support on WeCom."}
-              </p>
+              <div className="mt-1 font-mono text-base font-semibold break-all text-foreground">
+                {order.orderId}
+              </div>
             </div>
 
-            <div>
-              <div className="mx-auto w-full max-w-52 rounded-xl border border-border bg-white p-2 shadow-sm dark:border-white/10">
-                <img
-                  alt={isZh ? "企业微信客服二维码" : "WeCom support QR code"}
-                  className="aspect-square w-full rounded-lg object-contain"
-                  src={qrImage}
-                />
-              </div>
-              <div className="mt-4 grid gap-2 text-sm">
+            <Button
+              className="h-11 w-full"
+              onClick={copyBookingInfo}
+              type="button"
+              variant="brand"
+            >
+              <span aria-hidden className="text-base leading-none">
+                ⓵
+              </span>
+              {isBookingCopied
+                ? isZh
+                  ? "已复制预约信息"
+                  : "Booking information copied"
+                : isZh
+                  ? "一键复制预约信息"
+                  : "Copy booking information"}
+            </Button>
+
+            {wecomContactUrl ? (
+              <Button asChild className="h-11 w-full" variant="brand">
                 <a
-                  className="flex w-fit items-center gap-2 rounded-md px-1 py-1 font-medium text-blue-700 transition-colors hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
-                  href={`tel:${contactPhone.replace(/[^\d+]/g, "")}`}
+                  href={wecomContactUrl}
+                  onClick={copyBookingInfo}
+                  rel="noopener noreferrer"
+                  target="_blank"
                 >
-                  <PhoneCall className="shrink-0" size={17} weight="fill" />
-                  <span>{contactPhone}</span>
+                  <span aria-hidden className="text-base leading-none">
+                    ⓶
+                  </span>
+                  {isZh
+                    ? "一键添加客服・提交派单"
+                    : "Add support & submit order"}
                 </a>
-                <a
-                  className="flex w-fit min-w-0 items-center gap-2 rounded-md px-1 py-1 font-medium text-blue-700 transition-colors hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
-                  href={`mailto:${contactEmail}`}
-                >
-                  <EnvelopeSimple
-                    className="shrink-0"
-                    size={17}
-                    weight="bold"
-                  />
-                  <span className="break-all">{contactEmail}</span>
-                </a>
-              </div>
+              </Button>
+            ) : null}
+
+            {wecomContactUrl ? (
+              <p className="text-center text-xs leading-5 text-muted-foreground">
+                {isZh
+                  ? "点击⓶会自动复制预约信息并打开企业微信，添加客服后粘贴发送即可。"
+                  : "Button ⓶ copies your booking info and opens WeCom — add support, then paste and send."}
+              </p>
+            ) : null}
+
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-border pt-3 text-sm">
+              <a
+                className="flex items-center gap-1.5 font-medium text-blue-700 transition-colors hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
+                href={`tel:${contactPhone.replace(/[^\d+]/g, "")}`}
+              >
+                <PhoneCall className="shrink-0" size={16} weight="fill" />
+                <span>{contactPhone}</span>
+              </a>
+              <a
+                className="flex min-w-0 items-center gap-1.5 font-medium text-blue-700 transition-colors hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
+                href={`mailto:${contactEmail}`}
+              >
+                <EnvelopeSimple className="shrink-0" size={16} weight="bold" />
+                <span className="break-all">{contactEmail}</span>
+              </a>
             </div>
           </div>
         </Card>
