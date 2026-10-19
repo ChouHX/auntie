@@ -224,6 +224,7 @@ function BookingRequestSection() {
     "contactPage",
     "serviceLocations",
     "serviceRegions",
+    "siteSettings",
   ])
   const copy = bookingCopy[language]
   const contactSettings =
@@ -234,6 +235,10 @@ function BookingRequestSection() {
     contactSettings.contactPhone || defaultContactPage[language].contactPhone
   const contactEmail =
     contactSettings.contactEmail || defaultContactPage[language].contactEmail
+  const wecomContactUrl =
+    content.siteSettings?.wecomContactUrl?.trim() ||
+    defaultCmsContent.siteSettings.wecomContactUrl ||
+    ""
   const [form, setForm] = useState<BookingFormState>(initialFormState)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
@@ -368,6 +373,7 @@ function BookingRequestSection() {
         language={language}
         order={submittedOrder}
         qrImage={contactQrImage}
+        wecomContactUrl={wecomContactUrl}
       />
     )
   }
@@ -1516,6 +1522,7 @@ function BookingSuccessPage({
   language,
   order,
   qrImage,
+  wecomContactUrl,
 }: {
   contactEmail: string
   contactPhone: string
@@ -1523,6 +1530,7 @@ function BookingSuccessPage({
   language: Language
   order: CmsPaymentOrder
   qrImage: string
+  wecomContactUrl: string
 }) {
   const isZh = language === "zh"
   const [isBookingCopied, setIsBookingCopied] = useState(false)
@@ -1574,11 +1582,26 @@ function BookingSuccessPage({
                   </div>
                 </div>
               </div>
+              {wecomContactUrl ? (
+                <Button asChild className="mt-4 h-11 w-full" variant="brand">
+                  <a
+                    href={wecomContactUrl}
+                    onClick={copyBookingInfo}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <ChatCircleText size={18} weight="fill" />
+                    {isZh
+                      ? "一键添加客服・提交派单"
+                      : "Add support & submit order"}
+                  </a>
+                </Button>
+              ) : null}
               <Button
-                className="mt-4 h-11 w-full"
+                className="mt-3 h-11 w-full"
                 onClick={copyBookingInfo}
                 type="button"
-                variant="brand"
+                variant={wecomContactUrl ? "outline" : "brand"}
               >
                 {isBookingCopied ? (
                   <Check size={18} weight="bold" />
@@ -1588,9 +1611,13 @@ function BookingSuccessPage({
                 {isZh ? "一键复制预约信息" : "Copy booking information"}
               </Button>
               <p className="mt-4 text-sm leading-7 text-muted-foreground">
-                {isZh
-                  ? "请长按二维码，自动弹出对话框，即可快速添加客服企业微信。"
-                  : "Press and hold the QR code to open the dialog and quickly add our customer support on WeCom."}
+                {wecomContactUrl
+                  ? isZh
+                    ? "点击上方按钮会复制预约信息并打开企业微信，添加客服后粘贴发送即可；也可以长按右侧二维码添加。"
+                    : "The button copies your booking info and opens WeCom — add support, then paste and send. You can also press and hold the QR code."
+                  : isZh
+                    ? "请长按二维码，自动弹出对话框，即可快速添加客服企业微信。"
+                    : "Press and hold the QR code to open the dialog and quickly add our customer support on WeCom."}
               </p>
             </div>
 

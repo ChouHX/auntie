@@ -282,6 +282,7 @@ type CmsNotificationSettings = {
 
 type CmsSiteSettings = {
   logoImage: string
+  wecomContactUrl?: string
 }
 
 type CmsAdminSettings = {

@@ -888,6 +888,7 @@ const defaultCmsContent: CmsContent = {
   serviceLocations: defaultServiceLocations,
   siteSettings: {
     logoImage: "/logo.webp",
+    wecomContactUrl: "https://work.weixin.qq.com/ca/cawcde6956980fd8f6",
   },
   teamMembers: defaultTeamMembers,
 }

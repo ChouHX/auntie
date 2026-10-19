@@ -38,7 +38,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { defaultAfterSalesPage, defaultContactPage } from "@/data/cms-defaults"
+import {
+  defaultAfterSalesPage,
+  defaultCmsContent,
+  defaultContactPage,
+} from "@/data/cms-defaults"
 import {
   fetchAdminPaymentRuntimeConfig,
   downloadAdminBackup,
@@ -850,6 +854,20 @@ export function SiteSettingsAdmin({
                   value={draft.email}
                 />
               </FormField>
+              <FormField
+                className="space-y-1.5 sm:col-span-2"
+                description="用于预约成功页的“一键添加客服・提交派单”按钮，填写企业微信「联系我」链接。"
+                label="企业微信添加客服链接"
+              >
+                <Input
+                  className="h-8 rounded-md"
+                  onChange={(event) =>
+                    updateDraft({ wecomContactUrl: event.target.value })
+                  }
+                  placeholder="https://work.weixin.qq.com/ca/..."
+                  value={draft.wecomContactUrl}
+                />
+              </FormField>
             </div>
           </section>
 
@@ -1157,6 +1175,7 @@ type SiteSettingsDraft = {
   smtpPort: string
   smtpSecure: boolean
   smtpUsername: string
+  wecomContactUrl: string
 }
 
 function createSiteSettingsDraft(content: CmsContent): SiteSettingsDraft {
@@ -1197,6 +1216,10 @@ function createSiteSettingsDraft(content: CmsContent): SiteSettingsDraft {
     smtpPort: notificationSettings.smtpPort,
     smtpSecure: Boolean(notificationSettings?.smtpSecure),
     smtpUsername: notificationSettings?.smtpUsername || "",
+    wecomContactUrl:
+      content.siteSettings?.wecomContactUrl ||
+      defaultCmsContent.siteSettings.wecomContactUrl ||
+      "",
   }
 }
 
@@ -1207,6 +1230,9 @@ function createSiteSettingsFromSiteSettings(
   return {
     ...value,
     logoImage: draft.logoImage.trim() || "/logo.webp",
+    wecomContactUrl:
+      draft.wecomContactUrl.trim() ||
+      defaultCmsContent.siteSettings.wecomContactUrl,
   }
 }
 
