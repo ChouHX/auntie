@@ -69,6 +69,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { PageJump } from "@/components/ui/page-jump"
 import { cn } from "@/lib/utils"
 import type {
   CmsBlogCategory,
@@ -556,10 +557,15 @@ export function TableFooterInfo({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div>
           Showing {start}-{pagination.endIndex} of {pagination.totalCount}
         </div>
+        <PageJump
+          onPageChange={pagination.setPage}
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+        />
         <div className="flex items-center gap-1">
           <Button
             aria-label="上一页"

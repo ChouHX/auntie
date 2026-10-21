@@ -10,6 +10,7 @@ import {
   isValidBookingPhone,
 } from "@/lib/booking-config"
 import { logServerEvent, serializeServerError } from "@/lib/server-log"
+import { enforceRateLimits, getClientIp } from "@/lib/rate-limit"
 import {
   normalizeNotificationSettings,
   sendBookingOrderNotification,
@@ -93,6 +94,42 @@ export async function POST(request: NextRequest) {
       },
       400,
       requestId
+    )
+  }
+
+  const clientIp = getClientIp(request)
+  const contactKey = contact.replace(/[^\d+]/g, "")
+  const rateLimit = enforceRateLimits([
+    { key: `booking:ip:${clientIp}`, rule: { limit: 1, windowMs: 60_000 } },
+    ...(contactKey
+      ? [
+          {
+            key: `booking:contact:${contactKey}`,
+            rule: { limit: 6, windowMs: 60 * 60_000 },
+          },
+        ]
+      : []),
+  ])
+
+  if (!rateLimit.allowed) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil(rateLimit.retryAfterMs / 1000)
+    )
+    logServerEvent("warn", "booking.order.rate_limited", {
+      ip: clientIp,
+      requestId,
+      retryAfterSeconds,
+    })
+    return bookingJsonResponse(
+      {
+        error: "rate_limited",
+        message: "Too many requests. Please try again later.",
+        requestId,
+      },
+      429,
+      requestId,
+      { "Retry-After": String(retryAfterSeconds) }
     )
   }
 
@@ -256,9 +293,13 @@ function getRequestId(request: NextRequest) {
 function bookingJsonResponse(
   body: Record<string, unknown>,
   status: number,
-  requestId: string
+  requestId: string,
+  extraHeaders?: Record<string, string>
 ) {
-  return Response.json(body, { headers: { "x-request-id": requestId }, status })
+  return Response.json(body, {
+    headers: { "x-request-id": requestId, ...extraHeaders },
+    status,
+  })
 }
 
 function normalizeText(value: unknown) {

@@ -21,6 +21,7 @@ import { toast } from "sonner"
 import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts"
 
 import { Badge } from "@/components/ui/badge"
+import { PageJump } from "@/components/ui/page-jump"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -343,13 +344,24 @@ export function SalesDashboardAdmin({ token }: { token: string }) {
               <ChartTooltip
                 content={
                   <ChartTooltipContent
+                    labelFormatter={(_, items) => {
+                      const item = items[0]
+                      const salesOwner = String(
+                        item?.payload?.salesOwner ?? ""
+                      )
+                      const currency = String(item?.payload?.currency ?? "")
+
+                      return currency
+                        ? `${salesOwner} · ${currency}`
+                        : salesOwner
+                    }}
                     valueFormatter={(value, item) =>
                       `${String(item.payload?.currency ?? "")} ${Number(value).toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`
                     }
                   />
                 }
               />
-              <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="amount" name="订单金额" radius={[4, 4, 0, 0]}>
                 {data.salesRanking.slice(0, 20).map((item) => (
                   <Cell
                     fill={getSalesRankingColor(item.salesOwner)}
@@ -519,10 +531,12 @@ function DashboardPagination({
           ))}
         </SelectContent>
       </Select>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>
-          第 {page} / {totalPages} 页
-        </span>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <PageJump
+          onPageChange={onPageChange}
+          page={page}
+          totalPages={totalPages}
+        />
         <Button
           aria-label="上一页"
           className="size-8"

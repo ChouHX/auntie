@@ -11,6 +11,7 @@ import { toast } from "sonner"
 
 import { RecordsPanel } from "@/components/admin/admin-shared"
 import { Badge } from "@/components/ui/badge"
+import { PageJump } from "@/components/ui/page-jump"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -570,10 +571,15 @@ function CustomerPagination({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <span>
           Showing {start}-{end} of {totalCount}
         </span>
+        <PageJump
+          onPageChange={onPageChange}
+          page={page}
+          totalPages={totalPages}
+        />
         <Button
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}

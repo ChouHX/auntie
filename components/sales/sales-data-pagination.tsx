@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { PageJump } from "@/components/ui/page-jump"
 import {
   Select,
   SelectContent,
@@ -73,9 +74,12 @@ export function SalesDataPagination({
         >
           <ChevronLeft className="size-4" />
         </Button>
-        <span className="min-w-14 text-center tabular-nums">
-          {page} / {totalPages}
-        </span>
+        <PageJump
+          disabled={disabled}
+          onPageChange={onPageChange}
+          page={page}
+          totalPages={totalPages}
+        />
         <Button
           aria-label="下一页"
           className="size-8"

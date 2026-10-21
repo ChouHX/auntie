@@ -6,6 +6,7 @@ import {
   sendFormNotification,
 } from "@/lib/form-notifications"
 import { readCmsContent } from "@/lib/cms-store"
+import { enforceRateLimits, getClientIp } from "@/lib/rate-limit"
 
 export const runtime = "nodejs"
 
@@ -25,11 +26,37 @@ export async function POST(
     )
   }
 
+  const body = (await request.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >
+  const clientIp = getClientIp(request)
+  const rateLimit = enforceRateLimits([
+    { key: `form:burst:${clientIp}`, rule: { limit: 1, windowMs: 10_000 } },
+    { key: `form:ip:${clientIp}`, rule: { limit: 6, windowMs: 10 * 60_000 } },
+  ])
+
+  if (!rateLimit.allowed) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil(rateLimit.retryAfterMs / 1000)
+    )
+
+    return Response.json(
+      {
+        error: "rate_limited",
+        message: "提交过于频繁，请稍后再试。",
+      },
+      { headers: { "Retry-After": String(retryAfterSeconds) }, status: 429 }
+    )
+  }
+
+  const formPayload = { ...body }
+
   try {
     const content = await readCmsContent()
-    const body = await request.json().catch(() => ({}))
     const formType = type === "join" ? "join" : "estimate"
-    const submission = normalizeFormSubmission(formType, body)
+    const submission = normalizeFormSubmission(formType, formPayload)
 
     const notificationSent = await sendFormNotification(
       normalizeNotificationSettings(content.notificationSettings),

@@ -77,3 +77,14 @@ The WeCom application must be configured as an application allowed to call
 Customer Contact APIs, and its visible scope must include the service members
 whose customers should be synchronized. The secret is only read by the server;
 it is never returned to the admin browser or stored in SQLite.
+
+## Public form abuse protection
+
+The booking and join endpoints are protected by in-process rate limits:
+
+- Booking: 1 request per IP per minute, and 6 per phone number per hour.
+- Join application: 1 request per IP per 10 seconds and 6 per IP per 10 minutes.
+
+The limits are stored in process memory, so each running instance enforces them
+independently. Use a reverse-proxy or CDN rate limit for multi-instance
+deployments.
