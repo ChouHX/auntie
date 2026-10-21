@@ -820,6 +820,7 @@ const defaultCmsContent: CmsContent = {
   blogCategories: defaultBlogCategories,
   blogPosts: defaultBlogPosts,
   bookingConfigs: defaultBookingConfigs,
+  cards: [],
   contactPage: defaultContactPage,
   dashboardTasks: createDefaultTasks(),
   galleryItems: defaultGalleryItems,

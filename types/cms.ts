@@ -212,6 +212,8 @@ type CmsPaymentOrder = {
   bathrooms?: number
   baseAmountValue?: number
   bedrooms?: number
+  cardId?: string
+  cardUsageAmount?: number
   contact: string
   createdAt: string
   currency?: string
@@ -372,12 +374,42 @@ type CmsServiceLocation = {
   longitude: number
 }
 
+type CmsCardStatus = "active" | "disabled"
+
+type CmsCard = {
+  /** 创建时支付金额，次卡单次金额按它固定计算。 */
+  amount: number
+  createdAt: string
+  currency: string
+  /** 客户所在地区。 */
+  customerRegion: string
+  /** 客户头像（企业微信），用于后台列表展示。 */
+  customerAvatar?: string
+  customerName: string
+  customerRelationId: string
+  id: string
+  /** 累计充值次数，后续充值在此基础上累加。 */
+  rechargeTimes: number
+  /** 充值地区，即次卡用于抵扣服务的地区。 */
+  rechargeRegion: string
+  /** 固定单次消耗金额 = amount / totalTimes。 */
+  singlePrice: number
+  status: CmsCardStatus
+  /** 次卡次数（创建时购买次数）。 */
+  totalTimes: number
+  updatedAt: string
+  /** 只读派生字段：由绑定订单实时统计，不落库。 */
+  remainingTimes?: number
+  usedTimes?: number
+}
+
 type CmsContent = {
   adminSettings?: CmsAdminSettings
   afterSalesPage: Record<Language, CmsAfterSalesPageContent>
   blogCategories: CmsBlogCategory[]
   blogPosts: CmsBlogPost[]
   bookingConfigs: CmsBookingLocationConfig[]
+  cards: CmsCard[]
   contactPage: Record<Language, CmsContactPageContent>
   dashboardTasks: CmsDashboardTask[]
   faq: Record<Language, CmsFaqContent>
@@ -406,6 +438,8 @@ export type {
   CmsBookingCatalogItem,
   CmsBookingLocationConfig,
   CmsBookingQuantityPrice,
+  CmsCard,
+  CmsCardStatus,
   CmsContactMethod,
   CmsContactPageContent,
   CmsContent,

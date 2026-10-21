@@ -33,6 +33,7 @@ import {
   type AuntieAssignmentMode,
 } from "@/lib/auntie-assignment"
 import { cn } from "@/lib/utils"
+import { getCardTotalTimes } from "@/lib/cards"
 import { findSalesMemberForStudentTags } from "@/lib/sales-attribution"
 import {
   deletePaymentOrderFromCollection,
@@ -325,7 +326,7 @@ export function OrderAdmin({
 }) {
   const [editingOrder, setEditingOrder] = useState<CmsPaymentOrder | null>(null)
   const [editingAssignmentMode, setEditingAssignmentMode] =
-    useState<AuntieAssignmentMode>("manual")
+    useState<AuntieAssignmentMode>("auto")
   const [orderError, setOrderError] = useState("")
   void remotePagination
   const { confirmAction, noticeDialog } = useAdminNoticeDialog()
@@ -348,6 +349,13 @@ export function OrderAdmin({
     (existingEditingOrder.status === "awaiting_confirmation" &&
       getOrderBaseAmount(existingEditingOrder) <= 0)
   )
+  const customerCard = editingOrder?.customerRelationId
+    ? (content.cards ?? []).find(
+        (card) =>
+          card.customerRelationId ===
+          editingOrder.customerRelationId?.trim()
+      )
+    : undefined
   const activeLoadByAuntieId = useMemo(
     () =>
       Object.fromEntries(
@@ -400,7 +408,7 @@ export function OrderAdmin({
 
   function startCreateOrder() {
     setOrderError("")
-    setEditingAssignmentMode("manual")
+    setEditingAssignmentMode("auto")
     setEditingOrder(createPaymentOrderDraft(content.paymentSettings.currency))
   }
 
@@ -840,6 +848,32 @@ export function OrderAdmin({
                   value={editingOrder.serviceTypeId || editingOrder.serviceType}
                 />
               </FormField>
+              {customerCard ? (
+                <div className="rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-100">
+                  <div className="font-semibold">
+                    该客户为次卡用户
+                    {customerCard.status === "disabled"
+                      ? "（次卡已停用）"
+                      : ""}
+                  </div>
+                  <div className="mt-1 text-amber-800/90 dark:text-amber-100/80">
+                    共 {getCardTotalTimes(customerCard)} 次
+                    {typeof customerCard.usedTimes === "number"
+                      ? ` · 已用 ${customerCard.usedTimes} 次`
+                      : ""}
+                    {typeof customerCard.remainingTimes === "number"
+                      ? ` · 剩余 ${customerCard.remainingTimes} 次`
+                      : ""}
+                    {` · 单次抵扣 ${formatAdminCurrencyAmount(
+                      customerCard.singlePrice,
+                      customerCard.currency
+                    )}`}
+                  </div>
+                  <div className="mt-1 text-amber-800/70 dark:text-amber-100/60">
+                    如需用次卡抵扣，请在「订单经营数据」中勾选使用次卡。
+                  </div>
+                </div>
+              ) : null}
               <FormField className="sm:col-span-2" label="详细地址" required>
                 <Input
                   className="h-9 rounded-md"

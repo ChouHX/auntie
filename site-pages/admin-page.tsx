@@ -45,6 +45,7 @@ import { ImageLibraryAdmin } from "@/components/admin/image-library-admin"
 import { FaqAdmin } from "@/components/admin/faq-admin"
 import { AuntieAdmin } from "@/components/admin/auntie-admin"
 import { OrderAdmin } from "@/components/admin/order-admin"
+import { CardAdmin } from "@/components/admin/card-admin"
 import { ServiceAreasAdmin } from "@/components/admin/service-areas-admin"
 import { BookingConfigAdmin } from "@/components/admin/booking-config-admin"
 import {
@@ -165,7 +166,7 @@ function AdminPage() {
   ])
 
   useEffect(() => {
-    if (!token || activeSection !== "orders") {
+    if (!token || (activeSection !== "orders" && activeSection !== "cards")) {
       return
     }
 
@@ -809,6 +810,7 @@ function mergeAdminContent(
       defaultCmsContent.blogCategories,
     blogPosts:
       partial.blogPosts ?? current?.blogPosts ?? defaultCmsContent.blogPosts,
+    cards: partial.cards ?? current?.cards ?? defaultCmsContent.cards,
     contactPage:
       partial.contactPage ??
       current?.contactPage ??
@@ -1054,6 +1056,16 @@ function AdminContentEditor({
           totalCount: orderPagination.totalCount,
           totalPages: orderPagination.totalPages,
         }}
+      />
+    )
+  }
+  if (activeSection === "cards") {
+    return (
+      <CardAdmin
+        content={content}
+        isSaving={isSaving}
+        onCommit={onCommit}
+        token={token}
       />
     )
   }

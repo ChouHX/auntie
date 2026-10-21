@@ -8,6 +8,7 @@ import {
 } from "node:crypto"
 
 import { defaultCmsContent } from "@/data/cms-defaults"
+import { normalizeCards } from "@/lib/cards"
 import { normalizeNotificationSettings } from "@/lib/notification-settings"
 import { logServerEvent } from "@/lib/server-log"
 import {
@@ -153,6 +154,7 @@ function withRuntimeDefaults(content: CmsContent): CmsContent {
     updatedAt: content.updatedAt || new Date().toISOString(),
     afterSalesPage: content.afterSalesPage ?? defaultCmsContent.afterSalesPage,
     bookingConfigs: content.bookingConfigs ?? defaultCmsContent.bookingConfigs,
+    cards: normalizeCards(content.cards),
     contactPage,
     dashboardTasks: content.dashboardTasks ?? defaultCmsContent.dashboardTasks,
     formulaTemplates,
@@ -217,6 +219,11 @@ function normalizePaymentOrder(
     baseAmountValue,
     bathrooms: normalizeBookingRoomCount(order.bathrooms, 1),
     bedrooms: order.studio ? 0 : normalizeBookingRoomCount(order.bedrooms, 1),
+    cardId: order.cardId?.trim() || undefined,
+    cardUsageAmount:
+      order.cardUsageAmount === undefined
+        ? undefined
+        : normalizeFinanceAmount(order.cardUsageAmount),
     currency,
     customerRelationId: order.customerRelationId ?? "",
     customerType: order.customerType ?? "",
@@ -815,6 +822,7 @@ function toPublicContent(content: CmsContent): CmsContent {
     },
     formulaTemplates: [],
     paymentOrders: [],
+    cards: [],
     paymentSettings: content.paymentSettings,
     notificationSettings: {
       ccEmails: [],

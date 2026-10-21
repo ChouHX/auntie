@@ -33,6 +33,7 @@ import {
   Tag,
   TextB,
   TextItalic,
+  Ticket,
   Trash,
   TrendUp,
   UploadSimple,
@@ -80,6 +81,7 @@ import type {
 export type AdminSection =
   | "dashboard"
   | "blogs"
+  | "cards"
   | "categories"
   | "gallery"
   | "reviews"
@@ -107,6 +109,7 @@ export const adminSections: AdminNavItem<AdminSection>[] = [
   { id: "reviews", label: "好评图片", icon: CheckCircle, group: "content" },
   { id: "faq", label: "QA管理", icon: ListChecks, group: "content" },
   { id: "orders", label: "订单管理", icon: Wallet, group: "main" },
+  { id: "cards", label: "次卡管理", icon: Ticket, group: "main" },
   { id: "customers", label: "客户管理", icon: UserCircle, group: "main" },
   { id: "sales", label: "销售管理", icon: TrendUp, group: "main" },
   { id: "aunties", label: "阿姨管理", icon: Users, group: "main" },
@@ -150,6 +153,10 @@ export const adminSectionMeta: Record<
   categories: {
     description: "维护博客分类，供文章筛选和前台展示使用。",
     title: "博客分类",
+  },
+  cards: {
+    description: "管理客户次卡，查看次数消耗与绑定订单。",
+    title: "次卡管理",
   },
   dashboard: {
     description: "按客户、订单、销售归属和经营成本查看成交与利润数据。",

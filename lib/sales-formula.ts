@@ -266,12 +266,16 @@ function calculateOrderFinancials(
               salaryAdjustment
           )
         )
-  const salesCommission = roundMoney(
-    Math.max(
-      0,
-      distributableAmount * (commissionPercentage / 100) + commissionAdjustment
-    )
-  )
+  // 使用次卡抵扣的订单不计入学员提成。
+  const salesCommission = order.cardId
+    ? 0
+    : roundMoney(
+        Math.max(
+          0,
+          distributableAmount * (commissionPercentage / 100) +
+            commissionAdjustment
+        )
+      )
   const orderProfit = template
     ? evaluateFormulaTokens(template.tokens, (field) => {
         if (field === "paymentAmount") return paymentAmount

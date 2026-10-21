@@ -428,3 +428,37 @@ test("对接客服来自订单绑定的微信跟进关系，可筛选姓名、�
     ["UNLINKED"]
   )
 })
+
+test("订单状态筛选可区分已付款（次卡）", () => {
+  const content = {
+    cards: [],
+    formulaTemplates: [],
+    paymentOrders: [
+      order({ cardId: "CARD1", orderId: "CARD-PAID", status: "paid" }),
+      order({ orderId: "NORMAL-PAID", status: "paid" }),
+      order({ orderId: "UNPAID", status: "unpaid" }),
+    ],
+    salesMembers: [],
+    teamMembers: [],
+  } as unknown as CmsContent
+  const result = createSalesDashboardResult(content, [], {
+    filters: [
+      {
+        field: "orderStatus",
+        id: "status",
+        operator: "eq",
+        value: "paid_card",
+      },
+    ],
+    logic: "all",
+    ordersOnly: true,
+    page: 1,
+    pageSize: 20,
+  })
+
+  assert.deepEqual(
+    result.rows.map((row) => row.orderId),
+    ["CARD-PAID"]
+  )
+  assert.ok(result.rows.every((row) => row.cardId))
+})

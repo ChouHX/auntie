@@ -1,4 +1,5 @@
 import type {
+  CmsCard,
   CmsFormulaTemplate,
   CmsPaymentOrder,
   CmsPaymentProof,
@@ -58,6 +59,8 @@ type SalesDashboardRow = {
   auntieId: string
   auntieName: string
   auntieSalary: number
+  cardId?: string
+  cardUsageAmount?: number
   cleaningType: string
   currency: string
   customerKey: string
@@ -107,6 +110,7 @@ type SalesRankingItem = {
 }
 
 type SalesDashboardResult = {
+  cards: CmsCard[]
   currencySummaries: SalesDashboardCurrencySummary[]
   customerCount: number
   convertedCustomerCount: number
@@ -132,6 +136,7 @@ type SalesDashboardResult = {
 }
 
 type SalesOrderFinancePatch = {
+  cardId?: string
   customerRelationId?: string
   customerType?: string
   financeNote?: string

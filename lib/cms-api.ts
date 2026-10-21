@@ -56,6 +56,7 @@ type AdminContentSection =
   | "account"
   | "aunties"
   | "blogs"
+  | "cards"
   | "categories"
   | "customers"
   | "dashboard"

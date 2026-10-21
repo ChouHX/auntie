@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server"
 
 import { isAdminToken, readCmsContent, updateCmsContent } from "@/lib/cms-store"
+import { validateCardUsage } from "@/lib/cards"
 import {
   calculateOrderFinancials,
   validateFormulaTemplateSet,
@@ -63,10 +64,22 @@ export async function PATCH(request: NextRequest) {
         (order) => order.orderId === patch.orderId
       )
       if (!current) throw new Error("订单不存在。")
-      const paymentAmount = normalizeAmount(
-        patch.paymentAmount ?? patch.receivedAmount,
-        current.amountValue || current.receivedAmount
-      )
+      const requestedCardId =
+        patch.cardId === undefined ? undefined : patch.cardId.trim()
+      const usedCard = requestedCardId
+        ? validateCardUsage(content.cards, content.paymentOrders, {
+            cardId: requestedCardId,
+            customerRelationId:
+              patch.customerRelationId ?? current.customerRelationId,
+            excludeOrderId: current.orderId,
+          })
+        : undefined
+      const paymentAmount = usedCard
+        ? usedCard.singlePrice
+        : normalizeAmount(
+            patch.paymentAmount ?? patch.receivedAmount,
+            current.amountValue || current.receivedAmount
+          )
       const storedBreakdown = current.amountBreakdown ?? []
       const storedBreakdownTotal = storedBreakdown.reduce(
         (sum, item) => sum + Number(item.amount || 0),
@@ -92,21 +105,39 @@ export async function PATCH(request: NextRequest) {
           : null
       // 小费 100% 归阿姨：baseAmountValue 与 receivedAmount 都按不含小费口径写入，
       // 与历史订单保持一致（订单金额 340 / 小费 25 / 实收 315）。
+      // 使用次卡时订单金额固定为单次抵扣金额，且清零小费。
+      const effectiveTipAmount = usedCard ? 0 : Number(current.tipAmount || 0)
       const orderBaseAmountValue = Math.max(
         0,
-        paymentAmount - Number(current.tipAmount || 0)
+        paymentAmount - effectiveTipAmount
       )
+      const orderCurrency = usedCard?.currency ?? current.currency
       const orderForCalculation: CmsPaymentOrder = {
         ...current,
-        amount: formatOrderAmount(paymentAmount, current.currency || "USD"),
+        amount: formatOrderAmount(paymentAmount, orderCurrency || "USD"),
         amountBreakdown,
         amountValue: paymentAmount,
         baseAmountValue: orderBaseAmountValue,
+        calculationSnapshot:
+          usedCard || requestedCardId === ""
+            ? undefined
+            : current.calculationSnapshot,
+        cardId: usedCard
+          ? usedCard.id
+          : requestedCardId === ""
+            ? undefined
+            : current.cardId,
+        cardUsageAmount: usedCard
+          ? usedCard.singlePrice
+          : requestedCardId === ""
+            ? undefined
+            : current.cardUsageAmount,
+        currency: orderCurrency,
         customerRelationId:
           patch.customerRelationId ?? current.customerRelationId,
         customerType: patch.customerType ?? current.customerType,
         dealStatus:
-          offlinePaid || current.status === "paid"
+          usedCard || offlinePaid || current.status === "paid"
             ? "converted"
             : "unconverted",
         financeNote: patch.financeNote ?? current.financeNote,
@@ -115,12 +146,19 @@ export async function PATCH(request: NextRequest) {
           ...patch.formulaTemplateIds,
         },
         otherCost: normalizeAmount(patch.otherCost, current.otherCost),
-        gatewayStatus: offlinePaid ? "OFFLINE_PAID" : current.gatewayStatus,
-        paidAt: offlinePaid
+        gatewayStatus: usedCard
+          ? "CARD_PAID"
+          : offlinePaid
+            ? "OFFLINE_PAID"
+            : current.gatewayStatus,
+        paidAt: usedCard
           ? current.paidAt || new Date().toISOString()
-          : current.paidAt,
-        provider: offlinePaid ? "offline" : current.provider,
+          : offlinePaid
+            ? current.paidAt || new Date().toISOString()
+            : current.paidAt,
+        provider: usedCard ? "offline" : offlinePaid ? "offline" : current.provider,
         receivedAmount: orderBaseAmountValue,
+        tipAmount: effectiveTipAmount,
         salesMemberId: shouldUpdateSalesMember
           ? (selectedSalesMember?.id ?? "")
           : current.salesMemberId,
@@ -137,7 +175,7 @@ export async function PATCH(request: NextRequest) {
           selectedSalesMember?.id !== current.salesMemberId
             ? undefined
             : current.salesCommissionSnapshot,
-        status: offlinePaid ? "paid" : current.status,
+        status: usedCard ? "paid" : offlinePaid ? "paid" : current.status,
         updatedAt: new Date().toISOString(),
       }
       const next = calculateOrderFinancials(

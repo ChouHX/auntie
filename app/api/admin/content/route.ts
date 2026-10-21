@@ -7,6 +7,7 @@ import {
   writeCmsContent,
 } from "@/lib/cms-store"
 import { createAuntieStatsMap } from "@/lib/admin-analytics"
+import { validateCardUsage, withCardUsage } from "@/lib/cards"
 import {
   deletePaymentOrderFromCollection,
   findPaymentOrderById,
@@ -22,6 +23,7 @@ type AdminContentSection =
   | "account"
   | "aunties"
   | "blogs"
+  | "cards"
   | "categories"
   | "customers"
   | "dashboard"
@@ -56,6 +58,7 @@ const adminContentSections = new Set<AdminContentSection>([
   "account",
   "aunties",
   "blogs",
+  "cards",
   "categories",
   "customers",
   "dashboard",
@@ -94,9 +97,48 @@ export async function GET(request: NextRequest) {
     return Response.json(content)
   }
 
+  const responseContent =
+    section === "cards" ? await withCardCustomerAvatars(content) : content
+
   return Response.json(
-    createSectionResponse(content, section, request.nextUrl.searchParams)
+    createSectionResponse(
+      responseContent,
+      section,
+      request.nextUrl.searchParams
+    )
   )
+}
+
+/**
+ * 次卡列表展示客户头像：历史次卡未存头像时，按企业微信客户补齐。
+ */
+async function withCardCustomerAvatars(
+  content: CmsContent
+): Promise<CmsContent> {
+  const missing = content.cards.filter(
+    (card) => !card.customerAvatar && card.customerRelationId
+  )
+  if (!missing.length) return content
+
+  const avatars = new Map(
+    await Promise.all(
+      missing.map(async (card) => {
+        const customer = await getWecomCustomerByRelationId(
+          card.customerRelationId
+        )
+        return [card.id, customer?.avatar ?? ""] as const
+      })
+    )
+  )
+
+  return {
+    ...content,
+    cards: content.cards.map((card) =>
+      avatars.has(card.id)
+        ? { ...card, customerAvatar: avatars.get(card.id) ?? "" }
+        : card
+    ),
+  }
 }
 
 export async function PUT(request: NextRequest) {
@@ -340,6 +382,9 @@ function createSectionResponse(
       content: {
         ...responseContent,
         bookingConfigs: content.bookingConfigs,
+        cards: content.cards.map((card) =>
+          withCardUsage(card, content.paymentOrders)
+        ),
         formulaTemplates: content.formulaTemplates,
         paymentOrders: filteredOrders.slice(
           pagination.startIndex,
@@ -469,6 +514,19 @@ function createSectionResponse(
         contactPage: content.contactPage,
         notificationSettings: content.notificationSettings,
         siteSettings: content.siteSettings,
+      },
+    }
+  }
+
+  if (section === "cards") {
+    return {
+      content: {
+        ...responseContent,
+        cards: content.cards.map((card) =>
+          withCardUsage(card, content.paymentOrders)
+        ),
+        // 次卡订单用于“查看订单”弹窗，同时加载全部客户次卡。
+        paymentOrders: content.paymentOrders.filter((order) => order.cardId),
       },
     }
   }
@@ -618,9 +676,45 @@ function upsertPaymentOrder(content: CmsContent, order: CmsPaymentOrder) {
   return {
     ...content,
     paymentOrders: upsertPaymentOrderInCollection(content.paymentOrders, {
-      ...order,
+      ...applyCardUsage(content, order),
       orderSource: existingOrder ? existingOrder.orderSource : "admin",
     }),
+  }
+}
+
+/**
+ * 使用次卡的订单金额固定为次卡单次金额，并自动视为已付款，
+ * 学员提成由计算规则统一置 0。
+ */
+function applyCardUsage(content: CmsContent, order: CmsPaymentOrder) {
+  const cardId = order.cardId?.trim()
+  if (!cardId) return order
+
+  const card = validateCardUsage(content.cards, content.paymentOrders, {
+    cardId,
+    customerRelationId: order.customerRelationId,
+    excludeOrderId: order.orderId,
+  })
+  const price = card.singlePrice
+
+  return {
+    ...order,
+    amount: "",
+    amountBreakdown: [],
+    amountValue: price,
+    baseAmountValue: price,
+    calculationSnapshot: undefined,
+    cardId: card.id,
+    cardUsageAmount: price,
+    currency: card.currency,
+    dealStatus: "converted" as const,
+    gatewayStatus: "CARD_PAID",
+    paidAt: order.paidAt || new Date().toISOString(),
+    provider: "offline" as const,
+    receivedAmount: price,
+    salesCommission: 0,
+    status: "paid" as const,
+    tipAmount: 0,
   }
 }
 
@@ -731,6 +825,13 @@ function applySectionPatch(
       notificationSettings:
         content.notificationSettings ?? current.notificationSettings,
       siteSettings: content.siteSettings ?? current.siteSettings,
+    }
+  }
+
+  if (section === "cards") {
+    return {
+      ...current,
+      cards: content.cards ?? current.cards,
     }
   }
 

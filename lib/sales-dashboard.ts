@@ -2,6 +2,8 @@ import type { CmsContent, CmsPaymentOrder } from "@/types/cms"
 import type { WecomCustomer } from "@/lib/wecom-types"
 // @ts-expect-error Node's TypeScript test runner requires an explicit extension.
 import { findSalesMemberForStudentTags } from "./sales-attribution.ts"
+// @ts-expect-error Node's TypeScript test runner requires an explicit extension.
+import { withCardUsage } from "./cards.ts"
 import type {
   SalesDashboardCurrencySummary,
   SalesDashboardQuery,
@@ -39,6 +41,9 @@ function createSalesDashboardResult(
   const page = Math.min(Math.max(1, Math.trunc(query.page) || 1), totalPages)
 
   return {
+    cards: (content.cards ?? []).map((card) =>
+      withCardUsage(card, content.paymentOrders)
+    ),
     currencySummaries: createCurrencySummaries(filteredRows),
     customerCount: countDistinctCustomers(filteredRows),
     convertedCustomerCount: countDistinctCustomers(
@@ -131,6 +136,8 @@ function createOrderRow(
     auntieName:
       auntieMap.get(order.assignedAuntieId || "") || customer?.auntie || "",
     auntieSalary: normalizeNumber(order.auntieSalary),
+    cardId: order.cardId,
+    cardUsageAmount: order.cardUsageAmount,
     cleaningType: order.serviceType,
     currency: order.currency || "USD",
     customerKey: order.customerRelationId || `order:${order.orderId}`,
@@ -214,6 +221,11 @@ function createCustomerRow(
 }
 
 function matchesFilter(row: SalesDashboardRow, filter: SalesFilterCondition) {
+  // 订单状态筛选：区分“已付款（次卡）”与普通已付款。
+  if (filter.field === "orderStatus" && filter.value === "paid_card") {
+    const isCardPaid = row.orderStatus === "paid" && Boolean(row.cardId)
+    return filter.operator === "neq" ? !isCardPaid : isCardPaid
+  }
   const value =
     filter.field === "note"
       ? `${row.note} ${row.financeNote}`.trim()

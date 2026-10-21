@@ -145,6 +145,22 @@ test("默认利润模板为 (实收金额 - 其他成本) - 阿姨薪资 - 学�
   assert.equal(order.orderProfit, 28.8)
 })
 
+test("次卡抵扣订单不计入学员提成，利润按单次金额计算", () => {
+  const now = new Date().toISOString()
+  const { content, order: source } = createDistributableScenario(now, {
+    amountValue: 100,
+    cardId: "CARD1",
+    cardUsageAmount: 100,
+    receivedAmount: 100,
+  })
+  const order = calculateOrderFinancials(source, content)
+
+  // 单次金额 100，阿姨薪资按 85% = 85，学员提成为 0，利润 = 100 - 85 = 15。
+  assert.equal(order.auntieSalary, 85)
+  assert.equal(order.salesCommission, 0)
+  assert.equal(order.orderProfit, 15)
+})
+
 test("旧版未分组利润模板自动升级为分组写法，自定义模板保持不变", () => {
   const legacy: CmsFormulaTemplate = {
     createdAt: "",

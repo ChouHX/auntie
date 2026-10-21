@@ -94,6 +94,7 @@ import type {
   SalesOrderFinancePatch,
 } from "@/lib/sales-dashboard-types"
 import type {
+  CmsCard,
   CmsFormulaField,
   CmsFormulaTemplate,
   CmsFormulaToken,
@@ -1028,6 +1029,7 @@ export function SalesOrderDataPanel({
       </TabsContent>
 
       <FinanceDialog
+        cards={data?.cards ?? []}
         salesMembers={data?.salesMembers ?? []}
         token={token}
         onOpenChange={setFinanceOpen}
@@ -1325,9 +1327,11 @@ function getOrderStatusLabel(status: SalesDashboardRow["orderStatus"]) {
 function OrderStatusBadge({ row }: { row: SalesDashboardRow }) {
   const label = row.overdue24
     ? "已取消 · 超时 24 小时"
-    : row.orderStatus === "paid" && row.paymentProvider === "offline"
-      ? "已付款（公司账户）"
-      : getOrderStatusLabel(row.orderStatus)
+    : row.orderStatus === "paid" && row.cardId
+      ? "已付款（次卡）"
+      : row.orderStatus === "paid" && row.paymentProvider === "offline"
+        ? "已付款（公司账户）"
+        : getOrderStatusLabel(row.orderStatus)
   const className = row.overdue24
     ? "border-red-200 bg-red-50 text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-200"
     : {
@@ -1363,6 +1367,7 @@ function isCompletedSalesOrder(row: SalesDashboardRow) {
 }
 
 function FinanceDialog({
+  cards,
   onOpenChange,
   onRowChange,
   onSave,
@@ -1371,6 +1376,7 @@ function FinanceDialog({
   salesMembers,
   token,
 }: {
+  cards: CmsCard[]
   onOpenChange: (open: boolean) => void
   onRowChange: (row: SalesDashboardRow | null) => void
   onSave: (patch: SalesOrderFinancePatch) => Promise<void>
@@ -1395,6 +1401,13 @@ function FinanceDialog({
 
   const update = (patch: Partial<SalesDashboardRow>) =>
     onRowChange(row ? { ...row, ...patch } : row)
+
+  const rowCard = row?.customerRelationId
+    ? cards.find(
+        (card) =>
+          card.customerRelationId === row.customerRelationId?.trim()
+      )
+    : undefined
 
   async function handleSupportProofSelect(file: File) {
     if (!row) return
@@ -1490,6 +1503,7 @@ function FinanceDialog({
                 >
                   <NumberInput
                     className="h-8 px-2.5 text-sm"
+                    disabled={Boolean(row.cardId)}
                     min="0"
                     onValueChange={(paymentAmount) =>
                       update({ paymentAmount, receivedAmount: paymentAmount })
@@ -1498,6 +1512,46 @@ function FinanceDialog({
                     value={row.paymentAmount}
                   />
                 </FormField>
+                {rowCard ? (
+                  <FormField
+                    className="space-y-1.5 sm:col-span-2"
+                    description={
+                      rowCard.status === "disabled"
+                        ? "该次卡已停用，不能抵扣。"
+                        : `剩余 ${rowCard.remainingTimes ?? 0} 次 · 单次抵扣 ${formatMoney(
+                            rowCard.currency,
+                            rowCard.singlePrice
+                          )}。勾选后订单金额固定为该金额并自动视为已付款，不计学员提成。`
+                    }
+                    label="次卡抵扣"
+                  >
+                    <label className="flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-sm">
+                      <Checkbox
+                        checked={Boolean(row.cardId)}
+                        disabled={
+                          rowCard.status !== "active" ||
+                          (!row.cardId &&
+                            (rowCard.remainingTimes ?? 0) <= 0)
+                        }
+                        onCheckedChange={(checked) => {
+                          if (checked === true) {
+                            update({
+                              cardId: rowCard.id,
+                              cardUsageAmount: rowCard.singlePrice,
+                              paymentAmount: rowCard.singlePrice,
+                              receivedAmount: rowCard.singlePrice,
+                            })
+                          } else {
+                            update({ cardId: "", cardUsageAmount: undefined })
+                          }
+                        }}
+                      />
+                      <span>
+                        使用次卡抵扣本次订单（{rowCard.customerName}）
+                      </span>
+                    </label>
+                  </FormField>
+                ) : null}
                 <FormField
                   className="space-y-1.5"
                   description={
@@ -1515,7 +1569,9 @@ function FinanceDialog({
                         row.paymentProvider === "offline" ||
                         confirmOfflinePayment
                       }
-                      disabled={row.orderStatus === "paid"}
+                      disabled={
+                        row.orderStatus === "paid" || Boolean(row.cardId)
+                      }
                       onCheckedChange={(checked) =>
                         setConfirmOfflinePayment(checked === true)
                       }
@@ -1690,6 +1746,7 @@ function FinanceDialog({
             className="h-8"
             onClick={() =>
               onSave({
+                cardId: row?.cardId ?? "",
                 financeNote: row?.financeNote ?? "",
                 markAsOfflinePaid: confirmOfflinePayment,
                 orderId: row?.orderId ?? "",
@@ -2026,6 +2083,7 @@ function getFilterOptions(
       { label: "待客服确认", value: "awaiting_confirmation" },
       { label: "待付款", value: "unpaid" },
       { label: "支付中", value: "pending" },
+      { label: "已付款（次卡）", value: "paid_card" },
       { label: "已付款", value: "paid" },
       { label: "已取消", value: "cancelled" },
       { label: "支付失败", value: "failed" },
