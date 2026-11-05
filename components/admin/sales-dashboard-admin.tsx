@@ -1,8 +1,9 @@
 "use client"
 
-import { type ReactNode, useEffect, useState } from "react"
+import { Fragment, type ReactNode, useEffect, useState } from "react"
 import {
   Calculator,
+  CaretDown,
   CaretLeft,
   CaretRight,
   ClipboardText,
@@ -21,6 +22,7 @@ import { toast } from "sonner"
 import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts"
 
 import { Badge } from "@/components/ui/badge"
+import { CustomerColumnFilter } from "@/components/admin/customer-column-filter"
 import { PageJump } from "@/components/ui/page-jump"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -72,6 +74,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import {
+  fetchAdminRepeatCustomerOrders,
+  fetchAdminRepeatCustomers,
   fetchSalesDashboard,
   saveSalesFormulaTemplates,
   updateSalesOrderFinance,
@@ -95,7 +99,12 @@ import type {
   SalesOrderFinancePatch,
 } from "@/lib/sales-dashboard-types"
 import type {
+  RepeatCustomerOrderDetail,
+  RepeatCustomerRow,
+} from "@/lib/repeat-customers"
+import type {
   CmsCard,
+  CmsPaymentOrder,
   CmsFormulaField,
   CmsFormulaTemplate,
   CmsFormulaToken,
@@ -590,6 +599,7 @@ export function SalesOrderDataPanel({
   const [isLoading, setIsLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
   const [filterOpen, setFilterOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<string>("support")
   const [financeOpen, setFinanceOpen] = useState(false)
   const [editingRow, setEditingRow] = useState<SalesDashboardRow | null>(null)
   const [formulaOpen, setFormulaOpen] = useState(false)
@@ -653,8 +663,10 @@ export function SalesOrderDataPanel({
   return (
     <Tabs
       className="space-y-3"
-      value={query.orderSource}
+      value={activeTab}
       onValueChange={(value) => {
+        setActiveTab(value)
+        if (value === "repeat_customers") return
         setIsLoading(true)
         setData(null)
         setDraftFilters([])
@@ -672,12 +684,16 @@ export function SalesOrderDataPanel({
         <div>
           <h2 className="text-sm font-semibold">订单管理</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {query.orderSource === "support"
-              ? "客服通过管理后台创建的订单"
-              : "客户通过预约页面自主创建的订单"}
-            {isLoading
-              ? " · 加载中..."
-              : ` · 共 ${data?.pagination.totalCount ?? 0} 条订单`}
+            {activeTab === "repeat_customers"
+              ? "下单 2 次及以上的微信客户"
+              : query.orderSource === "support"
+                ? "客服通过管理后台创建的订单"
+                : "客户通过预约页面自主创建的订单"}
+            {activeTab === "repeat_customers"
+              ? null
+              : isLoading
+                ? " · 加载中..."
+                : ` · 共 ${data?.pagination.totalCount ?? 0} 条订单`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -751,6 +767,7 @@ export function SalesOrderDataPanel({
       <TabsList aria-label="订单来源">
         <TabsTrigger value="support">客服创建订单</TabsTrigger>
         <TabsTrigger value="self_service">自主预约订单</TabsTrigger>
+        <TabsTrigger value="repeat_customers">复购用户</TabsTrigger>
       </TabsList>
       <TabsContent value={query.orderSource ?? "support"} asChild>
         <Card className="space-y-0 overflow-hidden rounded-lg shadow-sm">
@@ -1042,6 +1059,10 @@ export function SalesOrderDataPanel({
         </Card>
       </TabsContent>
 
+      <TabsContent value="repeat_customers" asChild>
+        <RepeatCustomersTable token={token} refreshKey={refreshKey} />
+      </TabsContent>
+
       <FinanceDialog
         cards={data?.cards ?? []}
         salesMembers={data?.salesMembers ?? []}
@@ -1064,6 +1085,347 @@ export function SalesOrderDataPanel({
       />
     </Tabs>
   )
+}
+
+function RepeatCustomersTable({
+  refreshKey,
+  token,
+}: {
+  refreshKey: string
+  token: string
+}) {
+  const [rows, setRows] = useState<RepeatCustomerRow[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [expandedKey, setExpandedKey] = useState("")
+  const [ordersByKey, setOrdersByKey] = useState<
+    Record<string, RepeatCustomerOrderDetail[]>
+  >({})
+  const [loadingKey, setLoadingKey] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    fetchAdminRepeatCustomers(token)
+      .then((result) => mounted && setRows(result.rows))
+      .catch(
+        (error) =>
+          mounted &&
+          toast.error(
+            error instanceof Error ? error.message : "复购用户加载失败"
+          )
+      )
+      .finally(() => mounted && setIsLoading(false))
+    return () => {
+      mounted = false
+    }
+  }, [refreshKey, token])
+
+  const selectedSet = new Set(selectedCustomerIds)
+  const visibleRows = selectedCustomerIds.length
+    ? rows.filter((row) => selectedSet.has(row.customerRelationId))
+    : rows
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize))
+  const safePage = Math.min(Math.max(page, 1), totalPages)
+  const pageRows = visibleRows.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize
+  )
+
+  async function toggleRow(row: RepeatCustomerRow) {
+    if (expandedKey === row.customerRelationId) {
+      setExpandedKey("")
+      return
+    }
+
+    setExpandedKey(row.customerRelationId)
+    // 折叠时才按客户单独查询订单明细，避免一次性拉取全部订单。
+    if (!ordersByKey[row.customerRelationId]) {
+      setLoadingKey(row.customerRelationId)
+      try {
+        const result = await fetchAdminRepeatCustomerOrders(
+          token,
+          row.customerRelationId
+        )
+        setOrdersByKey((current) => ({
+          ...current,
+          [row.customerRelationId]: result.orders,
+        }))
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "订单明细加载失败"
+        )
+      } finally {
+        setLoadingKey("")
+      }
+    }
+  }
+
+  return (
+    <Card className="space-y-0 overflow-hidden rounded-lg shadow-sm">
+      <Table className="min-w-[900px] text-xs [&_td]:px-2 [&_th]:px-2">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-8" />
+            <TableHead>
+              <div className="flex items-center">
+                客户名称
+                <CustomerColumnFilter
+                  appliedCount={selectedCustomerIds.length}
+                  onChange={(ids) => {
+                    setExpandedKey("")
+                    setPage(1)
+                    setSelectedCustomerIds(ids)
+                  }}
+                  selected={selectedCustomerIds}
+                  token={token}
+                />
+              </div>
+            </TableHead>
+            <TableHead>复购次数</TableHead>
+            <TableHead>平均间隔时间</TableHead>
+            <TableHead>平均订单金额</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading && !rows.length ? (
+            <TableRow>
+              <TableCell
+                className="h-28 text-center text-muted-foreground"
+                colSpan={5}
+              >
+                正在加载复购用户...
+              </TableCell>
+            </TableRow>
+          ) : visibleRows.length ? (
+            pageRows.map((row) => {
+              const isExpanded = expandedKey === row.customerRelationId
+              const orders = ordersByKey[row.customerRelationId]
+
+              return (
+                <Fragment key={row.customerRelationId}>
+                  <TableRow
+                    className="cursor-pointer"
+                    onClick={() => void toggleRow(row)}
+                  >
+                    <TableCell>
+                      <Button
+                        aria-label={isExpanded ? "收起订单" : "展开订单"}
+                        className="size-7"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void toggleRow(row)
+                        }}
+                        size="icon-sm"
+                        variant="ghost"
+                      >
+                        <CaretDown
+                          className={
+                            isExpanded
+                              ? "rotate-180 transition-transform"
+                              : "transition-transform"
+                          }
+                          size={13}
+                          weight="bold"
+                        />
+                      </Button>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {row.customerAvatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- 企业微信提供远程头像地址。
+                          <img
+                            alt=""
+                            className="size-7 shrink-0 rounded-full bg-muted object-cover"
+                            loading="lazy"
+                            src={row.customerAvatar}
+                          />
+                        ) : (
+                          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
+                            {row.customerName.slice(0, 1) || "?"}
+                          </span>
+                        )}
+                        <span className="min-w-0 truncate">
+                          {row.customerName}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{row.repeatCount} 次</TableCell>
+                    <TableCell>
+                      {row.averageIntervalDays === null
+                        ? "-"
+                        : `${row.averageIntervalDays} 天`}
+                    </TableCell>
+                    <TableCell>
+                      {formatMoney(row.currency, row.averageOrderAmount)}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow>
+                      <TableCell className="bg-muted/30" colSpan={5}>
+                        {loadingKey === row.customerRelationId ? (
+                          <div className="py-4 text-center text-muted-foreground">
+                            正在加载订单明细...
+                          </div>
+                        ) : orders?.length ? (
+                          <div className="py-2">
+                            <Table className="w-full text-xs">
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>订单号</TableHead>
+                                  <TableHead>服务日期</TableHead>
+                                  <TableHead>距上一单</TableHead>
+                                  <TableHead>服务类型</TableHead>
+                                  <TableHead>地区</TableHead>
+                                  <TableHead>状态</TableHead>
+                                  <TableHead className="text-right">
+                                    订单金额
+                                  </TableHead>
+                                  <TableHead className="text-right">
+                                    对接阿姨
+                                  </TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {orders.map((order) => (
+                                  <TableRow key={order.orderId}>
+                                    <TableCell className="font-mono">
+                                      {order.orderId}
+                                    </TableCell>
+                                    <TableCell>
+                                      {order.serviceDate || "-"}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                                      {order.intervalDays === null
+                                        ? "首次"
+                                        : `${order.intervalDays} 天`}
+                                    </TableCell>
+                                    <TableCell>
+                                      {order.serviceType || "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {order.serviceArea || "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {getOrderStatusText(order.status) ??
+                                        order.status}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {formatMoney(
+                                        order.currency || "USD",
+                                        order.amount
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {order.auntieName || "-"}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ) : (
+                          <div className="py-4 text-center text-muted-foreground">
+                            暂无订单
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              )
+            })
+          ) : (
+            <TableRow>
+              <TableCell
+                className="h-28 text-center text-muted-foreground"
+                colSpan={5}
+              >
+                暂无复购用户
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span>每页</span>
+          <Select
+            onValueChange={(value) => {
+              setPage(1)
+              setPageSize(Number(value))
+            }}
+            value={String(pageSize)}
+          >
+            <SelectTrigger className="h-8 w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 20, 50, 100].map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size} 条
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span>
+            共 {visibleRows.length} 位复购用户
+            {selectedCustomerIds.length ? "（已筛选）" : ""}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <PageJump
+            onPageChange={(next) => {
+              setExpandedKey("")
+              setPage(next)
+            }}
+            page={safePage}
+            totalPages={totalPages}
+          />
+          <Button
+            aria-label="上一页"
+            className="size-8"
+            disabled={safePage <= 1}
+            onClick={() => {
+              setExpandedKey("")
+              setPage(safePage - 1)
+            }}
+            size="icon-sm"
+            variant="outline"
+          >
+            <CaretLeft size={14} />
+          </Button>
+          <Button
+            aria-label="下一页"
+            className="size-8"
+            disabled={safePage >= totalPages}
+            onClick={() => {
+              setExpandedKey("")
+              setPage(safePage + 1)
+            }}
+            size="icon-sm"
+            variant="outline"
+          >
+            <CaretRight size={14} />
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function getOrderStatusText(status: CmsPaymentOrder["status"]) {
+  const labels: Record<CmsPaymentOrder["status"], string> = {
+    awaiting_confirmation: "待客服确认",
+    cancelled: "已取消",
+    failed: "支付失败",
+    paid: "已付款",
+    pending: "支付中",
+    unpaid: "待付款",
+  }
+
+  return labels[status] ?? status
 }
 
 function SalesFilterPopover({

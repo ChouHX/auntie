@@ -27,6 +27,10 @@ import type {
   SalesDashboardResult,
   SalesOrderFinancePatch,
 } from "@/lib/sales-dashboard-types"
+import type {
+  RepeatCustomerOrderDetail,
+  RepeatCustomerRow,
+} from "@/lib/repeat-customers"
 import type { SalesOrderPage } from "@/lib/sales-orders"
 
 const ADMIN_TOKEN_KEY = "auntie-chen-admin-token"
@@ -305,6 +309,44 @@ async function saveAdminSalesMembers(
     headers: createAuthHeaders(token),
     method: "PUT",
   })
+}
+
+async function fetchAdminRepeatCustomers(
+  token: string,
+  customerQuery = ""
+) {
+  const query = new URLSearchParams()
+  if (customerQuery.trim()) query.set("customerQuery", customerQuery.trim())
+
+  return request<{ rows: RepeatCustomerRow[] }>(
+    `/api/admin/repeat-customers?${query}`,
+    { headers: createAuthHeaders(token) }
+  )
+}
+
+async function searchAdminRepeatCustomerOptions(
+  token: string,
+  params: { page: number; pageSize: number; query: string }
+) {
+  return request<WecomCustomerPage>("/api/admin/repeat-customers", {
+    body: JSON.stringify(params),
+    headers: createAuthHeaders(token),
+    method: "PUT",
+  })
+}
+
+async function fetchAdminRepeatCustomerOrders(
+  token: string,
+  customerRelationId: string
+) {
+  return request<{ orders: RepeatCustomerOrderDetail[] }>(
+    "/api/admin/repeat-customers",
+    {
+      body: JSON.stringify({ customerRelationId }),
+      headers: createAuthHeaders(token),
+      method: "POST",
+    }
+  )
 }
 
 async function updateSalesOrderFinance(
@@ -825,6 +867,9 @@ export {
   fetchPublicAuntie,
   fetchPublicAuntieReviews,
   fetchPublicContent,
+  fetchAdminRepeatCustomerOrders,
+  searchAdminRepeatCustomerOptions,
+  fetchAdminRepeatCustomers,
   fetchSalesDashboard,
   getStoredAdminToken,
   isApiRequestError,
