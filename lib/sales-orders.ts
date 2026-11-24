@@ -15,9 +15,15 @@ type SalesOrder = {
   status: CmsPaymentOrder["status"]
 }
 
+type SalesOrderTotal = {
+  amount: number
+  commission: number
+  currency: string
+  paidAmount: number
+}
 type SalesOrderPage = {
   months: string[]
-  totals: Array<{ currency: string; amount: number; commission: number }>
+  totals: SalesOrderTotal[]
   orders: SalesOrder[]
   pagination: {
     page: number
@@ -73,30 +79,29 @@ function createSalesOrderPage(
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const page = Math.min(Math.max(1, Math.trunc(options.page) || 1), totalPages)
 
-  const totals = new Map<
-    string,
-    { currency: string; amount: number; commission: number }
-  >()
-  // 提成与订单金额只统计已完成支付的订单，未支付订单不计入汇总。
-  filtered
-    .filter((order) => order.status === "paid")
-    .map(toSalesOrder)
-    .forEach((order) => {
-      const total = totals.get(order.currency) ?? {
-        currency: order.currency,
-        amount: 0,
-        commission: 0,
-      }
-      total.amount += order.amount
+  const totals = new Map<string, SalesOrderTotal>()
+  // 订单总金额覆盖该销售关联的全部订单；已支付金额与提成只累加已支付订单。
+  filtered.map(toSalesOrder).forEach((order) => {
+    const total = totals.get(order.currency) ?? {
+      amount: 0,
+      commission: 0,
+      currency: order.currency,
+      paidAmount: 0,
+    }
+    total.amount += order.amount
+    if (order.status === "paid") {
+      total.paidAmount += order.amount
       total.commission += order.salesCommission
-      totals.set(order.currency, total)
-    })
+    }
+    totals.set(order.currency, total)
+  })
   return {
     months: orderMonthOptions(accessibleOrders),
     totals: Array.from(totals.values()).map((total) => ({
       ...total,
       amount: normalizeAmount(total.amount),
       commission: normalizeAmount(total.commission),
+      paidAmount: normalizeAmount(total.paidAmount),
     })),
     orders: filtered
       .slice((page - 1) * pageSize, page * pageSize)
@@ -145,4 +150,4 @@ function clamp(value: number, min: number, max: number, fallback: number) {
 }
 
 export { createSalesOrderPage, isOrderOwnedBySalesMember }
-export type { SalesOrder, SalesOrderPage }
+export type { SalesOrder, SalesOrderPage, SalesOrderTotal }

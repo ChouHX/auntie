@@ -180,10 +180,12 @@ export function SalesOrderPanel({
               ? data.totals.map((total) => (
                   <p key={total.currency}>
                     订单总金额：{formatMoney(total.amount, total.currency)} ·
-                    提成总额：{formatMoney(total.commission, total.currency)}
+                    已支付订单总额：
+                    {formatMoney(total.paidAmount, total.currency)} · 提成总额：
+                    {formatMoney(total.commission, total.currency)}
                   </p>
                 ))
-              : "订单总金额：0.00 · 提成总额：0.00"}
+              : "订单总金额：0.00 · 已支付订单总额：0.00 · 提成总额：0.00"}
       </div>
       <div className="overflow-x-auto">
         <Table className="min-w-[900px] text-xs [&_td]:px-3 [&_td]:py-2 [&_th]:h-9 [&_th]:px-3">

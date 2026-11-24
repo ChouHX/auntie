@@ -104,12 +104,22 @@ test("月份筛选按服务日期包含月末，按所有页及币种汇总，�
   assert.equal(result.orders.length, 10)
   assert.equal(result.pagination.totalCount, 13)
   assert.deepEqual(result.totals, [
-    { currency: "USD", amount: 1200, commission: 150 },
-    { currency: "CNY", amount: 100, commission: 12.5 },
+    {
+      amount: 1200,
+      commission: 150,
+      currency: "USD",
+      paidAmount: 1200,
+    },
+    {
+      amount: 100,
+      commission: 12.5,
+      currency: "CNY",
+      paidAmount: 100,
+    },
   ])
 })
 
-test("订单页汇总只累加已支付订单，未支付订单不计入提成", () => {
+test("订单总金额含未支付订单，已支付金额与提成只算已支付", () => {
   const result = createSalesOrderPage(
     [
       order("paid", alice.id, alice.name),
@@ -124,7 +134,12 @@ test("订单页汇总只累加已支付订单，未支付订单不计入提成",
     { page: 1, pageSize: 10, query: "" }
   )
   assert.deepEqual(result.totals, [
-    { currency: "USD", amount: 100, commission: 12.5 },
+    {
+      amount: 300,
+      commission: 12.5,
+      currency: "USD",
+      paidAmount: 100,
+    },
   ])
 })
 
