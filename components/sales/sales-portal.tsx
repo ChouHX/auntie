@@ -233,7 +233,7 @@ function SalesDashboardContent({
         </label>
       </div>
 
-      <section className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+      <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <MetricCard
           icon={Users}
           label="总添加客户数"
@@ -254,26 +254,25 @@ function SalesDashboardContent({
           label={`${data.monthLabel}添加客户数`}
           value={String(data.customerCounts.month)}
         />
+      </section>
+
+      <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <MetricCard
-          className="col-span-2"
           icon={CircleDollarSign}
           label={`${data.monthLabel}成交金额`}
           value={formatMoneyTotals(data.monthlyRevenue)}
         />
         <MetricCard
-          className="col-span-2"
           icon={CircleDollarSign}
           label="成交金额总额"
           value={formatMoneyTotals(data.totalRevenue)}
         />
         <MetricCard
-          className="col-span-2"
           icon={CircleDollarSign}
           label={`${data.monthLabel}提成`}
           value={formatMoneyTotals(data.monthlyCommission)}
         />
         <MetricCard
-          className="col-span-2"
           icon={CircleDollarSign}
           label="提成总额"
           value={formatMoneyTotals(data.totalCommission)}
