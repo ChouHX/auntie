@@ -27,9 +27,11 @@ type SalesUserDashboard = {
   months: string[]
   monthLabel: string
   monthlyCommission: MoneyTotal[]
+  monthlyRevenue: MoneyTotal[]
   orderCountRanking: SalesOrderRanking[]
   orderRevenueRanking: SalesOrderRanking[]
   totalCommission: MoneyTotal[]
+  totalRevenue: MoneyTotal[]
 }
 
 function createSalesUserDashboard(
@@ -93,6 +95,12 @@ function createSalesUserDashboard(
       ),
       "salesCommission"
     ),
+    monthlyRevenue: sumMoney(
+      ownedPaidOrders.filter((order) =>
+        serviceMonth(order.serviceDate).startsWith(month)
+      ),
+      "receivedAmount"
+    ),
     orderCountRanking: rankings.toSorted(
       (left, right) =>
         right.orderCount - left.orderCount || right.amountCny - left.amountCny
@@ -102,6 +110,7 @@ function createSalesUserDashboard(
       (left, right) =>
         right.amountCny - left.amountCny || right.orderCount - left.orderCount
     ),
+    totalRevenue: sumMoney(ownedPaidOrders, "receivedAmount"),
   }
 }
 

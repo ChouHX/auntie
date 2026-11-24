@@ -257,6 +257,18 @@ function SalesDashboardContent({
         <MetricCard
           className="col-span-2"
           icon={CircleDollarSign}
+          label={`${data.monthLabel}成交金额`}
+          value={formatMoneyTotals(data.monthlyRevenue)}
+        />
+        <MetricCard
+          className="col-span-2"
+          icon={CircleDollarSign}
+          label="成交金额总额"
+          value={formatMoneyTotals(data.totalRevenue)}
+        />
+        <MetricCard
+          className="col-span-2"
+          icon={CircleDollarSign}
           label={`${data.monthLabel}提成`}
           value={formatMoneyTotals(data.monthlyCommission)}
         />

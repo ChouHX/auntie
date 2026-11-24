@@ -80,6 +80,8 @@ test("销售个人指标只统计本人归属客户与订单", () => {
   })
   assert.deepEqual(result.monthlyCommission, [{ amount: 10, currency: "USD" }])
   assert.deepEqual(result.totalCommission, [{ amount: 18, currency: "USD" }])
+  assert.deepEqual(result.monthlyRevenue, [{ amount: 100, currency: "USD" }])
+  assert.deepEqual(result.totalRevenue, [{ amount: 180, currency: "USD" }])
 })
 
 test("本月团队榜单分别按成交单量与折算成交金额排序", () => {
@@ -141,6 +143,8 @@ test("选择历史月份会更新月客户数、提成及排行，保留累计�
   assert.equal(result.customerCounts.month, 1)
   assert.deepEqual(result.monthlyCommission, [{ amount: 8, currency: "USD" }])
   assert.deepEqual(result.totalCommission, [{ amount: 18, currency: "USD" }])
+  assert.deepEqual(result.monthlyRevenue, [{ amount: 80, currency: "USD" }])
+  assert.deepEqual(result.totalRevenue, [{ amount: 180, currency: "USD" }])
   assert.equal(result.orderCountRanking[0].salesMemberId, "sales-a")
   assert.equal(result.orderCountRanking[0].orderCount, 1)
 })
@@ -161,6 +165,7 @@ test("Dashboard 月统计按服务日期，不按生成或付款日期", () => {
     "2026-08"
   )
   assert.deepEqual(august.monthlyCommission, [])
+  assert.deepEqual(august.monthlyRevenue, [])
   assert.equal(august.orderCountRanking[0].orderCount, 0)
   const september = createSalesUserDashboard(
     fixture,
