@@ -156,7 +156,11 @@ export async function PATCH(request: NextRequest) {
           : offlinePaid
             ? current.paidAt || new Date().toISOString()
             : current.paidAt,
-        provider: usedCard ? "offline" : offlinePaid ? "offline" : current.provider,
+        provider: usedCard
+          ? "offline"
+          : offlinePaid
+            ? "offline"
+            : current.provider,
         receivedAmount: orderBaseAmountValue,
         tipAmount: effectiveTipAmount,
         salesMemberId: shouldUpdateSalesMember
@@ -178,10 +182,22 @@ export async function PATCH(request: NextRequest) {
         status: usedCard ? "paid" : offlinePaid ? "paid" : current.status,
         updatedAt: new Date().toISOString(),
       }
-      const next = calculateOrderFinancials(
-        captureOrderSalesCommission(orderForCalculation, content.salesMembers),
-        content
+      const attributed = captureOrderSalesCommission(
+        orderForCalculation,
+        content.salesMembers
       )
+      // 提成与利润只对已支付订单计算；未支付订单不带任何提成 / 利润残留，
+      // 成交时（改为 paid）再按当时的公式与分成快照计算。
+      const next =
+        attributed.status === "paid"
+          ? calculateOrderFinancials(attributed, content)
+          : {
+              ...attributed,
+              calculationSnapshot: undefined,
+              orderProfit: 0,
+              orderProfitCny: undefined,
+              salesCommission: 0,
+            }
       savedOrder = next
       return {
         ...content,

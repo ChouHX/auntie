@@ -77,16 +77,20 @@ function createSalesOrderPage(
     string,
     { currency: string; amount: number; commission: number }
   >()
-  filtered.map(toSalesOrder).forEach((order) => {
-    const total = totals.get(order.currency) ?? {
-      currency: order.currency,
-      amount: 0,
-      commission: 0,
-    }
-    total.amount += order.amount
-    total.commission += order.salesCommission
-    totals.set(order.currency, total)
-  })
+  // 提成与订单金额只统计已完成支付的订单，未支付订单不计入汇总。
+  filtered
+    .filter((order) => order.status === "paid")
+    .map(toSalesOrder)
+    .forEach((order) => {
+      const total = totals.get(order.currency) ?? {
+        currency: order.currency,
+        amount: 0,
+        commission: 0,
+      }
+      total.amount += order.amount
+      total.commission += order.salesCommission
+      totals.set(order.currency, total)
+    })
   return {
     months: orderMonthOptions(accessibleOrders),
     totals: Array.from(totals.values()).map((total) => ({
@@ -121,7 +125,9 @@ function toSalesOrder(order: CmsPaymentOrder): SalesOrder {
     customerName: order.customerName,
     orderId: order.orderId,
     region: order.serviceArea,
-    salesCommission: normalizeAmount(order.salesCommission),
+    // 未支付订单不产生提成，展示与汇总统一按 0 处理。
+    salesCommission:
+      order.status === "paid" ? normalizeAmount(order.salesCommission) : 0,
     serviceDate: order.serviceDate,
     status: order.status,
   }

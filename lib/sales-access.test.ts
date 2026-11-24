@@ -109,6 +109,25 @@ test("月份筛选按服务日期包含月末，按所有页及币种汇总，�
   ])
 })
 
+test("订单页汇总只累加已支付订单，未支付订单不计入提成", () => {
+  const result = createSalesOrderPage(
+    [
+      order("paid", alice.id, alice.name),
+      { ...order("unpaid", alice.id, alice.name), status: "unpaid" as const },
+      {
+        ...order("unpaid-with-commission", alice.id, alice.name),
+        salesCommission: 16.2,
+        status: "unpaid" as const,
+      },
+    ],
+    alice,
+    { page: 1, pageSize: 10, query: "" }
+  )
+  assert.deepEqual(result.totals, [
+    { currency: "USD", amount: 100, commission: 12.5 },
+  ])
+})
+
 test("服务月份可与搜索叠加，不使用生成月份", () => {
   const orders = [
     { ...order("booking", alice.id, alice.name), serviceDate: "2026-09-07" },

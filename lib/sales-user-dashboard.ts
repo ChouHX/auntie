@@ -26,10 +26,10 @@ type SalesUserDashboard = {
   month: string
   months: string[]
   monthLabel: string
-  monthlyProfit: MoneyTotal[]
+  monthlyCommission: MoneyTotal[]
   orderCountRanking: SalesOrderRanking[]
-  orderProfitTotal: MoneyTotal[]
   orderRevenueRanking: SalesOrderRanking[]
+  totalCommission: MoneyTotal[]
 }
 
 function createSalesUserDashboard(
@@ -87,17 +87,17 @@ function createSalesUserDashboard(
       now
     ),
     monthLabel: `${month.slice(0, 4)} 年 ${Number(month.slice(5, 7))} 月`,
-    monthlyProfit: sumMoney(
+    monthlyCommission: sumMoney(
       ownedPaidOrders.filter((order) =>
         serviceMonth(order.serviceDate).startsWith(month)
       ),
-      "orderProfit"
+      "salesCommission"
     ),
     orderCountRanking: rankings.toSorted(
       (left, right) =>
         right.orderCount - left.orderCount || right.amountCny - left.amountCny
     ),
-    orderProfitTotal: sumMoney(ownedPaidOrders, "orderProfit"),
+    totalCommission: sumMoney(ownedPaidOrders, "salesCommission"),
     orderRevenueRanking: rankings.toSorted(
       (left, right) =>
         right.amountCny - left.amountCny || right.orderCount - left.orderCount
@@ -130,7 +130,7 @@ function createRanking(member: CmsSalesMember, orders: CmsPaymentOrder[]) {
 
 function sumMoney(
   orders: CmsPaymentOrder[],
-  field: "orderProfit" | "receivedAmount"
+  field: "orderProfit" | "receivedAmount" | "salesCommission"
 ) {
   const totals = new Map<string, number>()
   orders.forEach((order) => {

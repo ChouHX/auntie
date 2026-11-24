@@ -281,7 +281,12 @@ function createCurrencySummaries(rows: SalesDashboardRow[]) {
       receivedAmount: 0,
       salesCommission: 0,
     }
-    if (row.orderStatus === "paid") summary.convertedAmount += row.paymentAmount
+    // 只统计已支付订单的金额与经营数据，未成交订单不参与汇总。
+    if (row.orderStatus !== "paid") {
+      map.set(row.currency, summary)
+      return
+    }
+    summary.convertedAmount += row.paymentAmount
     summary.receivedAmount += row.receivedAmount
     summary.auntieSalary += row.auntieSalary
     summary.otherCost += row.otherCost

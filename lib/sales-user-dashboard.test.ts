@@ -78,8 +78,8 @@ test("销售个人指标只统计本人归属客户与订单", () => {
     total: 4,
     week: 2,
   })
-  assert.deepEqual(result.monthlyProfit, [{ amount: 30, currency: "USD" }])
-  assert.deepEqual(result.orderProfitTotal, [{ amount: 40, currency: "USD" }])
+  assert.deepEqual(result.monthlyCommission, [{ amount: 10, currency: "USD" }])
+  assert.deepEqual(result.totalCommission, [{ amount: 18, currency: "USD" }])
 })
 
 test("本月团队榜单分别按成交单量与折算成交金额排序", () => {
@@ -120,6 +120,8 @@ function order(
     paidAt,
     profitExchangeRateToCny,
     receivedAmount,
+    // 提成按实收金额 10% 固化到订单，便于断言。
+    salesCommission: Math.round(receivedAmount * 10) / 100,
     salesMemberId,
     salesOwner,
     status: "paid",
@@ -127,7 +129,7 @@ function order(
   } as CmsPaymentOrder
 }
 
-test("选择历史月份会更新月客户数、利润及排行，保留累计统计", () => {
+test("选择历史月份会更新月客户数、提成及排行，保留累计统计", () => {
   const result = createSalesUserDashboard(
     content,
     customers,
@@ -137,8 +139,8 @@ test("选择历史月份会更新月客户数、利润及排行，保留累计�
   )
   assert.equal(result.month, "2026-07")
   assert.equal(result.customerCounts.month, 1)
-  assert.deepEqual(result.monthlyProfit, [{ amount: 10, currency: "USD" }])
-  assert.deepEqual(result.orderProfitTotal, [{ amount: 40, currency: "USD" }])
+  assert.deepEqual(result.monthlyCommission, [{ amount: 8, currency: "USD" }])
+  assert.deepEqual(result.totalCommission, [{ amount: 18, currency: "USD" }])
   assert.equal(result.orderCountRanking[0].salesMemberId, "sales-a")
   assert.equal(result.orderCountRanking[0].orderCount, 1)
 })
@@ -158,7 +160,7 @@ test("Dashboard 月统计按服务日期，不按生成或付款日期", () => {
     new Date("2026-10-01T00:00:00Z"),
     "2026-08"
   )
-  assert.deepEqual(august.monthlyProfit, [])
+  assert.deepEqual(august.monthlyCommission, [])
   assert.equal(august.orderCountRanking[0].orderCount, 0)
   const september = createSalesUserDashboard(
     fixture,
@@ -167,6 +169,8 @@ test("Dashboard 月统计按服务日期，不按生成或付款日期", () => {
     new Date("2026-10-01T00:00:00Z"),
     "2026-09"
   )
-  assert.deepEqual(september.monthlyProfit, [{ amount: 30, currency: "USD" }])
+  assert.deepEqual(september.monthlyCommission, [
+    { amount: 10, currency: "USD" },
+  ])
   assert.equal(september.orderCountRanking[0].orderCount, 1)
 })

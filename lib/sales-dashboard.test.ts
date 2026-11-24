@@ -336,7 +336,10 @@ test("订单按创建来源分类，客服订单无需绑定微信客户，旧�
       // 新订单：客服创建，即使未绑定微信客户也算客服订单。
       order({ orderId: "ADMIN-UNBOUND", orderSource: "admin" }),
       // 旧数据：无来源标记，回退为按微信客户绑定推断。
-      order({ orderId: "LEGACY-BOUND", customerRelationId: customer.relationId }),
+      order({
+        orderId: "LEGACY-BOUND",
+        customerRelationId: customer.relationId,
+      }),
       order({ orderId: "LEGACY-UNBOUND" }),
     ],
     salesMembers: [],
@@ -354,19 +357,19 @@ test("订单按创建来源分类，客服订单无需绑定微信客户，旧�
     ...baseQuery,
     orderSource: "support",
   })
-  assert.deepEqual(
-    support.rows.map((row) => row.orderId).sort(),
-    ["ADMIN-UNBOUND", "LEGACY-BOUND"]
-  )
+  assert.deepEqual(support.rows.map((row) => row.orderId).sort(), [
+    "ADMIN-UNBOUND",
+    "LEGACY-BOUND",
+  ])
 
   const selfService = createSalesDashboardResult(content, [customer], {
     ...baseQuery,
     orderSource: "self_service",
   })
-  assert.deepEqual(
-    selfService.rows.map((row) => row.orderId).sort(),
-    ["BOOKING-BOUND", "LEGACY-UNBOUND"]
-  )
+  assert.deepEqual(selfService.rows.map((row) => row.orderId).sort(), [
+    "BOOKING-BOUND",
+    "LEGACY-UNBOUND",
+  ])
 })
 
 test("对接客服来自订单绑定的微信跟进关系，可筛选姓名、空值及缺少姓名的客服账号", () => {
@@ -427,6 +430,48 @@ test("对接客服来自订单绑定的微信跟进关系，可筛选姓名、�
     unlinked.rows.map((row) => row.orderId),
     ["UNLINKED"]
   )
+})
+
+test("未支付订单的提成与经营数据不计入币种汇总", () => {
+  const content = {
+    formulaTemplates: [],
+    paymentOrders: [
+      order({
+        auntieSalary: 50,
+        orderProfit: 30,
+        receivedAmount: 100,
+        salesCommission: 10,
+        status: "paid",
+      }),
+      order({
+        auntieSalary: 200,
+        orderProfit: 60,
+        receivedAmount: 180,
+        salesCommission: 16.2,
+        status: "unpaid",
+      }),
+    ],
+    salesMembers: [],
+    teamMembers: [],
+  } as unknown as CmsContent
+  const result = createSalesDashboardResult(content, [], {
+    filters: [],
+    logic: "all",
+    page: 1,
+    pageSize: 20,
+  })
+
+  assert.deepEqual(result.currencySummaries, [
+    {
+      auntieSalary: 50,
+      convertedAmount: 100,
+      currency: "USD",
+      orderProfit: 30,
+      otherCost: 0,
+      receivedAmount: 100,
+      salesCommission: 10,
+    },
+  ])
 })
 
 test("订单状态筛选可区分已付款（次卡）", () => {
