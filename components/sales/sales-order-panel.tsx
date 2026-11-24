@@ -3,7 +3,7 @@
 import { OrderMonthSelect } from "@/components/sales/order-month-select"
 
 import { type FormEvent, useEffect, useState } from "react"
-import { ClipboardList, Search } from "lucide-react"
+import { BarChart3, ClipboardList, Search } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,11 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
   Table,
   TableBody,
   TableCell,
@@ -19,7 +24,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { SalesOrder, SalesOrderPage } from "@/lib/sales-orders"
+import type {
+  SalesOrder,
+  SalesOrderPage,
+  SalesOrderTotal,
+} from "@/lib/sales-orders"
 import { fetchAdminSalesOrders } from "@/lib/cms-api"
 
 const statusLabels: Record<SalesOrder["status"], string> = {
@@ -131,6 +140,12 @@ export function SalesOrderPanel({
               {adminView ? `${adminView.memberName}的订单` : "我的订单"}
             </h2>
             <Badge variant="secondary">{pagination.totalCount}</Badge>
+            <OrderStatsPopover
+              loading={loading}
+              month={month}
+              totalCount={pagination.totalCount}
+              totals={data?.totals ?? []}
+            />
           </div>
         </div>
         <form
@@ -165,28 +180,6 @@ export function SalesOrderPanel({
         </form>
       </div>
 
-      <div
-        className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b bg-muted/30 px-3 py-2 text-xs"
-        aria-live="polite"
-      >
-        <p className="text-muted-foreground">
-          服务月份：{month || "全部"}· 全部筛选结果合计
-        </p>
-        {loading
-          ? "加载中..."
-          : error
-            ? "汇总加载失败"
-            : data?.totals.length
-              ? data.totals.map((total) => (
-                  <p key={total.currency}>
-                    订单总金额：{formatMoney(total.amount, total.currency)} ·
-                    已支付订单总额：
-                    {formatMoney(total.paidAmount, total.currency)} · 提成总额：
-                    {formatMoney(total.commission, total.currency)}
-                  </p>
-                ))
-              : "订单总金额：0.00 · 已支付订单总额：0.00 · 提成总额：0.00"}
-      </div>
       <div className="overflow-x-auto">
         <Table className="min-w-[900px] text-xs [&_td]:px-3 [&_td]:py-2 [&_th]:h-9 [&_th]:px-3">
           <TableHeader>
@@ -282,6 +275,94 @@ function SalesOrderRow({ order }: { order: SalesOrder }) {
       </TableCell>
     </TableRow>
   )
+}
+
+function OrderStatsPopover({
+  loading,
+  month,
+  totalCount,
+  totals,
+}: {
+  loading: boolean
+  month: string
+  totalCount: number
+  totals: SalesOrderTotal[]
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          className="h-7 gap-1 px-2 text-xs"
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <BarChart3 className="size-3.5" />
+          统计
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto min-w-72 p-0">
+        <div className="border-b border-border px-3 py-2">
+          <p className="text-xs font-semibold">订单统计</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            服务月份：{month || "全部"} · 共 {totalCount} 笔订单
+          </p>
+        </div>
+        {loading ? (
+          <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+            统计加载中...
+          </p>
+        ) : (
+          <Table className="text-xs [&_td]:px-3 [&_td]:py-1.5 [&_th]:h-8 [&_th]:px-3">
+            <TableHeader>
+              <TableRow>
+                <TableHead>币种</TableHead>
+                <TableHead className="text-right">订单总额</TableHead>
+                <TableHead className="text-right">已支付订单总额</TableHead>
+                <TableHead className="text-right">提成总额</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {totals.length ? (
+                totals.map((total) => (
+                  <TableRow key={total.currency}>
+                    <TableCell className="font-medium">
+                      {total.currency}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatAmount(total.amount)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatAmount(total.paidAmount)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold text-primary tabular-nums">
+                      {formatAmount(total.commission)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    className="py-4 text-center text-muted-foreground"
+                    colSpan={4}
+                  >
+                    暂无订单
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function formatAmount(amount: number) {
+  return amount.toLocaleString("zh-CN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })
 }
 
 function formatMoney(amount: number, currency: string) {
